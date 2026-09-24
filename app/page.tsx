@@ -16,6 +16,9 @@ const PATHS: Record<string, ReactNode> = {
   chevron: <path d="m9 6 6 6-6 6" />,
   clock: (<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></>),
   user: (<><circle cx="12" cy="8" r="4" /><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" /></>),
+  filter: <path d="M4 4h16v2.2a2 2 0 0 1-.6 1.4L15 12v7l-6 2v-8.5L4.5 7.6A2 2 0 0 1 4 6.2z" />,
+  check: <path d="m5 12 5 5L20 7" />,
+  down: <path d="m6 9 6 6 6-6" />,
 };
 
 function Icon({ name, className = 'h-5 w-5', filled = false }: { name: string; className?: string; filled?: boolean }) {
@@ -52,6 +55,18 @@ const initials = (n: string) =>
   n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 const rowId = (r: Row) => pick(r, 'ORDER_NO', 'ORDER NO') || pick(r, 'NAMA KONSUMEN') + pick(r, 'NOPOL');
 
+/* ---------- Filter ---------- */
+type FKey = 'type' | 'produk' | 'kec' | 'kel';
+const FILTERS: { key: FKey; label: string; cols: string[] }[] = [
+  { key: 'type', label: 'Type unit', cols: ['TYPE UNIT DETAIL', 'TYPE UNIT'] },
+  { key: 'produk', label: 'Produk', cols: ['PRODUK'] },
+  { key: 'kec', label: 'Kecamatan', cols: ['KECAMATAN'] },
+  { key: 'kel', label: 'Kelurahan', cols: ['KELURAHAN'] },
+];
+const EMPTY_FILTERS: Record<FKey, string[]> = { type: [], produk: [], kec: [], kel: [] };
+const fval = (r: Row, k: FKey) => pick(r, ...(FILTERS.find((f) => f.key === k)?.cols ?? []));
+const fkey = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
+
 const readStore = (key: string): string[] => {
   try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
 };
@@ -78,7 +93,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
-  const [area, setArea] = useState('Semua');
+  const [filters, setFilters] = useState<Record<FKey, string[]>>(EMPTY_FILTERS);
+  const [openFilter, setOpenFilter] = useState<FKey | null>(null);
+  const [optSearch, setOptSearch] = useState('');
   const [tab, setTab] = useState<'cari' | 'simpan'>('cari');
   const [selected, setSelected] = useState<Row | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
@@ -115,20 +132,63 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const areas = useMemo(() => {
-    const set = new Set(rows.map((r) => pick(r, 'KECAMATAN')).filter(Boolean));
-    return ['Semua', ...Array.from(set).sort()];
-  }, [rows]);
-
-  const filtered = useMemo(() => {
+  // Cek apakah satu baris lolos semua filter (kecuali filter `except`)
+  const passes = (r: Row, except?: FKey) => {
+    if (tab === 'simpan' && !saved.includes(rowId(r))) return false;
+    for (const f of FILTERS) {
+      if (f.key === except) continue;
+      const sel = filters[f.key];
+      if (sel.length && !sel.includes(fkey(fval(r, f.key)))) return false;
+    }
     const q = norm(query);
-    return rows.filter((r) => {
-      if (tab === 'simpan' && !saved.includes(rowId(r))) return false;
-      if (area !== 'Semua' && pick(r, 'KECAMATAN') !== area) return false;
-      if (!q) return true;
-      return norm(Object.values(r).join(' ')).includes(q);
+    return !q || norm(Object.values(r).join(' ')).includes(q);
+  };
+
+  const filtered = useMemo(() => rows.filter((r) => passes(r)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, query, tab, saved, filters]);
+
+  // Nama asli (huruf besar/kecil) untuk setiap pilihan filter
+  const labelOf = useMemo(() => {
+    const m = new Map<string, string>();
+    rows.forEach((r) => FILTERS.forEach((f) => {
+      const v = fval(r, f.key);
+      if (v && !m.has(f.key + '|' + fkey(v))) m.set(f.key + '|' + fkey(v), v.trim());
+    }));
+    return m;
+  }, [rows]);
+  const lab = (k: FKey, v: string) => labelOf.get(k + '|' + v) || v;
+
+  // Daftar pilihan untuk filter yang sedang dibuka, lengkap dengan jumlahnya
+  const options = useMemo(() => {
+    if (!openFilter) return [];
+    const m = new Map<string, number>();
+    rows.forEach((r) => {
+      if (!passes(r, openFilter)) return;
+      const v = fval(r, openFilter);
+      if (v) m.set(fkey(v), (m.get(fkey(v)) || 0) + 1);
     });
-  }, [rows, query, area, tab, saved]);
+    filters[openFilter].forEach((k) => { if (!m.has(k)) m.set(k, 0); });
+    return Array.from(m, ([key, count]) => ({ key, count, label: lab(openFilter, key) }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'id'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFilter, rows, query, tab, saved, filters, labelOf]);
+
+  const visibleOptions = options.filter((o) => !optSearch || norm(o.label).includes(norm(optSearch)));
+  const activeCount = FILTERS.reduce((n, f) => n + filters[f.key].length, 0);
+
+  const toggleFilter = (k: FKey, v: string) => {
+    setFilters((prev) => {
+      const cur = prev[k];
+      const next = { ...prev, [k]: cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v] };
+      // Kelurahan yang tidak ada di kecamatan terpilih otomatis dilepas
+      if (k === 'kec' && next.kec.length) {
+        const valid = new Set(rows.filter((r) => next.kec.includes(fkey(fval(r, 'kec')))).map((r) => fkey(fval(r, 'kel'))));
+        next.kel = next.kel.filter((x) => valid.has(x));
+      }
+      return next;
+    });
+  };
 
   const shown = filtered.slice(0, 100);
 
@@ -208,19 +268,41 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Filter kecamatan */}
+        {/* Tombol filter */}
         <div className="flex gap-2 overflow-x-auto px-5 pt-4 [scrollbar-width:none]">
-          {areas.map((a) => (
-            <button key={a} onClick={() => setArea(a)}
-              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition ${
-                area === a
-                  ? 'border-[#1F4E78] bg-[#1F4E78] text-white'
-                  : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
-              }`}>
-              {a}
-            </button>
-          ))}
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${activeCount ? 'bg-[#1F4E78] text-white' : 'bg-white text-slate-500 dark:bg-slate-900'}`}>
+            <Icon name="filter" className="h-4 w-4" />
+          </div>
+          {FILTERS.map((f) => {
+            const sel = filters[f.key];
+            const text = sel.length === 0 ? f.label : sel.length === 1 ? lab(f.key, sel[0]) : `${f.label} (${sel.length})`;
+            return (
+              <button key={f.key} onClick={() => { setOptSearch(''); setOpenFilter(f.key); }}
+                className={`flex h-9 shrink-0 items-center gap-1 rounded-full border px-4 text-sm transition ${
+                  sel.length
+                    ? 'border-[#1F4E78] bg-[#1F4E78] text-white'
+                    : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
+                }`}>
+                <span className="max-w-[150px] truncate">{text}</span>
+                <Icon name="down" className="h-4 w-4 shrink-0" />
+              </button>
+            );
+          })}
         </div>
+
+        {/* Filter aktif */}
+        {activeCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-5 pt-3">
+            {FILTERS.flatMap((f) => filters[f.key].map((v) => (
+              <button key={f.key + v} onClick={() => toggleFilter(f.key, v)}
+                className="flex items-center gap-1 rounded-full bg-[#1F4E78]/10 py-1 pl-3 pr-2 text-xs text-[#1F4E78] dark:bg-sky-400/15 dark:text-sky-300">
+                <span className="max-w-[160px] truncate">{lab(f.key, v)}</span>
+                <Icon name="x" className="h-3.5 w-3.5" />
+              </button>
+            )))}
+            <button onClick={() => setFilters(EMPTY_FILTERS)} className="text-xs font-medium text-red-500">Reset semua</button>
+          </div>
+        )}
 
         {/* Riwayat pencarian */}
         {!query && recent.length > 0 && tab === 'cari' && (
@@ -251,10 +333,16 @@ export default function Home() {
           ) : shown.length === 0 ? (
             <div className="rounded-2xl bg-white p-8 text-center dark:bg-slate-900">
               <Icon name={tab === 'simpan' ? 'star' : 'user'} className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 font-medium">{tab === 'simpan' ? 'Belum ada konsumen disimpan' : 'Konsumen tidak ditemukan'}</p>
+              <p className="mt-3 font-medium">{tab === 'simpan' && !activeCount ? 'Belum ada konsumen disimpan' : 'Konsumen tidak ditemukan'}</p>
               <p className="mt-1 text-sm text-slate-500">
-                {tab === 'simpan' ? 'Ketuk bintang di detail konsumen untuk menyimpannya.' : 'Coba nama lain, nopol, atau nomor HP.'}
+                {activeCount ? 'Tidak ada yang cocok dengan kombinasi filter ini.'
+                  : tab === 'simpan' ? 'Ketuk bintang di detail konsumen untuk menyimpannya.' : 'Coba nama lain, nopol, atau nomor HP.'}
               </p>
+              {activeCount > 0 && (
+                <button onClick={() => setFilters(EMPTY_FILTERS)} className="mt-4 rounded-full border border-slate-200 px-5 py-2 text-sm font-medium dark:border-slate-700">
+                  Reset filter
+                </button>
+              )}
             </div>
           ) : (
             <ul className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -304,6 +392,61 @@ export default function Home() {
           ))}
         </div>
       </nav>
+
+      {/* Panel pilihan filter (bottom sheet) */}
+      {openFilter && (() => {
+        const f = FILTERS.find((x) => x.key === openFilter)!;
+        const sel = filters[f.key];
+        return (
+          <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40" onClick={() => setOpenFilter(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-3xl bg-white pt-3 dark:bg-slate-900">
+              <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
+              <div className="flex items-center justify-between px-5">
+                <p className="text-lg font-semibold">{f.label}</p>
+                {sel.length > 0 && (
+                  <button onClick={() => setFilters((p) => ({ ...p, [f.key]: [] }))} className="text-sm font-medium text-red-500">
+                    Hapus pilihan
+                  </button>
+                )}
+              </div>
+              {f.key === 'kel' && filters.kec.length > 0 && (
+                <p className="px-5 pt-1 text-xs text-slate-500">Hanya kelurahan di kecamatan yang dipilih</p>
+              )}
+              <div className="relative mx-5 mt-3">
+                <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input value={optSearch} onChange={(e) => setOptSearch(e.target.value)}
+                  placeholder={`Cari ${f.label.toLowerCase()}`}
+                  className="h-11 w-full rounded-xl bg-slate-100 pl-9 pr-3 text-base outline-none focus:ring-2 focus:ring-sky-300 dark:bg-slate-800" />
+              </div>
+              <ul className="mt-2 flex-1 overflow-y-auto px-2">
+                {visibleOptions.length === 0 && (
+                  <li className="px-3 py-6 text-center text-sm text-slate-500">Tidak ada pilihan yang cocok</li>
+                )}
+                {visibleOptions.map((o) => {
+                  const on = sel.includes(o.key);
+                  return (
+                    <li key={o.key}>
+                      <button onClick={() => toggleFilter(f.key, o.key)}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800">
+                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${on ? 'border-[#1F4E78] bg-[#1F4E78] text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                          {on && <Icon name="check" className="h-3.5 w-3.5" />}
+                        </span>
+                        <span className="flex-1 text-sm"><Highlight text={o.label} q={optSearch.trim()} /></span>
+                        <span className={`text-xs ${o.count ? 'text-slate-400' : 'text-red-400'}`}>{o.count}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="border-t border-slate-100 px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3 dark:border-slate-800">
+                <button onClick={() => setOpenFilter(null)} className="w-full rounded-2xl bg-[#1F4E78] py-3 text-sm font-semibold text-white active:scale-[0.99]">
+                  Lihat {filtered.length} konsumen
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Detail konsumen (bottom sheet) */}
       {selected && (() => {
