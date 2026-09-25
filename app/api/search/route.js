@@ -1,25 +1,31 @@
 import { google } from 'googleapis';
+import { verifySession, SESSION_COOKIE } from '../../../lib/session';
+import { getRole } from '../../../lib/access';
+
+export const dynamic = 'force-dynamic';
+
+// >>> SESUAIKAN dengan nama tab data konsumen di Google Sheets (sama seperti di route.js lama) <<<
+const DATA_RANGE = 'Sheet1!A1:Z';
+
+// Kolom nomor telepon: hanya dikirim ke akun OWNER. Akun TIM tidak pernah menerima kolom ini.
+const PHONE_COLUMN = /^(NO\.?\s*)?(HP|WA|TELP|TELEPON|TLP|PHONE|HANDPHONE|WHATSAPP)(\s*\d+)?$/i;
 
 export async function GET(request) {
+  // 1. Cek login & peran
+  const session = await verifySession(request.cookies.get(SESSION_COOKIE)?.value);
+  if (!session) return Response.json({ error: 'Silakan login dulu.' }, { status: 401 });
+  const role = await getRole(session.email);
+  if (!role) return Response.json({ error: 'Akses akun ini sudah dicabut. Hubungi owner.' }, { status: 403 });
+
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q')?.toLowerCase() || '';
 
-  // Ambil data dari .env.local
   const sheetId = process.env.GOOGLE_SHEET_ID;
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
-  // Proteksi jika variabel environment belum terbaca
   if (!sheetId || !clientEmail || !privateKey) {
-    return Response.json({
-      error: "Variabel lingkungan (environment variables) belum terbaca!",
-      detail: {
-        GOOGLE_SHEET_ID: sheetId ? "Terbaca" : "KOSONG / TIDAK TERBACA",
-        GOOGLE_SERVICE_ACCOUNT_EMAIL: clientEmail ? "Terbaca" : "KOSONG / TIDAK TERBACA",
-        GOOGLE_PRIVATE_KEY: privateKey ? "Terbaca" : "KOSONG / TIDAK TERBACA",
-      },
-      solusi: "Pastikan file .env.local berada di folder utama (aplikasi-konsumen) dan restart server (npm run dev)."
-    }, { status: 500 });
+    return Response.json({ error: 'Pengaturan Google Sheets di Vercel belum lengkap.' }, { status: 500 });
   }
 
   try {
@@ -32,31 +38,30 @@ export async function GET(request) {
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
-
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'Sheet1!A1:Z', // Pastikan 'Sheet1' sesuai nama tab di Google Sheets Anda
+      range: DATA_RANGE,
     });
 
     const rows = response.data.values;
     if (!rows || rows.length === 0) return Response.json([]);
 
-    const headers = rows[0];
-    const dataRows = rows.slice(1);
+    // 2. Tentukan kolom yang boleh dikirim
+    const headers = rows[0].map((h) => String(h || '').trim());
+    const allowed = headers
+      .map((h, i) => ({ h, i }))
+      .filter(({ h }) => h && (role === 'owner' || !PHONE_COLUMN.test(h)));
 
-    const filtered = dataRows.filter(row =>
-      row.some(cell => cell.toLowerCase().includes(query))
-    );
+    const result = rows
+      .slice(1)
+      .map((row) => {
+        const obj = {};
+        allowed.forEach(({ h, i }) => { obj[h] = row[i] || ''; });
+        return obj;
+      })
+      .filter((obj) => !query || Object.values(obj).some((v) => String(v).toLowerCase().includes(query)));
 
-    const result = filtered.map(row => {
-      let obj = {};
-      headers.forEach((header, index) => {
-        obj[header] = row[index] || '';
-      });
-      return obj;
-    });
-
-    return Response.json(result);
+    return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

@@ -11,6 +11,7 @@ const PATHS: Record<string, ReactNode> = {
   pin: (<><circle cx="12" cy="11" r="3" /><path d="M17.7 16.7 13.4 21a2 2 0 0 1-2.8 0l-4.3-4.3a8 8 0 1 1 11.3 0z" /></>),
   copy: (<><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>),
   star: <path d="M12 17.75l-6.17 3.24 1.18-6.87-5-4.86 6.9-1 3.09-6.26 3.09 6.26 6.9 1-5 4.86 1.18 6.87z" />,
+  logout: <path d="M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2M9 12h12l-3-3m0 6 3-3" />,
   refresh: <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />,
   x: <path d="M18 6 6 18M6 6l12 12" />,
   chevron: <path d="m9 6 6 6-6 6" />,
@@ -106,12 +107,16 @@ export default function Home() {
   const [toast, setToast] = useState('');
   const [picker, setPicker] = useState<{ kind: 'tel' | 'wa'; phones: string[] } | null>(null);
   const [greeting, setGreeting] = useState('Selamat datang');
+  const [me, setMe] = useState<{ email: string; name?: string; role: 'owner' | 'tim' } | null>(null);
+  const isOwner = me?.role === 'owner';
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/search?q=');
+      const [res, meRes] = await Promise.all([fetch('/api/search?q=', { cache: 'no-store' }), fetch('/api/me', { cache: 'no-store' })]);
+      if (res.status === 401 || meRes.status === 401) { window.location.href = '/login'; return; }
+      if (meRes.ok) setMe(await meRes.json());
       const json = await res.json();
       if (Array.isArray(json)) setRows(json);
       else setError(json?.error || 'Data tidak bisa dimuat.');
@@ -234,13 +239,26 @@ export default function Home() {
         <header className="rounded-b-3xl bg-[#1F4E78] px-5 pb-5 pt-[calc(env(safe-area-inset-top)+20px)] text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-white/70">{greeting}</p>
+              <p className="text-sm text-white/70">
+                {greeting}{me?.name ? `, ${me.name.split(' ')[0]}` : ''}
+                {me && (
+                  <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide">
+                    {isOwner ? 'Owner' : 'Tim'}
+                  </span>
+                )}
+              </p>
               <h1 className="text-2xl font-semibold tracking-tight">Cari Konsumen</h1>
             </div>
-            <button onClick={load} aria-label="Muat ulang data"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
-              <Icon name="refresh" className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex gap-2">
+              <button onClick={load} aria-label="Muat ulang data"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
+                <Icon name="refresh" className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+              <a href="/api/auth/logout" aria-label="Keluar" title={me?.email ? `Keluar (${me.email})` : 'Keluar'}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
+                <Icon name="logout" className="h-5 w-5" />
+              </a>
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -259,7 +277,7 @@ export default function Home() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Nama, nopol, no HP, order no"
+              placeholder={isOwner ? 'Nama, nopol, no HP, order no' : 'Nama, nopol, order no'}
               inputMode="search"
               className="h-12 w-full rounded-2xl bg-white pl-12 pr-11 text-base text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-sky-300 dark:bg-slate-900 dark:text-slate-100"
             />
@@ -491,7 +509,8 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="mt-5 grid grid-cols-4 gap-2">
+              <div className={`mt-5 grid gap-2 ${isOwner ? 'grid-cols-4' : 'grid-cols-2'}`}>
+                {isOwner && (<>
                 {phones.length > 1 ? (
                   <button onClick={() => setPicker({ kind: 'tel', phones })} className={action}>
                     <Icon name="phone" className="h-6 w-6 text-[#1F4E78] dark:text-sky-300" />Telepon
@@ -510,6 +529,7 @@ export default function Home() {
                     <Icon name="chat" className="h-6 w-6 text-green-600" />WhatsApp
                   </a>
                 )}
+                </>)}
                 <a href={mapsUrl || undefined} target="_blank" rel="noreferrer" className={`${action} ${mapsUrl ? '' : 'opacity-40'}`}>
                   <Icon name="pin" className="h-6 w-6 text-red-500" />Maps
                 </a>
@@ -518,7 +538,7 @@ export default function Home() {
                 </button>
               </div>
 
-              {phones.length > 1 && (
+              {isOwner && phones.length > 1 && (
                 <div className="mt-4 rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
                   <p className="px-1 pb-2 text-xs text-slate-500">Konsumen ini punya {phones.length} nomor HP</p>
                   {phones.map((p, i) => (

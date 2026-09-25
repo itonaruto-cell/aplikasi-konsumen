@@ -1,32 +1,23 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from 'next/server';
+import { verifySession, SESSION_COOKIE } from './lib/session';
 
-export function proxy(req: NextRequest) {
-  const auth = req.headers.get("authorization");
+// Semua halaman & data wajib login dengan akun Google (email).
+// Pengecualian: halaman login, proses login, manifest, ikon, dan assetlinks.
+export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  if (pathname === '/login' || pathname.startsWith('/api/auth/')) return NextResponse.next();
 
-  if (auth && auth.startsWith("Basic ")) {
-    const decoded = atob(auth.slice(6));
-    const sep = decoded.indexOf(":");
-    const user = decoded.slice(0, sep);
-    const pass = decoded.slice(sep + 1);
+  const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (session) return NextResponse.next();
 
-    if (
-      process.env.APP_USER &&
-      process.env.APP_PASSWORD &&
-      user === process.env.APP_USER &&
-      pass === process.env.APP_PASSWORD
-    ) {
-      return NextResponse.next();
-    }
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 });
   }
-
-  return new NextResponse("Login diperlukan", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Cari Konsumen"' },
-  });
+  return NextResponse.redirect(new URL('/login', req.url));
 }
 
 export const config = {
   matcher: [
-    "/((?!manifest.json|icon-|.well-known|_next/static|_next/image|favicon.ico).*)",
+    '/((?!manifest.json|icon-|.well-known|_next/static|_next/image|favicon.ico).*)',
   ],
 };
