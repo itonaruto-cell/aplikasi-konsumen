@@ -47,6 +47,9 @@ const toWa = (hp: string) => {
   if (d.startsWith('8')) return '62' + d;
   return d;
 };
+const splitPhones = (v: string) =>
+  v.split(/\s*[\/,;|]\s*|\s+atau\s+|\s+dan\s+/i).map(digits).filter((d) => d.length >= 8)
+    .filter((d, i, a) => a.indexOf(d) === i);
 const rupiah = (v: string) => {
   const n = Number(digits(v));
   return n ? 'Rp ' + n.toLocaleString('id-ID') : v || '-';
@@ -101,6 +104,7 @@ export default function Home() {
   const [saved, setSaved] = useState<string[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [toast, setToast] = useState('');
+  const [picker, setPicker] = useState<{ kind: 'tel' | 'wa'; phones: string[] } | null>(null);
   const [greeting, setGreeting] = useState('Selamat datang');
 
   const load = async () => {
@@ -452,8 +456,7 @@ export default function Home() {
       {selected && (() => {
         const r = selected;
         const nama = pick(r, 'NAMA KONSUMEN', 'NAMA') || '(tanpa nama)';
-        const phones = pick(r, 'NO HP', 'NO. HP', 'HP')
-          .split(/\s*[\/,;]\s*/).map(digits).filter((d) => d.length >= 8);
+        const phones = splitPhones(pick(r, 'NO HP', 'NO. HP', 'HP'));
         const hp = phones[0] || '';
         const wa = toWa(hp);
         const maps = pick(r, 'MAPS');
@@ -489,12 +492,24 @@ export default function Home() {
               </div>
 
               <div className="mt-5 grid grid-cols-4 gap-2">
-                <a href={hp ? `tel:${hp}` : undefined} className={`${action} ${hp ? '' : 'opacity-40'}`}>
-                  <Icon name="phone" className="h-6 w-6 text-[#1F4E78] dark:text-sky-300" />Telepon
-                </a>
-                <a href={wa ? `https://wa.me/${wa}` : undefined} target="_blank" rel="noreferrer" className={`${action} ${wa ? '' : 'opacity-40'}`}>
-                  <Icon name="chat" className="h-6 w-6 text-green-600" />WhatsApp
-                </a>
+                {phones.length > 1 ? (
+                  <button onClick={() => setPicker({ kind: 'tel', phones })} className={action}>
+                    <Icon name="phone" className="h-6 w-6 text-[#1F4E78] dark:text-sky-300" />Telepon
+                  </button>
+                ) : (
+                  <a href={hp ? `tel:${hp}` : undefined} className={`${action} ${hp ? '' : 'opacity-40'}`}>
+                    <Icon name="phone" className="h-6 w-6 text-[#1F4E78] dark:text-sky-300" />Telepon
+                  </a>
+                )}
+                {phones.length > 1 ? (
+                  <button onClick={() => setPicker({ kind: 'wa', phones })} className={action}>
+                    <Icon name="chat" className="h-6 w-6 text-green-600" />WhatsApp
+                  </button>
+                ) : (
+                  <a href={wa ? `https://wa.me/${wa}` : undefined} target="_blank" rel="noreferrer" className={`${action} ${wa ? '' : 'opacity-40'}`}>
+                    <Icon name="chat" className="h-6 w-6 text-green-600" />WhatsApp
+                  </a>
+                )}
                 <a href={mapsUrl || undefined} target="_blank" rel="noreferrer" className={`${action} ${mapsUrl ? '' : 'opacity-40'}`}>
                   <Icon name="pin" className="h-6 w-6 text-red-500" />Maps
                 </a>
@@ -550,6 +565,33 @@ export default function Home() {
           </div>
         );
       })()}
+
+      {/* Pilih nomor (jika konsumen punya lebih dari 1 nomor) */}
+      {picker && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={() => setPicker(null)}>
+          <div onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xl rounded-t-3xl bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3 dark:bg-slate-900">
+            <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
+            <p className="text-lg font-semibold">{picker.kind === 'wa' ? 'Buka WhatsApp ke nomor' : 'Telepon ke nomor'}</p>
+            <div className="mt-3 space-y-2">
+              {picker.phones.map((p, i) => (
+                <a key={p} onClick={() => setPicker(null)}
+                  href={picker.kind === 'wa' ? `https://wa.me/${toWa(p)}` : `tel:${p}`}
+                  target={picker.kind === 'wa' ? '_blank' : undefined} rel="noreferrer"
+                  className="flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3.5 active:scale-[0.99] dark:bg-slate-800">
+                  <Icon name={picker.kind === 'wa' ? 'chat' : 'phone'}
+                    className={`h-5 w-5 ${picker.kind === 'wa' ? 'text-green-600' : 'text-[#1F4E78] dark:text-sky-300'}`} />
+                  <span className="flex-1 font-mono text-base">{p}</span>
+                  <span className="text-xs text-slate-400">Nomor {i + 1}</span>
+                </a>
+              ))}
+            </div>
+            <button onClick={() => setPicker(null)} className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-medium dark:border-slate-700">
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Notifikasi kecil */}
       {toast && (
