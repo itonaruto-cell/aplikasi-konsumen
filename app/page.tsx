@@ -452,8 +452,10 @@ export default function Home() {
       {selected && (() => {
         const r = selected;
         const nama = pick(r, 'NAMA KONSUMEN', 'NAMA') || '(tanpa nama)';
-        const hp = pick(r, 'NO HP', 'NO. HP', 'HP');
-        const wa = pick(r, 'NO WA') || toWa(hp);
+        const phones = pick(r, 'NO HP', 'NO. HP', 'HP')
+          .split(/\s*[\/,;]\s*/).map(digits).filter((d) => d.length >= 8);
+        const hp = phones[0] || '';
+        const wa = toWa(hp);
         const maps = pick(r, 'MAPS');
         const mapsUrl = maps
           ? maps.startsWith('http') ? maps : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(maps)}`
@@ -487,7 +489,7 @@ export default function Home() {
               </div>
 
               <div className="mt-5 grid grid-cols-4 gap-2">
-                <a href={hp ? `tel:${digits(hp)}` : undefined} className={`${action} ${hp ? '' : 'opacity-40'}`}>
+                <a href={hp ? `tel:${hp}` : undefined} className={`${action} ${hp ? '' : 'opacity-40'}`}>
                   <Icon name="phone" className="h-6 w-6 text-[#1F4E78] dark:text-sky-300" />Telepon
                 </a>
                 <a href={wa ? `https://wa.me/${wa}` : undefined} target="_blank" rel="noreferrer" className={`${action} ${wa ? '' : 'opacity-40'}`}>
@@ -500,6 +502,23 @@ export default function Home() {
                   <Icon name="copy" className="h-6 w-6 text-slate-500" />Salin
                 </button>
               </div>
+
+              {phones.length > 1 && (
+                <div className="mt-4 rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+                  <p className="px-1 pb-2 text-xs text-slate-500">Konsumen ini punya {phones.length} nomor HP</p>
+                  {phones.map((p, i) => (
+                    <div key={p} className="flex items-center gap-2 border-t border-slate-100 py-2 first:border-0 dark:border-slate-800">
+                      <span className="flex-1 font-mono text-sm">{p}{i === 0 && <span className="ml-2 font-sans text-xs text-slate-400">utama</span>}</span>
+                      <a href={`tel:${p}`} aria-label={`Telepon ${p}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                        <Icon name="phone" className="h-4 w-4 text-[#1F4E78] dark:text-sky-300" />
+                      </a>
+                      <a href={`https://wa.me/${toWa(p)}`} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${p}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                        <Icon name="chat" className="h-4 w-4 text-green-600" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-[#1F4E78]/5 p-4 dark:bg-sky-400/10">
                 <div>
