@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { signSession, SESSION_COOKIE, SESSION_DAYS } from '../../../../lib/session';
 import { getRole } from '../../../../lib/access';
+import { recordActivity } from '../../../../lib/activity';
 
 // Google mengembalikan pengguna ke sini setelah memilih akun.
 export async function GET(req: NextRequest) {
@@ -44,6 +45,8 @@ export async function GET(req: NextRequest) {
     const email = info.email.toLowerCase();
     const role = await getRole(email);
     if (!role) return fail('akses', email);
+
+    try { await recordActivity(email, info.name || '', role, 'login'); } catch (e) { console.error('Log login gagal:', e); }
 
     const session = await signSession({ email, name: info.name, exp: Date.now() + SESSION_DAYS * 86_400_000 });
     const res = NextResponse.redirect(new URL('/', req.url));

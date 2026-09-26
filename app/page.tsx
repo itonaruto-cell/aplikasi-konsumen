@@ -11,6 +11,7 @@ const PATHS: Record<string, ReactNode> = {
   pin: (<><circle cx="12" cy="11" r="3" /><path d="M17.7 16.7 13.4 21a2 2 0 0 1-2.8 0l-4.3-4.3a8 8 0 1 1 11.3 0z" /></>),
   copy: (<><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>),
   star: <path d="M12 17.75l-6.17 3.24 1.18-6.87-5-4.86 6.9-1 3.09-6.26 3.09 6.26 6.9 1-5 4.86 1.18 6.87z" />,
+  users: (<><circle cx="9" cy="7" r="4" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M16 3.1a4 4 0 0 1 0 7.8M21 21v-2a4 4 0 0 0-3-3.9" /></>),
   logout: <path d="M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2M9 12h12l-3-3m0 6 3-3" />,
   refresh: <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />,
   x: <path d="M18 6 6 18M6 6l12 12" />,
@@ -91,6 +92,93 @@ function Highlight({ text, q }: { text: string; q: string }) {
   );
 }
 
+/* ---------- Panel aktivitas tim (khusus owner) ---------- */
+type Aktivitas = { email: string; nama: string; role: string; aktif: boolean; online: boolean; pertama: string; terakhir: string; jumlahBuka: number };
+const hhmm = (t: string) => t.slice(0, 5);
+
+function TeamPanel() {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+  const [tanggal, setTanggal] = useState(today);
+  const [list, setList] = useState<Aktivitas[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+
+  const load = async (tgl: string) => {
+    setLoading(true); setErr('');
+    try {
+      const res = await fetch(`/api/aktivitas?tanggal=${tgl}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (res.ok) setList(json.list || []); else setErr(json.error || 'Gagal memuat aktivitas.');
+    } catch { setErr('Koneksi bermasalah.'); } finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    load(tanggal);
+    if (tanggal !== today) return;
+    const t = setInterval(() => load(tanggal), 60_000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tanggal]);
+
+  const online = list.filter((x) => x.online).length;
+  const aktif = list.filter((x) => x.aktif).length;
+
+  return (
+    <section className="px-5 pt-4">
+      <div className="flex items-center gap-2">
+        <input type="date" value={tanggal} max={today} onChange={(e) => e.target.value && setTanggal(e.target.value)}
+          className="h-11 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-slate-800 dark:bg-slate-900" />
+        <button onClick={() => load(tanggal)} aria-label="Muat ulang aktivitas"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <Icon name="refresh" className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {[['Online', tanggal === today ? online : '-'], ['Aktif', aktif], ['Belum aktif', list.length - aktif]].map(([l, v]) => (
+          <div key={l} className="rounded-2xl bg-white px-3 py-3 dark:bg-slate-900">
+            <p className="text-xs text-slate-500">{l}</p>
+            <p className="text-xl font-semibold">{loading ? '…' : v}</p>
+          </div>
+        ))}
+      </div>
+
+      {err ? (
+        <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{err}</p>
+      ) : (
+        <ul className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          {!loading && list.length === 0 && <li className="p-6 text-center text-sm text-slate-500">Belum ada anggota di tab AKSES.</li>}
+          {list.map((p) => (
+            <li key={p.email} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0 dark:border-slate-800">
+              <div className="relative">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1F4E78]/10 text-sm font-semibold text-[#1F4E78] dark:bg-sky-400/15 dark:text-sky-300">
+                  {initials(p.nama || p.email)}
+                </div>
+                <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 ${p.online ? 'bg-green-500' : p.aktif ? 'bg-slate-300' : 'bg-transparent'}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{p.nama || p.email}</p>
+                <p className="truncate text-xs text-slate-500">
+                  {p.aktif ? `Aktif ${hhmm(p.pertama)} – ${hhmm(p.terakhir)} · ${p.jumlahBuka}x buka` : 'Belum membuka aplikasi'}
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                p.online ? 'bg-green-50 text-green-700 dark:bg-green-400/15 dark:text-green-300'
+                  : p.aktif ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                  : 'bg-amber-50 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300'}`}>
+                {p.online ? 'Online' : p.aktif ? `Terakhir ${hhmm(p.terakhir)}` : 'Offline'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="px-1 py-4 text-xs text-slate-500">
+        Online = aplikasi sedang terbuka di layar (aktif dalam 5 menit terakhir). Jam memakai WIB. Riwayat lengkap ada di tab LOG_AKTIF Google Sheets.
+      </p>
+    </section>
+  );
+}
+
 /* ---------- Halaman ---------- */
 export default function Home() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -100,7 +188,7 @@ export default function Home() {
   const [filters, setFilters] = useState<Record<FKey, string[]>>(EMPTY_FILTERS);
   const [openFilter, setOpenFilter] = useState<FKey | null>(null);
   const [optSearch, setOptSearch] = useState('');
-  const [tab, setTab] = useState<'cari' | 'simpan'>('cari');
+  const [tab, setTab] = useState<'cari' | 'simpan' | 'tim'>('cari');
   const [selected, setSelected] = useState<Row | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
@@ -134,6 +222,20 @@ export default function Home() {
     const h = new Date().getHours();
     setGreeting(h < 11 ? 'Selamat pagi' : h < 15 ? 'Selamat siang' : h < 18 ? 'Selamat sore' : 'Selamat malam');
   }, []);
+
+  // Catat aktivitas: saat aplikasi dibuka & setiap 2 menit selama tampil di layar
+  useEffect(() => {
+    if (!me) return;
+    const ping = (kind: 'buka' | 'aktif') => {
+      fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind }), keepalive: true })
+        .catch(() => {});
+    };
+    ping('buka');
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') ping('aktif'); }, 120_000);
+    const onVis = () => { if (document.visibilityState === 'visible') ping('buka'); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
+  }, [me?.email]);
 
   useEffect(() => {
     if (!toast) return;
@@ -261,6 +363,7 @@ export default function Home() {
             </div>
           </div>
 
+          {tab !== 'tim' && (<>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-white/10 px-4 py-3">
               <p className="text-xs text-white/70">Total konsumen</p>
@@ -288,8 +391,10 @@ export default function Home() {
               </button>
             )}
           </div>
+          </>)}
         </header>
 
+        {tab === 'tim' && isOwner ? <TeamPanel /> : (<>
         {/* Tombol filter */}
         <div className="flex gap-2 overflow-x-auto px-5 pt-4 [scrollbar-width:none]">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${activeCount ? 'bg-[#1F4E78] text-white' : 'bg-white text-slate-500 dark:bg-slate-900'}`}>
@@ -400,12 +505,15 @@ export default function Home() {
             </p>
           )}
         </section>
+        </>)}
       </div>
 
       {/* Navigasi bawah */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-        <div className="mx-auto grid max-w-xl grid-cols-2">
-          {([['cari', 'search', 'Cari'], ['simpan', 'star', `Disimpan (${saved.length})`]] as const).map(([key, icon, label]) => (
+        <div className={`mx-auto grid max-w-xl ${isOwner ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {([['cari', 'search', 'Cari'], ['simpan', 'star', `Disimpan (${saved.length})`], ['tim', 'users', 'Tim']] as const)
+            .filter(([key]) => key !== 'tim' || isOwner)
+            .map(([key, icon, label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`flex flex-col items-center gap-1 py-3 text-xs ${tab === key ? 'text-[#1F4E78] dark:text-sky-300' : 'text-slate-400'}`}>
               <Icon name={icon} className="h-6 w-6" filled={key === 'simpan' && tab === key} />

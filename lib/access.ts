@@ -40,16 +40,29 @@ async function loadAccessSheet(): Promise<Map<string, Role>> {
   return map;
 }
 
-export async function getRole(email: string): Promise<Role | null> {
-  const e = email.trim().toLowerCase();
-  const owners = (process.env.OWNER_EMAIL || '')
-    .split(',')
-    .map((x) => x.trim().toLowerCase())
-    .filter(Boolean);
-  if (owners.includes(e)) return 'owner';
-
+async function accessMap(): Promise<Map<string, Role>> {
   if (!cache || Date.now() - cache.at > CACHE_MS) {
     cache = { at: Date.now(), map: await loadAccessSheet() };
   }
-  return cache.map.get(e) ?? null;
+  return cache.map;
+}
+
+function ownerEmails(): string[] {
+  return (process.env.OWNER_EMAIL || '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export async function getRole(email: string): Promise<Role | null> {
+  const e = email.trim().toLowerCase();
+  if (ownerEmails().includes(e)) return 'owner';
+  return (await accessMap()).get(e) ?? null;
+}
+
+// Semua email yang terdaftar (owner dari Vercel + isi tab AKSES).
+export async function getAccessList(): Promise<{ email: string; role: Role }[]> {
+  const map = new Map<string, Role>(await accessMap());
+  ownerEmails().forEach((e) => map.set(e, 'owner'));
+  return Array.from(map, ([email, role]) => ({ email, role }));
 }
