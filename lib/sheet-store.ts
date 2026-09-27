@@ -20,7 +20,7 @@ async function ensureTab(tab: string, header: string[]) {
   const api = sheets();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   const meta = await api.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties.title' });
-  const exists = (meta.data.sheets || []).some((s: { properties?: { title?: string } }) => s.properties?.title === tab);
+  const exists = (meta.data.sheets || []).some((s) => s.properties?.title === tab);
   if (!exists) {
     await api.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: [{ addSheet: { properties: { title: tab } } }] } });
     await api.spreadsheets.values.update({
