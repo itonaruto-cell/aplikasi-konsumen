@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cari Konsumen",
+  title: "Markering Kendal",
   description: "Aplikasi pencarian data konsumen",
   manifest: "/manifest.json",
 };
