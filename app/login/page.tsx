@@ -21,7 +21,7 @@ export default async function LoginPage({
         <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10">
           <img src="/icon-192.png" alt="" className="h-16 w-16 rounded-2xl" />
         </div>
-        <h1 className="mt-6 text-center text-3xl font-semibold tracking-tight">Cari Konsumen</h1>
+        <h1 className="mt-6 text-center text-3xl font-semibold tracking-tight">Marketing Kendal</h1>
         <p className="mt-2 text-center text-sm text-white/70">Masuk dengan akun Google yang sudah didaftarkan owner.</p>
 
         {sp.keluar && !error && (
