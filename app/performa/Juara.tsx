@@ -1,9 +1,9 @@
 'use client';
 import { useMemo, useState } from 'react';
 import type { Metric, Orang } from '../../lib/performa-types';
-import { badges, ranking, type Ctx, type Period, type RankRow } from '../../lib/performa-calc';
+import { badges, ranking, shareJuara, type Ctx, type Period, type RankRow } from '../../lib/performa-calc';
 import { angka, persen, rp, type Push } from './ui';
-import { Avatar, Ico, Line, MoveMark, PillSeg, Podium, UnderTabs, rankVal, salesDetail, shortName, twoNames } from './parts';
+import { Avatar, Ico, Line, MoveMark, PillSeg, Podium, ShareBtn, UnderTabs, rankVal, salesDetail, shareText, shortName, twoNames } from './parts';
 
 const TABS: [Metric, string][] = [['amount', 'Amount'], ['unit', 'Unit'], ['visit', 'Visit'], ['bertemu', 'Temu'], ['maintain', 'Maintain']];
 const UNIT: Record<Metric, string> = { amount: '', unit: '', visit: 'visit', bertemu: 'bertemu', maintain: 'maintain' };
@@ -47,6 +47,9 @@ export default function Juara({ c, me, push }: { c: Ctx; me: Orang | null; push:
       <div className="flex justify-between gap-2 border-b border-neutral-200 px-4 py-2 text-[13px] text-neutral-500 dark:border-neutral-800">
         <span>{pct ? '% dari target' : per === 'minggu' ? `Jumlah ${UNIT[metric]} minggu ini` : `Jumlah ${UNIT[metric]} bulan ini`}</span>
         <span>panah = vs kemarin</span>
+      </div>
+      <div className="flex justify-end border-b border-neutral-200 px-2 dark:border-neutral-800">
+        <ShareBtn label="Bagikan ke WA" onClick={() => shareText(shareJuara(c, metric, typeof location !== 'undefined' ? location.origin : undefined))} />
       </div>
       <ul>
         {rows.map((r) => (

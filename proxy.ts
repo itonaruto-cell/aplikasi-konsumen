@@ -3,11 +3,11 @@ import { verifySession, SESSION_COOKIE } from './lib/session';
 
 // Semua halaman & data wajib login dengan akun Google (email).
 // Pengecualian: halaman login, proses login, manifest, ikon, dan assetlinks,
-// serta kiriman performa dari Apps Script (dicek sendiri dengan PERFORMA_SECRET).
+// serta kiriman performa & notifikasi dari Apps Script (dicek sendiri dengan PERFORMA_SECRET), dan service worker.
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname === '/login' || pathname.startsWith('/api/auth/')) return NextResponse.next();
-  if (pathname === '/api/performa/push') return NextResponse.next();
+  if (pathname === '/api/performa/push' || pathname === '/api/push/kirim') return NextResponse.next();
 
   const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
   if (session) return NextResponse.next();
@@ -20,6 +20,6 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!manifest.json|icon-|.well-known|_next/static|_next/image|favicon.ico).*)',
+    '/((?!manifest.json|sw.js|icon-|.well-known|_next/static|_next/image|favicon.ico).*)',
   ],
 };

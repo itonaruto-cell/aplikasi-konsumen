@@ -324,3 +324,145 @@ export function badges(c: Ctx): Badge[] {
     { id: 'rekrut', label: 'Raja rekrut', desc: 'Rekrut MA capai target', holders: c.sales.filter((o) => { const r = o.rekrut?.rekrut; return !!r && !!r.target && r.jumlah >= r.target; }) },
   ];
 }
+
+/* ---------- Target per hari ---------- */
+const cf = new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 });
+const nf = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 });
+export const fmtRp = (v: number) => 'Rp ' + cf.format(v);
+export const fmtPct = (v: number | null | undefined) => (isNum(v) ? nf.format(Math.round(v * 100)) + '%' : '–');
+
+// Hari kerja (Senin–Sabtu) tersisa di bulan ini, termasuk hari ini
+export function hariKerjaSisa(today: string): number {
+  const [y, m] = today.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  let n = 0;
+  for (let d = today; d <= last; d = addDays(d, 1)) if (dayOfWeek(d) !== 0) n++;
+  return n;
+}
+
+export type Pace = { kurang: number; perHari: number; hari: number; tercapai: boolean };
+export function pace(ini: number | null | undefined, target: number | null | undefined, today: string): Pace | null {
+  if (!isNum(ini) || !isNum(target) || target <= 0) return null;
+  const hari = hariKerjaSisa(today);
+  const kurang = Math.max(0, target - ini);
+  return { kurang, perHari: hari ? kurang / hari : kurang, hari, tercapai: kurang <= 0 };
+}
+export function paceText(p: Pace | null, what: 'amount' | 'unit'): string {
+  if (!p) return '';
+  if (p.tercapai) return 'Target tercapai';
+  if (what === 'amount') return `Kurang ${fmtRp(p.kurang)} · ±${fmtRp(p.perHari)}/hari`;
+  const k = Math.ceil(p.kurang);
+  return `Kurang ${k} unit · ±${nf.format(Math.ceil(p.perHari * 10) / 10)}/hari`;
+}
+
+/* ---------- Data telat ---------- */
+// Sheet belum diperbarui ≥2 hari, atau kiriman Apps Script terakhir >3 jam lalu
+export function staleInfo(data: Performa, now = new Date()): string {
+  const today = todayJkt(now);
+  const upd = day10(data.updated || '');
+  const msgs: string[] = [];
+  if (validDay(upd) && daysBetween(upd, today) >= 2) {
+    const tgl = new Date(upd + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    msgs.push(`Data sheet terakhir ${tgl} (${daysBetween(upd, today)} hari lalu), angka terbaru mungkin belum masuk.`);
+  }
+  const sent = new Date(data.dikirim || '').getTime();
+  if (isFinite(sent) && now.getTime() - sent > 3 * 3600_000) {
+    const jam = Math.floor((now.getTime() - sent) / 3600_000);
+    msgs.push(`Kiriman otomatis terakhir ${jam >= 24 ? Math.floor(jam / 24) + ' hari' : jam + ' jam'} lalu.`);
+  }
+  return msgs.join(' ');
+}
+
+/* ---------- Teks untuk dibagikan (WhatsApp) ---------- */
+const title = (s: string) => String(s || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+const short = (n: string) => title(String(n).split(/\s+/).find((w) => !/^(MUHAMMAD|MUHAMAD|MOHAMMAD|MOH\.?|MOCH\.?|M\.?)$/i.test(w)) || n);
+
+export function shareJuara(c: Ctx, metric: Metric, url?: string): string {
+  const label = METRICS.find((m) => m[0] === metric)?.[1] || metric;
+  const rows = ranking(c, metric).filter((r) => r.rank);
+  const medal = ['🥇', '🥈', '🥉'];
+  const val = (r: RankRow) => (r.pct ? fmtPct(r.val) : nf.format(r.val || 0))
+    + (metric === 'amount' && isNum(r.o.amount?.ini) ? ` (${fmtRp(r.o.amount!.ini as number)})` : '')
+    + (metric === 'unit' && isNum(r.o.unit?.ini) ? ` (${r.o.unit!.ini} unit)` : '');
+  const bulan = new Date(c.today + 'T00:00:00Z').toLocaleDateString('id-ID', { month: 'long', timeZone: 'UTC' });
+  const lines = [
+    `*Papan juara ${label} · ${title(c.data.cabang)} ${bulan}*`,
+    ...rows.map((r, i) => `${medal[i] || `${r.rank}.`} ${short(r.o.nama)}: ${val(r)}`),
+  ];
+  const t = c.data.cabangTotal;
+  if (t?.amount || t?.unit) lines.push('', `Cabang: amount ${fmtPct(t.amount?.ach)} · unit ${fmtPct(t.unit?.ach)} · sisa ${hariKerjaSisa(c.today)} hari kerja`);
+  const riv = rivalry(rows);
+  if (riv && riv.gap <= (riv.up.pct ? 0.05 : 3)) lines.push(`🔥 ${short(riv.down.o.nama)} tinggal selisih ${riv.up.pct ? fmtPct(riv.gap) : nf.format(riv.gap)} dari ${short(riv.up.o.nama)}!`);
+  if (url) lines.push('', url);
+  return lines.join('\n');
+}
+
+export function shareRekap(f: Extract<FeedItem, { t: 'rekap' }>, cabang: string, url?: string): string {
+  return [`*Juara minggu lalu · ${title(cabang)}*`, ...f.juara.map((j) => `🏆 ${j.label}: ${short(j.o.nama)} (${j.n})`), ...(url ? ['', url] : [])].join('\n');
+}
+
+/* ---------- Isi notifikasi ---------- */
+export type Notif = { title: string; body: string; url?: string; tag?: string };
+
+export function notifPagi(c: Ctx, o: Orang | null): Notif {
+  const today = c.today;
+  const parts: string[] = [];
+  const b = o ? brandOf(o) : '';
+  if (!o || o.visit || !o.maintain) {
+    const kons = konsumenOf(c.data, (b || 'semua') as BrandKey);
+    const belum = kons.filter((x) => belumVisit(x.k));
+    const kc = new Map<string, number>();
+    belum.forEach((x) => { if (x.k.k) kc.set(x.k.k, (kc.get(x.k.k) || 0) + 1); });
+    const top = [...kc].sort((x, y) => y[1] - x[1])[0];
+    if (belum.length) parts.push(`${belum.length} konsumen belum visit${top ? `, terbanyak di Kec. ${title(top[0])}` : ''}.`);
+  }
+  if (o?.maintain?.belum) parts.push(`${o.maintain.belum} MA belum dimaintain.`);
+  const rk = o?.rekrut?.rekrut;
+  if (rk?.target && rk.jumlah < rk.target) parts.push(`Rekrut MA ${rk.jumlah}/${rk.target}.`);
+  if (o) {
+    const r = ranking(c, 'amount').find((x) => x.o === o);
+    const u = pace(o.unit?.ini, o.unit?.target, today);
+    if (r?.rank) parts.push(`Kamu #${r.rank} amount (${fmtPct(r.val)}).`);
+    if (u && !u.tercapai) parts.push(`Butuh ${Math.ceil(u.kurang)} unit lagi dalam ${u.hari} hari kerja.`);
+  } else {
+    const t = c.data.cabangTotal;
+    parts.push(`Cabang: amount ${fmtPct(t?.amount?.ach)}, unit ${fmtPct(t?.unit?.ach)}, sisa ${hariKerjaSisa(today)} hari kerja.`);
+  }
+  return { title: 'Misi hari ini', body: parts.join(' ') || 'Cek papan juara & misi hari ini.', url: '/', tag: 'pagi' };
+}
+
+export function notifSore(c: Ctx, o: Orang | null): Notif {
+  const today = c.today;
+  if (!o) {
+    const t = c.data.cabangTotal;
+    return { title: 'Rekap sore', body: `Cabang hari ini: amount ${fmtPct(t?.amount?.ach)}, unit ${fmtPct(t?.unit?.ach)}. Sisa ${hariKerjaSisa(addDays(today, 1))} hari kerja setelah hari ini.`, url: '/', tag: 'sore' };
+  }
+  const a = actsOf(c, o.nama);
+  const v = a.visits.filter((x) => x.d === today), m = a.maint.filter((x) => x.d === today);
+  const parts: string[] = [];
+  if (v.length) parts.push(`Hari ini kamu visit ${v.length} konsumen, ${v.filter((x) => x.met).length} bertemu.`);
+  if (m.length) parts.push(`Maintain ${m.length} MA hari ini.`);
+  if (!v.length && !m.length) parts.push('Aktivitas hari ini belum tercatat. Pastikan sudah diisi di sheet ya.');
+  const r = ranking(c, 'amount').find((x) => x.o === o);
+  if (r?.rank) parts.push(`Posisi kamu #${r.rank} amount.`);
+  return { title: 'Rekap sore', body: parts.join(' '), url: '/', tag: 'sore' };
+}
+
+// Perubahan peringkat amount: siapa naik, siapa disalip
+export function rankMoves(before: string[] | undefined, after: string[] | undefined) {
+  const out: { nama: string; kind: 'naik' | 'disalip'; to: number; oleh?: string }[] = [];
+  if (!before?.length || !after?.length) return out;
+  after.forEach((n, i) => {
+    const was = before.indexOf(n);
+    if (was > i) {
+      out.push({ nama: n, kind: 'naik', to: i + 1 });
+      after.slice(i + 1).forEach((m) => { if (before.indexOf(m) !== -1 && before.indexOf(m) < was) out.push({ nama: m, kind: 'disalip', to: after.indexOf(m) + 1, oleh: n }); });
+    }
+  });
+  return out;
+}
+export function notifMove(mv: ReturnType<typeof rankMoves>[number]): Notif {
+  return mv.kind === 'naik'
+    ? { title: 'Naik peringkat!', body: `Kamu sekarang #${mv.to} papan juara amount. Pertahankan!`, url: '/', tag: 'peringkat' }
+    : { title: 'Posisimu disalip', body: `${short(mv.oleh || '')} menyalip kamu. Sekarang kamu #${mv.to} amount. Kejar lagi!`, url: '/', tag: 'peringkat' };
+}

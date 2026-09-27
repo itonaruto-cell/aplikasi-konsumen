@@ -5,6 +5,7 @@ import { ThemeToggle } from '../theme';
 import { OrangDetail, nama, type Push } from './ui';
 import { Avatar, Card, Ico } from './parts';
 import { MONITORING_MOTORKU } from './Rute';
+import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
@@ -75,6 +76,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas }: { c: Ct
             <span className="block text-[13px] text-neutral-500">Akses: {role}</span>
           </span>
         </div>
+        <NotifSetting nama={me?.nama || ''} />
         <div className="flex min-h-14 items-center gap-3 border-b border-neutral-200 px-4 dark:border-neutral-800">
           <span className="flex-1 text-[15px]">Mode terang / gelap</span>
           <ThemeToggle className="h-11 w-11 border border-neutral-200 dark:border-neutral-800" />

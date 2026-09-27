@@ -1,7 +1,9 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import { OverlayCtx } from './overlay';
-import type { Orang, Performa } from '../lib/performa-types';
+import type { Orang, Pengumuman, Performa } from '../lib/performa-types';
+import { PengumumanForm } from './performa/Pengumuman';
+import { refreshPush } from './push-client';
 import { brandOf, buildCtx, findMe, stories, streak, type BrandKey, type Story } from '../lib/performa-calc';
 import { ThemeToggle } from './theme';
 import { Sheet, type View } from './performa/ui';
@@ -39,6 +41,10 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const [seen, setSeen] = useState<string[]>([]);
   const [pull, setPull] = useState(0);
   const pullStart = useRef<number | null>(null);
+  const [pengumuman, setPengumuman] = useState<Pengumuman[]>([]);
+  const [pKey, setPKey] = useState(0);
+  const [formP, setFormP] = useState(false);
+  const [toast, setToast] = useState('');
 
   // Lembar/panel dari halaman lain (mis. detail di Cari) ikut ditutup tombol kembali Android
   const overlays = useRef<(() => void)[]>([]);
@@ -76,6 +82,19 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   }, [reloadKey]);
   const reload = () => setReloadKey((k) => k + 1);
 
+  // Pengumuman owner
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/pengumuman', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { list: [] }))
+      .then((j) => { if (alive) setPengumuman(Array.isArray(j?.list) ? j.list : []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [reloadKey, pKey]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // Balik ke aplikasi setelah >5 menit → muat ulang diam-diam
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === 'visible' && Date.now() - loadedAt.current > 300_000) reload(); };
@@ -97,6 +116,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const me: Orang | null = useMemo(() => (data ? findMe(data, akun.perfName, akun.name) : null), [data, akun.perfName, akun.name]);
   const storyList = useMemo(() => (c ? stories(c, brand, me) : []), [c, brand, me]);
   const myStreak = c && me ? streak(c, me.nama) : 0;
+  // Simpan nama anggota di langganan notifikasi (supaya pesan pagi/sore sesuai orangnya)
+  useEffect(() => { if (me) refreshPush(me.nama).catch(() => {}); }, [me?.nama]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- Tombol kembali Android: tutup panel / sorotan / balik ke Kabar ---------- */
   const push = (v: View) => setStack((s) => [...s, v]);
@@ -213,6 +234,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             {page === 'kabar' && (
               <Kabar c={c} me={me} brand={brand} push={push}
                 storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory}
+                pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
                 goJuara={() => go('juara')}
                 goRute={(mode, b) => { setRute((r) => ({ mode, brand: b, n: r.n + 1 })); go('rute'); }} />
             )}
@@ -249,6 +271,16 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             const r = [...c.sales].filter((o) => typeof o.amount?.ach === 'number').sort((a, b) => (b.amount!.ach as number) - (a.amount!.ach as number));
             return [r.findIndex((o) => o.nama === n) + 1, r.length];
           }} />
+      )}
+
+      {formP && (
+        <PengumumanForm onClose={() => setFormP(false)}
+          onSaved={(n) => { setFormP(false); setPKey((k) => k + 1); setToast(n ? `Pengumuman terkirim ke ${n} HP` : 'Pengumuman disematkan'); }} />
+      )}
+      {toast && (
+        <div className="fixed inset-x-0 bottom-[calc(96px+env(safe-area-inset-bottom))] z-50 flex justify-center px-5">
+          <div className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">{toast}</div>
+        </div>
       )}
 
       {story !== null && c && storyList.length > 0 && (

@@ -74,3 +74,6 @@ export type Performa = {
 export type Metric = 'amount' | 'unit' | 'visit' | 'bertemu' | 'maintain';
 export type Peringkat = Partial<Record<Metric, string[]>>;
 export type Riwayat = { kemarin?: { tgl: string; rank: Peringkat } };
+
+// Pengumuman owner (tab PENGUMUMAN)
+export type Pengumuman = { id: string; judul: string; isi: string; untuk: 'semua' | 'mobilku' | 'motorku'; sampai: string; dibuat: string; oleh: string };

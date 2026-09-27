@@ -65,6 +65,7 @@ export async function savePerforma(data: Performa) {
     snaps = parseSnaps(r.data.values?.[0]?.[0]);
   } catch { snaps = {}; }
   const rank = rankSnapshot(data, today);
+  const before = snaps.cur?.rank;   // urutan dari kiriman sebelumnya (untuk notifikasi naik/disalip)
   snaps = snaps.cur && snaps.cur.tgl !== today ? { prev: snaps.cur, cur: { tgl: today, rank } } : { prev: snaps.prev, cur: { tgl: today, rank } };
   await api.spreadsheets.values.update({
     spreadsheetId, range: `${PERF_TAB}!B1`, valueInputOption: 'RAW', requestBody: { values: [[JSON.stringify(snaps)]] },
@@ -80,6 +81,7 @@ export async function savePerforma(data: Performa) {
     requestBody: { values: [[NOTE], ...chunks] },
   });
   cache = { at: Date.now(), data };
+  return { before, after: rank };
 }
 
 export async function loadPerforma(): Promise<Performa | null> {

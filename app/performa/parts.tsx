@@ -21,6 +21,7 @@ const P: Record<string, ReactNode> = {
   users: (<><circle cx="9" cy="7" r="4" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M16 11l2 2 4-4" /></>),
   logout: <path d="M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2M9 12h12l-3-3m0 6 3-3" />,
   map: (<><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z" /><path d="M9 4v14m6-12v14" /></>),
+  share: (<><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5" /></>),
 };
 
 export function Ico({ n, className = 'h-5 w-5', fill = 'none', sw = 1.9 }: { n: string; className?: string; fill?: string; sw?: number }) {
@@ -170,3 +171,19 @@ export const salesDetail = (metric: string) => (r: RankRow) =>
   metric === 'amount' ? (typeof r.o.amount?.ini === 'number' ? rp(r.o.amount.ini) : '')
     : metric === 'unit' ? (typeof r.o.unit?.ini === 'number' ? `${angka(r.o.unit.ini)} unit` : '')
       : '';
+
+// Bagikan teks: lembar bagikan bawaan HP (WhatsApp ada di sana); kalau tidak ada, langsung buka WhatsApp
+export async function shareText(text: string) {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.share) { await navigator.share({ text }); return; }
+  } catch (e) { if ((e as Error)?.name === 'AbortError') return; }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+}
+
+export function ShareBtn({ onClick, label = 'Bagikan' }: { onClick: () => void; label?: string }) {
+  return (
+    <button onClick={onClick} aria-label={label || 'Bagikan ke WhatsApp'} className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-2 text-sm font-bold active:bg-neutral-100 dark:active:bg-neutral-900">
+      <Ico n="share" className="h-[18px] w-[18px]" sw={2} />{label}
+    </button>
+  );
+}

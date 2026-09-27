@@ -2,11 +2,14 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { KonsumenFull, MaFull, Metric, Orang, Performa, Sales } from '../../lib/performa-types';
 import {
-  belumVisit, brandOf, feed, isNum, konsumenOf, perluUlang, ranking, relDay, rivalry,
+  belumVisit, brandOf, feed, hariKerjaSisa, isNum, konsumenOf, pace, paceText, perluUlang, ranking, relDay, rivalry, shareJuara, shareRekap, staleInfo,
   type BrandKey, type Ctx, type FeedItem, type Story,
 } from '../../lib/performa-calc';
 import { angka, nama, persen, rp, tanggal, waktu, type Push } from './ui';
-import { Avatar, Card, Ico, Line, PillSeg, Podium, SectionTitle, salesDetail, shortName, twoNames } from './parts';
+import { Avatar, Card, Ico, Line, PillSeg, Podium, SectionTitle, ShareBtn, salesDetail, shareText, shortName, twoNames } from './parts';
+import { PengumumanList } from './Pengumuman';
+import { NotifPrompt } from './Notif';
+import type { Pengumuman } from '../../lib/performa-types';
 
 const BR: ['mobilku' | 'motorku', string][] = [['mobilku', 'Mobilku'], ['motorku', 'Motorku']];
 const brands = (b: BrandKey) => (b === 'semua' ? BR.map((x) => x[0]) : [b]);
@@ -27,10 +30,8 @@ function totalOf(c: Ctx, brand: BrandKey, what: 'amount' | 'unit'): Sales | null
 }
 
 function sisaHari(today: string) {
-  const [y, m, d] = today.split('-').map(Number);
-  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const n = last - d;
-  return n > 0 ? `Sisa ${n} hari` : 'Hari terakhir';
+  const n = hariKerjaSisa(today);
+  return n > 1 ? `Sisa ${n} hari kerja` : n === 1 ? 'Hari kerja terakhir' : 'Bulan sudah habis';
 }
 const bulanPanjang = (today: string) =>
   new Date(today + 'T00:00:00Z').toLocaleDateString('id-ID', { month: 'long', timeZone: 'UTC' });
@@ -159,7 +160,10 @@ function FeedCard({ f, c, push, openK }: { f: FeedItem; c: Ctx; push: Push; open
     <Post tag="rekap" time={time} icon={
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-[#F5C451] dark:bg-neutral-800"><Ico n="trophy" className="h-5 w-5" sw={2} /></span>
     }>
-      <p className="text-[15px] leading-snug">Selamat buat para juara!</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[15px] leading-snug">Selamat buat para juara!</p>
+        <ShareBtn onClick={() => shareText(shareRekap(f, c.data.cabang, typeof location !== 'undefined' ? location.origin : undefined))} />
+      </div>
       <div className="overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800">
         {f.juara.map((j) => (
           <button key={j.label} onClick={() => push({ t: 'orang', o: j.o })}
@@ -174,8 +178,9 @@ function FeedCard({ f, c, push, openK }: { f: FeedItem; c: Ctx; push: Push; open
 }
 
 /* ---------- Halaman Kabar ---------- */
-export default function Kabar({ c, me, brand, push, storyList, seen, openStory, goJuara, goRute }: {
+export default function Kabar({ c, me, brand, push, storyList, seen, openStory, goJuara, goRute, pengumuman, isOwner, onPengumuman, buatPengumuman }: {
   c: Ctx; me: Orang | null; brand: BrandKey; push: Push;
+  pengumuman: Pengumuman[]; isOwner: boolean; onPengumuman: () => void; buatPengumuman: () => void;
   storyList: Story[]; seen: (s: Story) => boolean; openStory: (i: number) => void;
   goJuara: () => void; goRute: (mode: 'belum' | 'ulang', b: BrandKey) => void;
 }) {
@@ -228,17 +233,28 @@ export default function Kabar({ c, me, brand, push, storyList, seen, openStory, 
     const u = me.unit, am = me.amount;
     if (u && isNum(u.ach) && u.ach < 1 && isNum(u.target) && isNum(u.ini)) {
       const kurang = Math.max(1, Math.ceil(u.target - u.ini));
-      return { title: 'Badge Unit tembus', val: `${angka(u.ini)}/${angka(u.target)}`, ach: u.ach, sub: `Tinggal ${kurang} unit lagi` };
+      const p = pace(u.ini, u.target, today);
+      return { title: 'Badge Unit tembus', val: `${angka(u.ini)}/${angka(u.target)}`, ach: u.ach, sub: `Tinggal ${kurang} unit lagi${p && p.hari ? ` · ±${(Math.ceil(p.perHari * 10) / 10).toLocaleString('id-ID')}/hari` : ''}` };
     }
     if (am && isNum(am.ach) && am.ach < 1) {
-      return { title: 'Badge Target tembus', val: persen(am.ach), ach: am.ach, sub: `Kurang ${rp(isNum(am.diffTarget) ? -am.diffTarget : null)} lagi` };
+      return { title: 'Badge Target tembus', val: persen(am.ach), ach: am.ach, sub: paceText(pace(am.ini, am.target, today), 'amount') };
     }
     return { title: 'Target tembus semua', val: '100%', ach: 1, sub: 'Mantap! Pertahankan sampai akhir bulan' };
   })() : null;
 
+  const stale = staleInfo(data);
+  const shareUrl = typeof location !== 'undefined' ? location.origin : undefined;
+
   return (
     <div className="pb-6">
+      {stale && (
+        <div role="status" className="flex items-start gap-2 bg-[#FFF4E0] px-4 py-2.5 text-[13px] leading-snug text-[#5C2F00] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">
+          <Ico n="refresh" className="mt-px h-4 w-4 shrink-0" sw={2} />{stale}
+        </div>
+      )}
       <Stories list={storyList} me={me} seen={seen} open={openStory} />
+      <PengumumanList list={pengumuman} brand={brand} isOwner={isOwner} onChanged={onPengumuman} onCreate={buatPengumuman} />
+      <NotifPrompt nama={me?.nama || ''} />
 
       {/* Rekap cabang */}
       <Card className="mx-4 mt-4 p-4">
@@ -255,13 +271,30 @@ export default function Kabar({ c, me, brand, push, storyList, seen, openStory, 
               <span className="truncate text-[13px] text-neutral-500">
                 {s ? (money ? `${rp(s.ini).replace('Rp ', 'Rp')} / ${rp(s.target).replace('Rp ', '')}` : `${angka(s.ini)} / ${angka(s.target)} unit`) : '–'}
               </span>
+              {s && (() => {
+                const p = pace(s.ini, s.target, today);
+                if (!p) return null;
+                return p.tercapai
+                  ? <span className="text-[13px] font-bold text-green-700 dark:text-green-400">Target tercapai</span>
+                  : (
+                    <span className="text-[13px] leading-snug">
+                      <b>Kurang {money ? rp(p.kurang) : `${Math.ceil(p.kurang)} unit`}</b>
+                      <span className="block text-neutral-500">±{money ? rp(p.perHari) : `${(Math.ceil(p.perHari * 10) / 10).toLocaleString('id-ID')} unit`}/hari</span>
+                    </span>
+                  );
+              })()}
             </div>
           ))}
         </div>
       </Card>
 
       {/* Papan juara */}
-      <SectionTitle right={<button onClick={goJuara} className="flex min-h-11 items-center text-sm font-bold">Lihat semua ›</button>}>Papan juara</SectionTitle>
+      <SectionTitle right={
+        <span className="flex items-center">
+          <ShareBtn label="" onClick={() => shareText(shareJuara(c, metric, shareUrl))} />
+          <button onClick={goJuara} className="flex min-h-11 items-center pl-1 text-sm font-bold">Lihat semua ›</button>
+        </span>
+      }>Papan juara</SectionTitle>
       <div className="px-4 pt-2">
         <PillSeg value={metric} onChange={setMetric} full options={[['amount', 'Amount'], ['unit', 'Unit'], ['visit', 'Visit']]} />
       </div>
