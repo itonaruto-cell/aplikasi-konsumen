@@ -2,10 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from './lib/session';
 
 // Semua halaman & data wajib login dengan akun Google (email).
-// Pengecualian: halaman login, proses login, manifest, ikon, dan assetlinks.
+// Pengecualian: halaman login, proses login, manifest, ikon, dan assetlinks,
+// serta kiriman performa dari Apps Script (dicek sendiri dengan PERFORMA_SECRET).
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname === '/login' || pathname.startsWith('/api/auth/')) return NextResponse.next();
+  if (pathname === '/api/performa/push') return NextResponse.next();
 
   const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
   if (session) return NextResponse.next();

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import PerformaPanel from './PerformaPanel';
 
 type Row = Record<string, string>;
 
@@ -21,6 +22,7 @@ const PATHS: Record<string, ReactNode> = {
   filter: <path d="M4 4h16v2.2a2 2 0 0 1-.6 1.4L15 12v7l-6 2v-8.5L4.5 7.6A2 2 0 0 1 4 6.2z" />,
   check: <path d="m5 12 5 5L20 7" />,
   down: <path d="m6 9 6 6 6-6" />,
+  chart: <path d="M4 20V10m6 10V4m6 16v-7m4 7H3" />,
 };
 
 function Icon({ name, className = 'h-5 w-5', filled = false }: { name: string; className?: string; filled?: boolean }) {
@@ -188,23 +190,33 @@ export default function Home() {
   const [filters, setFilters] = useState<Record<FKey, string[]>>(EMPTY_FILTERS);
   const [openFilter, setOpenFilter] = useState<FKey | null>(null);
   const [optSearch, setOptSearch] = useState('');
-  const [tab, setTab] = useState<'cari' | 'simpan' | 'tim'>('cari');
+  const [tab, setTab] = useState<'cari' | 'simpan' | 'performa' | 'tim'>('cari');
+  const [perfKey, setPerfKey] = useState(0);
   const [selected, setSelected] = useState<Row | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [toast, setToast] = useState('');
   const [picker, setPicker] = useState<{ kind: 'tel' | 'wa'; phones: string[] } | null>(null);
   const [greeting, setGreeting] = useState('Selamat datang');
-  const [me, setMe] = useState<{ email: string; name?: string; role: 'owner' | 'tim' } | null>(null);
+  const [me, setMe] = useState<{ email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' } | null>(null);
   const isOwner = me?.role === 'owner';
+  // Database konsumen hanya untuk owner & peran "konsumen"; peran "tim" hanya melihat performa.
+  const canKonsumen = me?.role === 'owner' || me?.role === 'konsumen';
+  const view = me && !canKonsumen ? 'performa' : tab;
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const [res, meRes] = await Promise.all([fetch('/api/search?q=', { cache: 'no-store' }), fetch('/api/me', { cache: 'no-store' })]);
-      if (res.status === 401 || meRes.status === 401) { window.location.href = '/login'; return; }
-      if (meRes.ok) setMe(await meRes.json());
+      const meRes = await fetch('/api/me', { cache: 'no-store' });
+      if (meRes.status === 401) { window.location.href = '/login'; return; }
+      const meJson = await meRes.json();
+      if (!meRes.ok) { setError(meJson?.error || 'Akun ini tidak bisa dipakai.'); return; }
+      setMe(meJson);
+      if (meJson.role !== 'owner' && meJson.role !== 'konsumen') { setTab('performa'); return; }
+
+      const res = await fetch('/api/search?q=', { cache: 'no-store' });
+      if (res.status === 401) { window.location.href = '/login'; return; }
       const json = await res.json();
       if (Array.isArray(json)) setRows(json);
       else setError(json?.error || 'Data tidak bisa dimuat.');
@@ -345,14 +357,14 @@ export default function Home() {
                 {greeting}{me?.name ? `, ${me.name.split(' ')[0]}` : ''}
                 {me && (
                   <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide">
-                    {isOwner ? 'Owner' : 'Tim'}
+                    {isOwner ? 'Owner' : canKonsumen ? 'Konsumen' : 'Tim'}
                   </span>
                 )}
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight">Cari Konsumen</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">{view === 'performa' ? 'Performa Tim' : 'Cari Konsumen'}</h1>
             </div>
             <div className="flex gap-2">
-              <button onClick={load} aria-label="Muat ulang data"
+              <button onClick={() => (view === 'performa' ? setPerfKey((k) => k + 1) : load())} aria-label="Muat ulang data"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
                 <Icon name="refresh" className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
               </button>
@@ -363,7 +375,7 @@ export default function Home() {
             </div>
           </div>
 
-          {tab !== 'tim' && (<>
+          {view !== 'tim' && view !== 'performa' && (<>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-white/10 px-4 py-3">
               <p className="text-xs text-white/70">Total konsumen</p>
@@ -394,7 +406,7 @@ export default function Home() {
           </>)}
         </header>
 
-        {tab === 'tim' && isOwner ? <TeamPanel /> : (<>
+        {view === 'tim' && isOwner ? <TeamPanel /> : view === 'performa' ? <PerformaPanel reloadKey={perfKey} /> : (<>
         {/* Tombol filter */}
         <div className="flex gap-2 overflow-x-auto px-5 pt-4 [scrollbar-width:none]">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${activeCount ? 'bg-[#1F4E78] text-white' : 'bg-white text-slate-500 dark:bg-slate-900'}`}>
@@ -508,20 +520,24 @@ export default function Home() {
         </>)}
       </div>
 
-      {/* Navigasi bawah */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-        <div className={`mx-auto grid max-w-xl ${isOwner ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          {([['cari', 'search', 'Cari'], ['simpan', 'star', `Disimpan (${saved.length})`], ['tim', 'users', 'Tim']] as const)
-            .filter(([key]) => key !== 'tim' || isOwner)
-            .map(([key, icon, label]) => (
-            <button key={key} onClick={() => setTab(key)}
-              className={`flex flex-col items-center gap-1 py-3 text-xs ${tab === key ? 'text-[#1F4E78] dark:text-sky-300' : 'text-slate-400'}`}>
-              <Icon name={icon} className="h-6 w-6" filled={key === 'simpan' && tab === key} />
-              {label}
-            </button>
-          ))}
-        </div>
-      </nav>
+      {/* Navigasi bawah (akun peran "tim" hanya punya Performa, jadi tidak perlu navigasi) */}
+      {me && canKonsumen && (() => {
+        const items = ([['cari', 'search', 'Cari'], ['simpan', 'star', `Disimpan (${saved.length})`], ['performa', 'chart', 'Performa'], ['tim', 'users', 'Aktivitas']] as const)
+          .filter(([key]) => key !== 'tim' || isOwner);
+        return (
+          <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+            <div className="mx-auto grid max-w-xl" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+              {items.map(([key, icon, label]) => (
+                <button key={key} onClick={() => setTab(key)}
+                  className={`flex flex-col items-center gap-1 py-3 text-xs ${view === key ? 'text-[#1F4E78] dark:text-sky-300' : 'text-slate-400'}`}>
+                  <Icon name={icon} className="h-6 w-6" filled={key === 'simpan' && view === key} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        );
+      })()}
 
       {/* Panel pilihan filter (bottom sheet) */}
       {openFilter && (() => {

@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
-import { getRole } from '../../../lib/access';
+import { getRole, canSeeKonsumen } from '../../../lib/access';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,9 @@ export async function GET(request) {
   if (!session) return Response.json({ error: 'Silakan login dulu.' }, { status: 401 });
   const role = await getRole(session.email);
   if (!role) return Response.json({ error: 'Akses akun ini sudah dicabut. Hubungi owner.' }, { status: 403 });
+  if (!canSeeKonsumen(role)) {
+    return Response.json({ error: 'Akun ini hanya bisa melihat performa tim.' }, { status: 403 });
+  }
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q')?.toLowerCase() || '';

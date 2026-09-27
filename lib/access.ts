@@ -2,10 +2,16 @@ import { google } from 'googleapis';
 
 // Siapa boleh masuk & perannya.
 // - OWNER_EMAIL (Environment Variable di Vercel): selalu owner, pisahkan dengan koma kalau lebih dari satu.
-// - Tab "AKSES" di Google Sheets: kolom A = EMAIL, kolom B = ROLE (owner / tim). Mulai baris 2.
-//   Email yang tidak ada di daftar tidak bisa masuk.
+// - Tab "AKSES" di Google Sheets: kolom A = EMAIL, kolom B = ROLE. Mulai baris 2.
+//     owner    = semua fitur, termasuk nomor HP konsumen & aktivitas tim
+//     konsumen = performa tim + database konsumen (tanpa nomor HP)
+//     tim      = hanya performa tim
+//   Email yang tidak ada di daftar tidak bisa masuk. ROLE kosong/lainnya dianggap "tim".
 
-export type Role = 'owner' | 'tim';
+export type Role = 'owner' | 'konsumen' | 'tim';
+
+// Boleh membuka database konsumen?
+export const canSeeKonsumen = (role: Role | null | undefined) => role === 'owner' || role === 'konsumen';
 
 let cache: { at: number; map: Map<string, Role> } | null = null;
 const CACHE_MS = 60_000;
@@ -32,7 +38,7 @@ async function loadAccessSheet(): Promise<Map<string, Role>> {
       const email = String(row[0] || '').trim().toLowerCase();
       if (!email || !email.includes('@')) continue;
       const role = String(row[1] || '').trim().toLowerCase();
-      map.set(email, role === 'owner' ? 'owner' : 'tim');
+      map.set(email, role === 'owner' ? 'owner' : role === 'konsumen' ? 'konsumen' : 'tim');
     }
   } catch (err) {
     console.error('Gagal membaca tab AKSES:', err);
