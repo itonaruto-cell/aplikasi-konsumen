@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import PerformaPanel from './PerformaPanel';
+import { ThemeToggle } from './theme';
 
 type Row = Record<string, string>;
 
@@ -23,40 +24,7 @@ const PATHS: Record<string, ReactNode> = {
   check: <path d="m5 12 5 5L20 7" />,
   down: <path d="m6 9 6 6 6-6" />,
   chart: <path d="M4 20V10m6 10V4m6 16v-7m4 7H3" />,
-  sun: (<><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>),
-  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />,
 };
-
-/* ---------- Mode terang / gelap ---------- */
-function ThemeToggle() {
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'));
-    // Selama belum memilih sendiri, ikuti perubahan pengaturan HP
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => {
-      let chosen: string | null = null;
-      try { chosen = localStorage.getItem('ck_theme'); } catch { /* abaikan */ }
-      if (chosen) return;
-      document.documentElement.classList.toggle('dark', e.matches);
-      setDark(e.matches);
-    };
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  const toggle = () => {
-    const next = !dark;
-    document.documentElement.classList.toggle('dark', next);
-    try { localStorage.setItem('ck_theme', next ? 'dark' : 'light'); } catch { /* abaikan */ }
-    setDark(next);
-  };
-  return (
-    <button onClick={toggle} aria-label={dark ? 'Pakai mode terang' : 'Pakai mode gelap'} title={dark ? 'Mode terang' : 'Mode gelap'}
-      className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
-      <Icon name={dark ? 'sun' : 'moon'} className="h-5 w-5" />
-    </button>
-  );
-}
 
 function Icon({ name, className = 'h-5 w-5', filled = false }: { name: string; className?: string; filled?: boolean }) {
   return (
@@ -224,14 +192,13 @@ export default function Home() {
   const [openFilter, setOpenFilter] = useState<FKey | null>(null);
   const [optSearch, setOptSearch] = useState('');
   const [tab, setTab] = useState<'cari' | 'simpan' | 'performa' | 'tim'>('cari');
-  const [perfKey, setPerfKey] = useState(0);
   const [selected, setSelected] = useState<Row | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [toast, setToast] = useState('');
   const [picker, setPicker] = useState<{ kind: 'tel' | 'wa'; phones: string[] } | null>(null);
   const [greeting, setGreeting] = useState('Selamat datang');
-  const [me, setMe] = useState<{ email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' } | null>(null);
+  const [me, setMe] = useState<{ email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null } | null>(null);
   const isOwner = me?.role === 'owner';
   // Database konsumen hanya untuk owner & peran "konsumen"; peran "tim" hanya melihat performa.
   const canKonsumen = me?.role === 'owner' || me?.role === 'konsumen';
@@ -379,6 +346,11 @@ export default function Home() {
     }
   };
 
+  // Performa tampil layar penuh dengan navigasinya sendiri (Kabar · Juara · Rute · Saya)
+  if (me && view === 'performa') {
+    return <PerformaPanel me={me} onExit={canKonsumen ? () => setTab('cari') : undefined} />;
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 pb-28 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto max-w-xl">
@@ -394,11 +366,11 @@ export default function Home() {
                   </span>
                 )}
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight">{view === 'performa' ? 'Performa Tim' : 'Cari Konsumen'}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Cari Konsumen</h1>
             </div>
             <div className="flex gap-2">
-              <ThemeToggle />
-              <button onClick={() => (view === 'performa' ? setPerfKey((k) => k + 1) : load())} aria-label="Muat ulang data"
+              <ThemeToggle className="h-10 w-10 bg-white/10" />
+              <button onClick={() => load()} aria-label="Muat ulang data"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
                 <Icon name="refresh" className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
               </button>
@@ -440,7 +412,7 @@ export default function Home() {
           </>)}
         </header>
 
-        {view === 'tim' && isOwner ? <TeamPanel /> : view === 'performa' ? <PerformaPanel reloadKey={perfKey} /> : (<>
+        {view === 'tim' && isOwner ? <TeamPanel /> : (<>
         {/* Tombol filter */}
         <div className="flex gap-2 overflow-x-auto px-5 pt-4 [scrollbar-width:none]">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${activeCount ? 'bg-[#1F4E78] text-white' : 'bg-white text-slate-500 dark:bg-slate-900'}`}>

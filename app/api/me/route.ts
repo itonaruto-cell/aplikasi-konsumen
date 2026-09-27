@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
-import { getRole } from '../../../lib/access';
+import { getPerfName, getRole } from '../../../lib/access';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,5 +10,5 @@ export async function GET(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 });
   const role = await getRole(s.email);
   if (!role) return NextResponse.json({ error: 'Akses akun ini sudah dicabut.' }, { status: 403 });
-  return NextResponse.json({ email: s.email, name: s.name, role });
+  return NextResponse.json({ email: s.email, name: s.name, role, perfName: await getPerfName(s.email) });
 }

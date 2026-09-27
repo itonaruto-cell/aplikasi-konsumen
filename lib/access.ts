@@ -2,7 +2,9 @@ import { google } from 'googleapis';
 
 // Siapa boleh masuk & perannya.
 // - OWNER_EMAIL (Environment Variable di Vercel): selalu owner, pisahkan dengan koma kalau lebih dari satu.
-// - Tab "AKSES" di Google Sheets: kolom A = EMAIL, kolom B = ROLE. Mulai baris 2.
+// - Tab "AKSES" di Google Sheets: kolom A = EMAIL, kolom B = ROLE, kolom C = NAMA (opsional). Mulai baris 2.
+//   NAMA = nama persis seperti di sheet pantauan (mis. MUHAMMAD NAUFAL RAFLI AL HAFIZ), supaya
+//   halaman Performa tahu "Kamu" yang mana. Kalau kosong, dicocokkan dari nama akun Google.
 //     owner    = semua fitur, termasuk nomor HP konsumen & aktivitas tim
 //     konsumen = performa tim + database konsumen (tanpa nomor HP)
 //     tim      = hanya performa tim
@@ -13,7 +15,7 @@ export type Role = 'owner' | 'konsumen' | 'tim';
 // Boleh membuka database konsumen?
 export const canSeeKonsumen = (role: Role | null | undefined) => role === 'owner' || role === 'konsumen';
 
-let cache: { at: number; map: Map<string, Role> } | null = null;
+let cache: { at: number; map: Map<string, Role>; names: Map<string, string> } | null = null;
 const CACHE_MS = 60_000;
 
 function sheetsClient() {
@@ -27,30 +29,42 @@ function sheetsClient() {
   return google.sheets({ version: 'v4', auth });
 }
 
-async function loadAccessSheet(): Promise<Map<string, Role>> {
+async function loadAccessSheet(): Promise<{ map: Map<string, Role>; names: Map<string, string> }> {
   const map = new Map<string, Role>();
+  const names = new Map<string, string>();
   try {
     const res = await sheetsClient().spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: 'AKSES!A2:B',
+      range: 'AKSES!A2:C',
     });
     for (const row of res.data.values || []) {
       const email = String(row[0] || '').trim().toLowerCase();
       if (!email || !email.includes('@')) continue;
       const role = String(row[1] || '').trim().toLowerCase();
       map.set(email, role === 'owner' ? 'owner' : role === 'konsumen' ? 'konsumen' : 'tim');
+      const nama = String(row[2] || '').trim();
+      if (nama) names.set(email, nama);
     }
   } catch (err) {
     console.error('Gagal membaca tab AKSES:', err);
   }
-  return map;
+  return { map, names };
+}
+
+async function loadCache() {
+  if (!cache || Date.now() - cache.at > CACHE_MS) {
+    cache = { at: Date.now(), ...(await loadAccessSheet()) };
+  }
+  return cache;
 }
 
 async function accessMap(): Promise<Map<string, Role>> {
-  if (!cache || Date.now() - cache.at > CACHE_MS) {
-    cache = { at: Date.now(), map: await loadAccessSheet() };
-  }
-  return cache.map;
+  return (await loadCache()).map;
+}
+
+// Nama anggota di sheet pantauan (kolom C tab AKSES), kalau diisi
+export async function getPerfName(email: string): Promise<string | null> {
+  return (await loadCache()).names.get(email.trim().toLowerCase()) ?? null;
 }
 
 function ownerEmails(): string[] {
