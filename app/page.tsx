@@ -23,7 +23,40 @@ const PATHS: Record<string, ReactNode> = {
   check: <path d="m5 12 5 5L20 7" />,
   down: <path d="m6 9 6 6 6-6" />,
   chart: <path d="M4 20V10m6 10V4m6 16v-7m4 7H3" />,
+  sun: (<><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>),
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />,
 };
+
+/* ---------- Mode terang / gelap ---------- */
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains('dark'));
+    // Selama belum memilih sendiri, ikuti perubahan pengaturan HP
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => {
+      let chosen: string | null = null;
+      try { chosen = localStorage.getItem('ck_theme'); } catch { /* abaikan */ }
+      if (chosen) return;
+      document.documentElement.classList.toggle('dark', e.matches);
+      setDark(e.matches);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const toggle = () => {
+    const next = !dark;
+    document.documentElement.classList.toggle('dark', next);
+    try { localStorage.setItem('ck_theme', next ? 'dark' : 'light'); } catch { /* abaikan */ }
+    setDark(next);
+  };
+  return (
+    <button onClick={toggle} aria-label={dark ? 'Pakai mode terang' : 'Pakai mode gelap'} title={dark ? 'Mode terang' : 'Mode gelap'}
+      className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
+      <Icon name={dark ? 'sun' : 'moon'} className="h-5 w-5" />
+    </button>
+  );
+}
 
 function Icon({ name, className = 'h-5 w-5', filled = false }: { name: string; className?: string; filled?: boolean }) {
   return (
@@ -364,6 +397,7 @@ export default function Home() {
               <h1 className="text-2xl font-semibold tracking-tight">{view === 'performa' ? 'Performa Tim' : 'Cari Konsumen'}</h1>
             </div>
             <div className="flex gap-2">
+              <ThemeToggle />
               <button onClick={() => (view === 'performa' ? setPerfKey((k) => k + 1) : load())} aria-label="Muat ulang data"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 active:scale-95">
                 <Icon name="refresh" className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />

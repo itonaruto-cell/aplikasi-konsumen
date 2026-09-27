@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
-import type { Orang, Performa, Sales } from '../lib/performa-types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Aktivitas, KonsumenVisit, MaItem, Orang, Performa, RekrutRegist, Sales } from '../lib/performa-types';
 
 /* ---------- Format ---------- */
 const nf = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 });
@@ -9,8 +9,6 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
 const angka = (v?: number | null) => (isNum(v) ? nf.format(v) : '–');
 const rp = (v?: number | null) => (isNum(v) ? 'Rp ' + cf.format(v) : '–');
 const persen = (v?: number | null) => (isNum(v) ? nf.format(Math.round(v * 100)) + '%' : '–');
-const selisih = (v: number | null | undefined, money = false) =>
-  isNum(v) ? (v > 0 ? '+' : '') + (money ? cf.format(v) : nf.format(v)) : '–';
 const tone = (ach?: number | null) =>
   !isNum(ach) ? 'none' : ach >= 1 ? 'good' : ach >= 0.5 ? 'mid' : 'bad';
 const TEXT: Record<string, string> = {
@@ -24,46 +22,168 @@ const waktu = (iso: string) => {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : d.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
-const tanggal = (s: string | null) => {
+const tanggal = (s: string | null, short = false) => {
   if (!s) return '';
   const d = new Date(s.slice(0, 10) + 'T00:00:00');
-  return isNaN(d.getTime()) ? s : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  return isNaN(d.getTime()) ? s : d.toLocaleDateString('id-ID', short ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'long', year: 'numeric' });
 };
+const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 
-function Bar({ ach }: { ach?: number | null }) {
+function Bar({ ach, className = 'h-1.5' }: { ach?: number | null; className?: string }) {
   const w = isNum(ach) ? Math.max(0, Math.min(100, ach * 100)) : 0;
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+    <div className={`${className} w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800`}>
       <div className={`h-full rounded-full ${BAR[tone(ach)]}`} style={{ width: `${w}%` }} />
     </div>
   );
 }
 
-/* ---------- Urutan peringkat ---------- */
-type SortKey = 'amount' | 'unit' | 'oi' | 'visit';
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'amount', label: 'Amount' },
-  { key: 'unit', label: 'Unit' },
-  { key: 'oi', label: 'Order in' },
-  { key: 'visit', label: 'Visit' },
-];
-const score = (o: Orang, k: SortKey): number | null => {
-  if (k === 'amount') return o.amount?.ach ?? null;
-  if (k === 'unit') return o.unit?.ach ?? null;
-  if (k === 'oi') return o.oi?.ach ?? o.oi?.total ?? null;
-  return o.visit?.konsumen ?? null;
-};
-const headline = (o: Orang, k: SortKey) => {
-  if (score(o, k) === null) return { big: '–', small: 'Belum ada data untuk urutan ini', ach: null };
-  if (k === 'amount') return { big: persen(o.amount?.ach), small: `${rp(o.amount?.ini)} / ${rp(o.amount?.target)}`, ach: o.amount?.ach };
-  if (k === 'unit') return { big: persen(o.unit?.ach), small: `${angka(o.unit?.ini)} / ${angka(o.unit?.target)} unit`, ach: o.unit?.ach };
-  if (k === 'oi') return { big: persen(o.oi?.ach), small: `${angka(o.oi?.total)} / ${angka(o.oi?.target)} OI`, ach: o.oi?.ach };
-  return { big: angka(o.visit?.konsumen ?? null), small: `konsumen · ${angka(o.visit?.ditemui ?? null)} ditemui`, ach: null };
-};
+function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+      {options.map(([k, label]) => (
+        <button key={k} onClick={() => onChange(k)} aria-pressed={value === k}
+          className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition ${value === k
+            ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-slate-100'
+            : 'text-slate-500 dark:text-slate-400'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Chev() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+/* ---------- Peringkat ---------- */
+type SortKey = 'amount' | 'unit';
+const achOf = (o: Orang, k: SortKey) => (k === 'amount' ? o.amount?.ach : o.unit?.ach) ?? null;
+
+function Metric({ label, s, money, active }: { label: string; s?: Sales; money?: boolean; active: boolean }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-1">
+        <span className={`text-xs ${active ? 'font-medium text-slate-700 dark:text-slate-200' : 'text-slate-500'}`}>{label}</span>
+        <span className={`text-sm font-semibold ${TEXT[tone(s?.ach)]}`}>{persen(s?.ach)}</span>
+      </div>
+      <div className="mt-1"><Bar ach={s?.ach} /></div>
+      <p className="mt-1 truncate text-[11px] text-slate-500">
+        {s ? (money ? `${rp(s.ini)} / ${rp(s.target)}` : `${angka(s.ini)} / ${angka(s.target)} unit`) : 'Belum ada data'}
+      </p>
+    </div>
+  );
+}
+
+/* ---------- Rekrut & regist ---------- */
+function RekrutTiles({ r }: { r: RekrutRegist }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {([['Rekrut', r.rekrut], ['Regist', r.regist]] as const).map(([label, x]) => {
+        const ach = x && x.target ? x.jumlah / x.target : null;
+        const kurang = x && x.target ? Math.max(0, x.target - x.jumlah) : null;
+        return (
+          <div key={label} className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs text-slate-500">{label}</span>
+              <span className={`text-xs font-semibold ${TEXT[tone(ach)]}`}>{persen(ach)}</span>
+            </div>
+            <p className="text-lg font-semibold">{x ? x.jumlah : '–'}<span className="text-sm font-normal text-slate-400">/{x?.target ?? '–'}</span></p>
+            <Bar ach={ach} />
+            <p className="mt-1 text-[11px] text-slate-500">{kurang === null ? '' : kurang ? `Kurang ${kurang}` : 'Target tercapai'}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- Aktivitas cabang ---------- */
+const BRANDS: ['mobilku' | 'motorku', string][] = [['mobilku', 'Mobilku'], ['motorku', 'Motorku']];
+
+function AktivitasCabang({ a }: { a: Aktivitas }) {
+  const [brand, setBrand] = useState<'mobilku' | 'motorku'>('mobilku');
+  const v = a.visit[brand];
+  return (
+    <>
+      <h2 className="mt-6 text-sm font-semibold text-slate-500">Aktivitas cabang</h2>
+
+      <div className="mt-2 rounded-2xl bg-white p-4 dark:bg-slate-900">
+        <p className="text-sm font-medium">Maintain MA</p>
+        <div className="mt-3 space-y-3">
+          {BRANDS.map(([k, label]) => {
+            const m = a.maintain[k];
+            if (!m) return null;
+            return (
+              <div key={k}>
+                <div className="flex items-baseline justify-between text-sm">
+                  <span>{label}</span>
+                  <span><b className="text-base">{m.sudah}</b><span className="text-slate-400">/{m.ma} MA</span></span>
+                </div>
+                <div className="mt-1"><Bar ach={ratio(m.sudah, m.ma)} /></div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {m.belum ? <><span className="font-medium text-red-600 dark:text-red-300">{m.belum} belum</span> dimaintain bulan ini</> : 'Semua sudah dimaintain bulan ini'}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {a.rekrut && (
+        <div className="mt-3 rounded-2xl bg-white p-4 dark:bg-slate-900">
+          <p className="text-sm font-medium">Rekrut & regist MA</p>
+          <div className="mt-3 space-y-3">
+            {BRANDS.map(([k, label]) => a.rekrut?.[k] && (
+              <div key={k}>
+                <p className="mb-1.5 text-xs font-medium text-slate-500">{label}</p>
+                <RekrutTiles r={a.rekrut[k]} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 rounded-2xl bg-white p-4 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium">Visit prioritas</p>
+          <div className="w-48"><Seg value={brand} options={BRANDS} onChange={setBrand} /></div>
+        </div>
+        <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+          {(['p1', 'p2', 'p3'] as const).map((p, i) => {
+            const x = v?.[p];
+            if (!x) return null;
+            const belum = x.database - x.tervisit;
+            return (
+              <div key={p} className="py-3 first:pt-0 last:pb-0">
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="font-medium">Prioritas {i + 1}</span>
+                  <span><b className="text-base">{x.tervisit}</b><span className="text-slate-400">/{x.database} tervisit</span></span>
+                </div>
+                <div className="mt-1"><Bar ach={ratio(x.tervisit, x.database)} /></div>
+                <p className="mt-1 text-xs text-slate-500">
+                  <span className="text-green-700 dark:text-green-300">{x.ditemui} ditemui</span>
+                  {' · '}{x.tervisit - x.ditemui} belum ditemui
+                  {' · '}<span className={belum ? 'text-red-600 dark:text-red-300' : ''}>{belum} belum visit</span>
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
 
 /* ---------- Detail satu orang ---------- */
 function SalesRows({ label, s, money, bulan }: { label: string; s?: Sales; money?: boolean; bulan: Performa['bulan'] }) {
   const f = money ? rp : angka;
+  const diffLalu = s?.diffLalu;
   return (
     <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
       <div className="flex items-baseline justify-between">
@@ -77,8 +197,12 @@ function SalesRows({ label, s, money, bulan }: { label: string; s?: Sales; money
         <div><dt className="text-xs text-slate-500">Target</dt><dd className="font-medium">{f(s?.target)}</dd></div>
       </dl>
       <p className="mt-2 text-xs text-slate-500">
-        vs {bulan.lalu}: <span className={isNum(s?.diffLalu) && s!.diffLalu! < 0 ? 'text-red-600 dark:text-red-300' : 'text-green-700 dark:text-green-300'}>{money && isNum(s?.diffLalu) ? (s!.diffLalu! > 0 ? '+Rp ' : s!.diffLalu! < 0 ? '−Rp ' : 'Rp ') + cf.format(Math.abs(s!.diffLalu!)) : selisih(s?.diffLalu)}</span>
-        {' · '}{isNum(s?.diffTarget) && s!.diffTarget! < 0
+        vs {bulan.lalu}:{' '}
+        <span className={isNum(diffLalu) && diffLalu < 0 ? 'text-red-600 dark:text-red-300' : 'text-green-700 dark:text-green-300'}>
+          {isNum(diffLalu) ? (diffLalu > 0 ? '+' : diffLalu < 0 ? '−' : '') + (money ? 'Rp ' + cf.format(Math.abs(diffLalu)) : nf.format(Math.abs(diffLalu))) : '–'}
+        </span>
+        {' · '}
+        {isNum(s?.diffTarget) && s!.diffTarget! < 0
           ? <>kurang <span className="text-slate-700 dark:text-slate-200">{money ? 'Rp ' + cf.format(-s!.diffTarget!) : nf.format(-s!.diffTarget!)}</span> ke target</>
           : <span className="text-green-700 dark:text-green-300">target tercapai</span>}
       </p>
@@ -95,85 +219,182 @@ function Stat({ label, value, strong = false, className = '' }: { label: string;
   );
 }
 
+function OpenRow({ title, sub, onClick }: { title: string; sub: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className="mt-2 flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-left active:bg-slate-50 dark:border-slate-700 dark:active:bg-slate-800">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-[#1F4E78] dark:text-sky-300">{title}</p>
+        <p className="truncate text-xs text-slate-500">{sub}</p>
+      </div>
+      <Chev />
+    </button>
+  );
+}
+
+type Sub = { kind: 'ma' } | { kind: 'visit'; p: 0 | 1 | 2 | 3 };
+
+function MaList({ list }: { list: MaItem[] }) {
+  const [tab, setTab] = useState<'belum' | 'sudah'>(list.some((m) => !m.f) ? 'belum' : 'sudah');
+  const belum = list.filter((m) => !m.f).sort((a, b) => a.n.localeCompare(b.n));
+  const sudah = list.filter((m) => m.f).sort((a, b) => a.f - b.f || a.n.localeCompare(b.n));
+  const items = tab === 'belum' ? belum : sudah;
+  return (
+    <>
+      <Seg value={tab} onChange={setTab} options={[['belum', `Belum dimaintain (${belum.length})`], ['sudah', `Sudah (${sudah.length})`]]} />
+      <ul className="mt-3 divide-y divide-slate-100 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+        {items.length === 0 && <li className="p-6 text-center text-sm text-slate-500">{tab === 'belum' ? 'Semua MA sudah dimaintain bulan ini.' : 'Belum ada MA yang dimaintain.'}</li>}
+        {items.map((m, i) => (
+          <li key={m.n + i} className="flex items-center gap-3 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{nama(m.n)}</p>
+              {m.job && <p className="truncate text-xs text-slate-500">{nama(m.job)}</p>}
+            </div>
+            {m.f ? (
+              <div className="shrink-0 text-right">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${m.f >= 4 ? 'bg-green-50 text-green-700 dark:bg-green-400/15 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+                  {m.f >= 4 ? '≥4X' : `${m.f}X`}
+                </span>
+                {m.t && <p className="mt-1 text-[11px] text-slate-500">terakhir {tanggal(m.t, true)}</p>}
+              </div>
+            ) : (
+              <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-400/15 dark:text-red-300">Belum</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function VisitList({ list, p0 }: { list: KonsumenVisit[]; p0: 0 | 1 | 2 | 3 }) {
+  const [p, setP] = useState<'0' | '1' | '2' | '3'>(String(p0) as '0');
+  const inP = list.filter((k) => p === '0' || k.p === Number(p));
+  const [tab, setTab] = useState<'belum' | 'sudah'>('belum');
+  const belum = inP.filter((k) => !k.m).sort((a, b) => a.n.localeCompare(b.n));
+  const sudah = inP.filter((k) => k.m).sort((a, b) => a.n.localeCompare(b.n));
+  const items = tab === 'belum' ? belum : sudah;
+  const count = (n: number) => list.filter((k) => !n || k.p === n).length;
+  return (
+    <>
+      <Seg value={p} onChange={setP}
+        options={[['0', `Semua (${count(0)})`], ['1', `P1 (${count(1)})`], ['2', `P2 (${count(2)})`], ['3', `P3 (${count(3)})`]]} />
+      <div className="mt-2">
+        <Seg value={tab} onChange={setTab} options={[['belum', `Belum ditemui (${belum.length})`], ['sudah', `Sudah ditemui (${sudah.length})`]]} />
+      </div>
+      <ul className="mt-3 divide-y divide-slate-100 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+        {items.length === 0 && <li className="p-6 text-center text-sm text-slate-500">Tidak ada konsumen di kategori ini.</li>}
+        {items.map((k, i) => (
+          <li key={k.n + i} className="flex items-center gap-3 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{nama(k.n)}</p>
+              <p className="truncate text-xs text-slate-500">{[k.k && `Kec. ${nama(k.k)}`, `P${k.p}`, `${k.v}x visit`].filter(Boolean).join(' · ')}</p>
+            </div>
+            {k.m ? (
+              <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-400/15 dark:text-green-300">Ditemui V{k.ke}</span>
+            ) : (
+              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">Belum ditemui</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 function Detail({ o, rank, total, bulan, onClose }: { o: Orang; rank: number; total: number; bulan: Performa['bulan']; onClose: () => void }) {
+  const [sub, setSub] = useState<Sub | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (box.current) box.current.scrollTop = 0; }, [sub]);
+  const v = o.visit, m = o.maintain;
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()}
+      <div ref={box} onClick={(e) => e.stopPropagation()}
         className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3 dark:bg-slate-900">
         <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-300 dark:bg-slate-700" />
-        <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1F4E78] text-lg font-semibold text-white">{initials(o.nama)}</div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-semibold">{nama(o.nama)}</p>
-            <p className="text-sm text-slate-500">{[o.brand && nama(o.brand), rank ? `Peringkat ${rank} dari ${total} (amount)` : ''].filter(Boolean).join(' · ')}</p>
-          </div>
-        </div>
 
-        {(o.unit || o.amount) && (
-          <section className="mt-5 space-y-3">
-            <p className="text-sm font-semibold text-slate-500">Sales</p>
-            <SalesRows label="Amount" s={o.amount} money bulan={bulan} />
-            <SalesRows label="Unit" s={o.unit} bulan={bulan} />
-          </section>
-        )}
-
-        {o.oi && (
-          <section className="mt-5">
-            <p className="text-sm font-semibold text-slate-500">Order in</p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <Stat label="Total OI" value={`${angka(o.oi.total)} / ${angka(o.oi.target)}`} strong />
-              <Stat label="Pencapaian" value={persen(o.oi.ach)} strong className={TEXT[tone(o.oi.ach)]} />
-              <Stat label="Success rate" value={persen(o.oi.successRate)} strong />
-              <Stat label="Golive" value={angka(o.oi.golive)} className={o.oi.golive ? 'text-green-700 dark:text-green-300' : ''} />
-              <Stat label="Pending" value={angka(o.oi.pending)} />
-              <Stat label="PO pending" value={angka(o.oi.poPending)} />
-              <Stat label="Reject" value={angka(o.oi.reject)} className={o.oi.reject ? 'text-red-600 dark:text-red-300' : ''} />
-              <Stat label="Cancel" value={angka(o.oi.cancel)} />
+        {sub ? (
+          <>
+            <button onClick={() => setSub(null)} className="mb-3 text-sm font-medium text-[#1F4E78] dark:text-sky-300">‹ Kembali ke {nama(o.nama).split(' ')[0]}</button>
+            <p className="text-lg font-semibold">{sub.kind === 'ma' ? 'MA yang dipegang' : 'Konsumen yang dikunjungi'}</p>
+            <p className="mb-3 text-sm text-slate-500">{nama(o.nama)}</p>
+            {sub.kind === 'ma' ? <MaList list={m?.list || []} /> : <VisitList list={v?.list || []} p0={sub.p} />}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1F4E78] text-lg font-semibold text-white">{initials(o.nama)}</div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg font-semibold">{nama(o.nama)}</p>
+                <p className="text-sm text-slate-500">{[o.brand && nama(o.brand), rank ? `Peringkat ${rank} dari ${total} (amount)` : ''].filter(Boolean).join(' · ')}</p>
+              </div>
             </div>
-          </section>
-        )}
 
-        {o.approval && (
-          <section className="mt-5">
-            <p className="text-sm font-semibold text-slate-500">Hasil pengajuan</p>
-            <div className="mt-2 grid grid-cols-4 gap-2">
-              <Stat label="Approve" value={angka(o.approval.approve)} />
-              <Stat label="Banding" value={angka(o.approval.banding)} />
-              <Stat label="Reject" value={angka(o.approval.reject)} />
-              <Stat label="Cancel" value={angka(o.approval.cancel)} />
-            </div>
-          </section>
-        )}
+            {(o.unit || o.amount) && (
+              <section className="mt-5 space-y-3">
+                <p className="text-sm font-semibold text-slate-500">Sales</p>
+                <SalesRows label="Amount" s={o.amount} money bulan={bulan} />
+                <SalesRows label="Unit" s={o.unit} bulan={bulan} />
+              </section>
+            )}
 
-        {o.visit && (
-          <section className="mt-5">
-            <p className="text-sm font-semibold text-slate-500">Visit konsumen prioritas</p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <Stat label="Konsumen dikunjungi" value={angka(o.visit.konsumen)} strong />
-              <Stat label="Sudah ditemui" value={angka(o.visit.ditemui)} strong className="text-green-700 dark:text-green-300" />
-              <Stat label="Total visit" value={angka(o.visit.total)} strong />
-              <Stat label="Prioritas 1" value={angka(o.visit.p1)} />
-              <Stat label="Prioritas 2" value={angka(o.visit.p2)} />
-              <Stat label="Prioritas 3" value={angka(o.visit.p3)} />
-            </div>
-          </section>
-        )}
+            {m && (
+              <section className="mt-5">
+                <p className="text-sm font-semibold text-slate-500">Maintain MA</p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <Stat label="MA dipegang" value={angka(m.ma)} strong />
+                  <Stat label="Sudah" value={angka(m.sudah)} strong className="text-green-700 dark:text-green-300" />
+                  <Stat label="Belum" value={angka(m.belum)} strong className={m.belum ? 'text-red-600 dark:text-red-300' : ''} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Minimal 2X: {m.x2} · 3X: {m.x3} · 4X: {m.x4}</p>
+                {!!m.list?.length && (
+                  <OpenRow title="Lihat nama MA" sub={m.belum ? `${m.belum} belum dimaintain` : 'Semua sudah dimaintain'} onClick={() => setSub({ kind: 'ma' })} />
+                )}
+              </section>
+            )}
 
-        {o.maintain && (
-          <section className="mt-5">
-            <p className="text-sm font-semibold text-slate-500">Maintain MA</p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <Stat label="MA dipegang" value={angka(o.maintain.ma)} strong />
-              <Stat label="Sudah dimaintain" value={angka(o.maintain.sudah)} strong className="text-green-700 dark:text-green-300" />
-              <Stat label="Belum" value={angka(o.maintain.belum)} strong className={o.maintain.belum ? 'text-red-600 dark:text-red-300' : ''} />
-              <Stat label="Minimal 2X" value={angka(o.maintain.x2)} />
-              <Stat label="Minimal 3X" value={angka(o.maintain.x3)} />
-              <Stat label="Minimal 4X" value={angka(o.maintain.x4)} />
-            </div>
-          </section>
-        )}
+            {o.rekrut && (
+              <section className="mt-5">
+                <p className="text-sm font-semibold text-slate-500">Rekrut & regist MA · {nama(o.brand)}</p>
+                <div className="mt-2"><RekrutTiles r={o.rekrut} /></div>
+              </section>
+            )}
 
-        <button onClick={onClose} className="mt-6 w-full rounded-2xl border border-slate-200 py-3 text-sm font-medium dark:border-slate-700">Tutup</button>
+            {v && (
+              <section className="mt-5">
+                <p className="text-sm font-semibold text-slate-500">Visit konsumen prioritas</p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <Stat label="Dikunjungi" value={angka(v.konsumen)} strong />
+                  <Stat label="Sudah ditemui" value={angka(v.ditemui)} strong className="text-green-700 dark:text-green-300" />
+                  <Stat label="Belum ditemui" value={angka(v.konsumen - v.ditemui)} strong className={v.konsumen - v.ditemui ? 'text-amber-700 dark:text-amber-300' : ''} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Total {v.total} kali visit · ketuk prioritas untuk melihat nama</p>
+                {v.list && ([1, 2, 3] as const).map((p) => {
+                  const inP = v.list!.filter((k) => k.p === p);
+                  if (!inP.length) return null;
+                  const met = inP.filter((k) => k.m).length;
+                  return <OpenRow key={p} title={`Prioritas ${p} · ${inP.length} konsumen`} sub={`${met} sudah ditemui · ${inP.length - met} belum ditemui`} onClick={() => setSub({ kind: 'visit', p })} />;
+                })}
+              </section>
+            )}
+
+            {o.oi && (
+              <section className="mt-5">
+                <p className="text-sm font-semibold text-slate-500">Order in</p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <Stat label="Total OI" value={`${angka(o.oi.total)} / ${angka(o.oi.target)}`} strong />
+                  <Stat label="Pencapaian" value={persen(o.oi.ach)} strong className={TEXT[tone(o.oi.ach)]} />
+                  <Stat label="Success rate" value={persen(o.oi.successRate)} strong />
+                  <Stat label="Golive" value={angka(o.oi.golive)} />
+                  <Stat label="Pending" value={angka(o.oi.pending)} />
+                  <Stat label="Reject" value={angka(o.oi.reject)} />
+                </div>
+              </section>
+            )}
+
+            <button onClick={onClose} className="mt-6 w-full rounded-2xl border border-slate-200 py-3 text-sm font-medium dark:border-slate-700">Tutup</button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -212,7 +433,7 @@ export default function PerformaPanel({ reloadKey = 0 }: { reloadKey?: number })
   const ranked = useMemo(() => {
     const list = [...(data?.orang || [])];
     return list.sort((a, b) => {
-      const sa = score(a, sort), sb = score(b, sort);
+      const sa = achOf(a, sort), sb = achOf(b, sort);
       if (sa === null && sb === null) return a.nama.localeCompare(b.nama);
       if (sa === null) return 1;
       if (sb === null) return -1;
@@ -254,60 +475,57 @@ export default function PerformaPanel({ reloadKey = 0 }: { reloadKey?: number })
         Cabang {nama(data.cabang)} · data per {tanggal(data.updated)} · diperbarui {waktu(data.dikirim)}
       </p>
 
-      {/* Ringkasan cabang */}
+      {/* Pencapaian cabang: amount & unit */}
       <div className="mt-3 rounded-2xl bg-white p-4 dark:bg-slate-900">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-medium">Pencapaian cabang · {data.bulan.ini}</p>
-          <p className={`text-2xl font-semibold ${TEXT[tone(t.amount?.ach)]}`}>{persen(t.amount?.ach)}</p>
-        </div>
-        <p className="text-xs text-slate-500">Amount {rp(t.amount?.ini)} dari {rp(t.amount?.target)}</p>
-        <div className="mt-2"><Bar ach={t.amount?.ach} /></div>
-        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-          <div><p className="text-xs text-slate-500">Unit</p><p className="font-semibold">{angka(t.unit?.ini)}<span className="text-slate-400">/{angka(t.unit?.target)}</span></p></div>
-          <div><p className="text-xs text-slate-500">Order in</p><p className="font-semibold">{angka(t.oi?.total)}<span className="text-slate-400">/{angka(t.oi?.target)}</span></p></div>
-          <div><p className="text-xs text-slate-500">Success rate</p><p className="font-semibold">{persen(t.oi?.successRate)}</p></div>
+        <p className="text-sm font-medium">Pencapaian cabang · {data.bulan.ini}</p>
+        <div className="mt-3 grid grid-cols-2 gap-4">
+          {([['Amount', t.amount, true], ['Unit', t.unit, false]] as const).map(([label, s, money]) => (
+            <div key={label}>
+              <p className="text-xs text-slate-500">{label}</p>
+              <p className={`text-3xl font-semibold leading-tight ${TEXT[tone(s?.ach)]}`}>{persen(s?.ach)}</p>
+              <p className="mb-2 text-xs text-slate-500">{s ? (money ? `${rp(s.ini)} dari ${rp(s.target)}` : `${angka(s.ini)} dari ${angka(s.target)} unit`) : '–'}</p>
+              <Bar ach={s?.ach} className="h-2" />
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Urutkan */}
-      <div className="mt-4 flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
-        <span className="shrink-0 text-xs text-slate-500">Peringkat</span>
-        {SORTS.map((s) => (
-          <button key={s.key} onClick={() => setSort(s.key)} aria-pressed={sort === s.key}
-            className={`h-9 shrink-0 rounded-full border px-4 text-sm transition ${sort === s.key
-              ? 'border-[#1F4E78] bg-[#1F4E78] text-white'
-              : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
-            {s.label}
-          </button>
-        ))}
+      {/* Peringkat */}
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-slate-500">Peringkat tim</h2>
+        <div className="w-44"><Seg value={sort} onChange={setSort} options={[['amount', 'Amount'], ['unit', 'Unit']]} /></div>
       </div>
-
-      {/* Daftar anggota */}
-      <ul className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <ul className="mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         {ranked.map((o, i) => {
-          const h = headline(o, sort);
-          const hasScore = score(o, sort) !== null;
+          const hasScore = achOf(o, sort) !== null;
           return (
             <li key={o.nama} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-              <button onClick={() => setOpen(o)} className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800">
-                <span className={`w-5 shrink-0 text-center text-sm font-semibold ${hasScore ? 'text-slate-500' : 'text-slate-300'}`}>{hasScore ? i + 1 : '–'}</span>
+              <button onClick={() => setOpen(o)} className="flex w-full items-start gap-3 px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800">
+                <span className={`mt-2 w-5 shrink-0 text-center text-sm font-semibold ${hasScore ? 'text-slate-500' : 'text-slate-300'}`}>{hasScore ? i + 1 : '–'}</span>
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1F4E78]/10 text-sm font-semibold text-[#1F4E78] dark:bg-sky-400/15 dark:text-sky-300">
                   {initials(o.nama)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="truncate font-medium">{nama(o.nama)}</p>
-                    <p className={`shrink-0 font-semibold ${sort === 'visit' ? '' : TEXT[tone(h.ach)]}`}>{h.big}</p>
-                  </div>
-                  <p className="truncate text-xs text-slate-500">{[o.brand && nama(o.brand), h.small].filter(Boolean).join(' · ')}</p>
-                  {sort !== 'visit' && hasScore && <div className="mt-1.5"><Bar ach={h.ach} /></div>}
+                  <p className="truncate font-medium">{nama(o.nama)}</p>
+                  <p className="truncate text-xs text-slate-500">{o.brand ? nama(o.brand) : 'Tanpa data sales'}</p>
+                  {(o.amount || o.unit) && (
+                    <div className="mt-2 grid grid-cols-2 gap-3">
+                      <Metric label="Amount" s={o.amount} money active={sort === 'amount'} />
+                      <Metric label="Unit" s={o.unit} active={sort === 'unit'} />
+                    </div>
+                  )}
                 </div>
+                <span className="mt-2"><Chev /></span>
               </button>
             </li>
           );
         })}
       </ul>
-      <p className="px-1 py-4 text-xs text-slate-500">Ketuk nama untuk melihat detail. Angka diperbarui otomatis tiap 30 menit dari sheet pantauan cabang.</p>
+      <p className="px-1 pt-2 text-xs text-slate-500">Ketuk nama untuk melihat detail, daftar MA, dan konsumen yang dikunjungi.</p>
+
+      {data.aktivitas && <AktivitasCabang a={data.aktivitas} />}
+
+      <p className="px-1 py-4 text-xs text-slate-500">Angka diperbarui otomatis tiap 30 menit dari sheet pantauan cabang.</p>
 
       {open && (
         <Detail o={open} rank={amountRank.get(open.nama) || 0} total={amountRank.size} bulan={data.bulan} onClose={() => setOpen(null)} />
