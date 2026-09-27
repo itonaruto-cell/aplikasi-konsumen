@@ -1,5 +1,5 @@
-// Bentuk data performa yang dikirim Apps Script: angka, plus daftar nama MA dan
-// nama + kecamatan konsumen prioritas yang dikunjungi (tanpa no kontrak / no HP / alamat).
+// Bentuk data performa yang dikirim Apps Script: angka, daftar MA, dan daftar konsumen prioritas
+// beserta riwayat visit (tanpa no kontrak / no HP / alamat / no ref MA).
 // Dipakai bersama oleh server (lib/performa.ts) dan halaman (app/PerformaPanel.tsx).
 
 export type Sales = {
@@ -33,14 +33,30 @@ export type RekrutRegist = { rekrut: Target | null; regist: Target | null };
 
 // Konsumen yang dikunjungi orang ini: n = nama, k = kecamatan, p = prioritas, v = jumlah visit,
 // m = sudah ditemui, ke = ditemui di visit ke berapa
-export type KonsumenVisit = { n: string; k: string; p: number; v: number; m: boolean; ke: number };
+// b + i = posisi konsumen di aktivitas.konsumen[b][i] (untuk detail)
+export type KonsumenVisit = { n: string; k: string; p: number; v: number; m: boolean; ke: number; b?: string; i?: number };
 // MA yang dipegang: n = nama, f = frekuensi maintain bulan ini, t = terakhir tercatat, job = pekerjaan
-export type MaItem = { n: string; f: number; t: string; job: string };
+// b + i = posisi MA di aktivitas.ma[b][i] (untuk detail)
+export type MaItem = { n: string; f: number; t: string; job: string; b?: string; i?: number };
+
+// Satu visit: ke = visit ke-, st = status, bd = bertemu dengan, h = hasil, kt = keterangan
+export type VisitRow = { ke: number; tgl: string; st: string; bd: string; h: string; kt: string; pic: string; note: string };
+// Konsumen prioritas lengkap: n = nama, k = kecamatan, p = prioritas, ket = kategori/keterangan,
+// info/pen = info & penawaran produk WOM, inj = tanggal inject, v = riwayat visit
+export type KonsumenFull = { n: string; k: string; p: number; ket: string; info: string; pen: string; inj: string; v: VisitRow[] };
+// MA lengkap: job = pekerjaan, cat = kategori, f = frekuensi, tgl = tanggal maintain tercatat,
+// t = terakhir, pic = MAO pemegang, inj = tanggal inject, sales = sales M-1
+export type MaFull = {
+  n: string; job: string; cat: string; reason: string; f: number; tgl: string[]; t: string;
+  pic: string; inj: string; hasil: string; sales: number | null;
+};
 
 export type Aktivitas = {
   visit: Record<string, Record<'p1' | 'p2' | 'p3', { database: number; tervisit: number; ditemui: number }>>;
   maintain: Record<string, { ma: number; sudah: number; belum: number }>;
   rekrut?: Record<string, RekrutRegist>;
+  konsumen?: Record<string, KonsumenFull[]>;
+  ma?: Record<string, MaFull[]>;
 };
 
 export type Performa = {
