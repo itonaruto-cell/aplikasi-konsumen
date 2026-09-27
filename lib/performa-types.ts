@@ -67,4 +67,10 @@ export type Performa = {
   cabangTotal: { unit: Sales | null; amount: Sales | null; oi: OrderIn | null };
   aktivitas?: Aktivitas;   // ringkasan cabang (motorku & mobilku)
   orang: Orang[];
+  riwayat?: Riwayat;       // ditambahkan server: urutan peringkat hari sebelumnya (untuk panah naik/turun)
 };
+
+// Urutan nama (huruf besar) per ukuran peringkat, bulan berjalan
+export type Metric = 'amount' | 'unit' | 'visit' | 'bertemu' | 'maintain';
+export type Peringkat = Partial<Record<Metric, string[]>>;
+export type Riwayat = { kemarin?: { tgl: string; rank: Peringkat } };

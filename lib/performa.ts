@@ -1,9 +1,11 @@
 import { google } from 'googleapis';
-import type { Performa } from './performa-types';
+import type { Performa, Peringkat } from './performa-types';
+import { rankSnapshot, todayJkt } from './performa-calc';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
 // (dibuat otomatis). Isinya JSON dari Apps Script, dipotong per sel karena
 // satu sel Google Sheets maksimal 50.000 karakter. Jangan diubah manual.
+// Sel B1 menyimpan urutan peringkat hari ini & hari sebelumnya (untuk panah naik/turun di Papan juara).
 
 export const PERF_TAB = 'PERFORMA';
 const CHUNK = 40_000;
@@ -39,13 +41,36 @@ async function ensureTab() {
 
 let cache: { at: number; data: Performa | null } | null = null;
 
+type Snap = { tgl: string; rank: Peringkat };
+type Snaps = { cur?: Snap; prev?: Snap };
+const parseSnaps = (v: unknown): Snaps => { try { return JSON.parse(String(v || '{}')) as Snaps; } catch { return {}; } };
+// Peringkat pembanding = snapshot terakhir SEBELUM hari ini
+const kemarinOf = (s: Snaps, today: string) =>
+  s.cur && s.cur.tgl < today ? s.cur : s.prev && s.prev.tgl < today ? s.prev : undefined;
+
 export async function savePerforma(data: Performa) {
+  data = { ...data, riwayat: undefined };
   await ensureTab();
   const api = sheets();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   const json = JSON.stringify(data);
   const chunks: string[][] = [];
   for (let i = 0; i < json.length; i += CHUNK) chunks.push([json.slice(i, i + CHUNK)]);
+
+  // Snapshot peringkat harian
+  const today = todayJkt();
+  let snaps: Snaps = {};
+  try {
+    const r = await api.spreadsheets.values.get({ spreadsheetId, range: `${PERF_TAB}!B1` });
+    snaps = parseSnaps(r.data.values?.[0]?.[0]);
+  } catch { snaps = {}; }
+  const rank = rankSnapshot(data, today);
+  snaps = snaps.cur && snaps.cur.tgl !== today ? { prev: snaps.cur, cur: { tgl: today, rank } } : { prev: snaps.prev, cur: { tgl: today, rank } };
+  await api.spreadsheets.values.update({
+    spreadsheetId, range: `${PERF_TAB}!B1`, valueInputOption: 'RAW', requestBody: { values: [[JSON.stringify(snaps)]] },
+  });
+  const kemarin = kemarinOf(snaps, today);
+  data = { ...data, riwayat: kemarin ? { kemarin } : undefined };
 
   await api.spreadsheets.values.clear({ spreadsheetId, range: `${PERF_TAB}!A:A` });
   await api.spreadsheets.values.update({
@@ -62,12 +87,17 @@ export async function loadPerforma(): Promise<Performa | null> {
   await ensureTab();
   const res = await sheets().spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${PERF_TAB}!A2:A`,
+    range: `${PERF_TAB}!A1:B`,
   });
-  const json = (res.data.values || []).map((r) => String(r[0] || '')).join('');
+  const rows = res.data.values || [];
+  const json = rows.slice(1).map((r) => String(r[0] || '')).join('');
   let data: Performa | null = null;
   if (json) {
     try { data = JSON.parse(json) as Performa; } catch { data = null; }
+  }
+  if (data) {
+    const kemarin = kemarinOf(parseSnaps(rows[0]?.[1]), todayJkt());
+    data = { ...data, riwayat: kemarin ? { kemarin } : undefined };
   }
   cache = { at: Date.now(), data };
   return data;
