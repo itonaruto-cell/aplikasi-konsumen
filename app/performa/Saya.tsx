@@ -4,6 +4,7 @@ import { badges, ranking, streak, type Ctx } from '../../lib/performa-calc';
 import { ThemeToggle } from '../theme';
 import { OrangDetail, nama, type Push } from './ui';
 import { Avatar, Card, Ico } from './parts';
+import { MONITORING_MOTORKU } from './Rute';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
@@ -85,6 +86,12 @@ export default function Saya({ c, me, akun, push, onExit }: { c: Ctx; me: Orang 
             <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
           </button>
         )}
+        <a href={MONITORING_MOTORKU} target="_blank" rel="noreferrer"
+          className="flex min-h-14 items-center gap-3 border-b border-neutral-200 px-4 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+          <Ico n="map" className="h-5 w-5 text-neutral-500" />
+          <span className="flex-1 text-[15px]">Monitoring Visit Motorku</span>
+          <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+        </a>
         <a href="/api/auth/logout" className="flex min-h-14 items-center gap-3 px-4 text-red-700 active:bg-neutral-50 dark:text-red-400 dark:active:bg-neutral-900">
           <Ico n="logout" className="h-5 w-5" />
           <span className="flex-1 text-[15px] font-semibold">Keluar</span>

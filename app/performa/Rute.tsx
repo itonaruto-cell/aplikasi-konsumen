@@ -5,6 +5,8 @@ import { belumVisit, kecGroups, konsumenOf, perluUlang, type BrandKey } from '..
 import { nama, type Push } from './ui';
 import { Ico, PillSeg } from './parts';
 
+export const MONITORING_MOTORKU = 'https://monitoring-visit-motorku-kendal-fin.vercel.app/';
+
 export default function Rute({ data, push, mode0, brand0 }: { data: Performa; push: Push; mode0: 'belum' | 'ulang'; brand0: BrandKey }) {
   const [brand, setBrand] = useState<BrandKey>(brand0);
   const [mode, setMode] = useState<'belum' | 'ulang'>(mode0);
@@ -37,6 +39,18 @@ export default function Rute({ data, push, mode0, brand0 }: { data: Performa; pu
           ))}
         </div>
       </div>
+
+      {brand !== 'mobilku' && (
+        <a href={MONITORING_MOTORKU} target="_blank" rel="noreferrer"
+          className="mx-4 mt-3 flex min-h-14 items-center gap-3 rounded-2xl border border-neutral-200 px-4 py-2.5 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-100 dark:bg-neutral-800"><Ico n="map" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-bold">Monitoring Visit Motorku</span>
+            <span className="block truncate text-[13px] text-neutral-500">Kelurahan, rating & hasil visit · tab baru</span>
+          </span>
+          <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+        </a>
+      )}
 
       {groups.length === 0 && (
         <p className="mx-4 mt-6 rounded-2xl bg-neutral-100 p-6 text-center text-sm text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400">
