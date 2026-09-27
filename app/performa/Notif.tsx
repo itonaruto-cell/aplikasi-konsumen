@@ -13,7 +13,7 @@ function useNotif(nama: string) {
   useEffect(() => { pushState().then(setSt); }, []);
   const on = async () => {
     setBusy(true); setMsg('');
-    const r = await enablePush(nama).catch(() => ({ ok: false, pesan: 'Gagal menyalakan notifikasi.' }));
+    const r = await enablePush(nama).catch((e) => ({ ok: false, pesan: `Gagal menyalakan notifikasi: ${(e as Error)?.message || e}` }));
     setSt(await pushState());
     setMsg(r.ok ? 'Notifikasi aktif.' : r.pesan || '');
     setBusy(false);
