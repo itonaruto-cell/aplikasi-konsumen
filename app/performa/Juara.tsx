@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { Metric, Orang } from '../../lib/performa-types';
 import { badges, ranking, type Ctx, type Period, type RankRow } from '../../lib/performa-calc';
 import { angka, persen, rp, type Push } from './ui';
-import { Avatar, Ico, Line, MoveMark, PillSeg, Podium, UnderTabs, rankVal, shortName, twoNames } from './parts';
+import { Avatar, Ico, Line, MoveMark, PillSeg, Podium, UnderTabs, rankVal, salesDetail, shortName, twoNames } from './parts';
 
 const TABS: [Metric, string][] = [['amount', 'Amount'], ['unit', 'Unit'], ['visit', 'Visit'], ['bertemu', 'Temu'], ['maintain', 'Maintain']];
 const UNIT: Record<Metric, string> = { amount: '', unit: '', visit: 'visit', bertemu: 'bertemu', maintain: 'maintain' };
@@ -15,10 +15,11 @@ function subOf(r: RankRow, rows: RankRow[], metric: Metric) {
     if (metric === 'unit') return [brand, `${angka(r.o.unit?.ini)} / ${angka(r.o.unit?.target)} unit`].filter(Boolean).join(' · ');
     return [brand, 'teratas'].filter(Boolean).join(' · ');
   }
+  const nilai = metric === 'amount' ? rp(r.o.amount?.ini) : metric === 'unit' ? `${angka(r.o.unit?.ini)} unit` : '';
   const up = rows[r.rank - 2];
-  if (!up || r.val === null || up.val === null) return brand;
+  if (!up || r.val === null || up.val === null) return [brand, nilai].filter(Boolean).join(' · ');
   const gap = up.val - r.val;
-  return [brand, `kurang ${r.pct ? persen(gap) : angka(gap) + ' ' + UNIT[metric]} ke #${up.rank}`].filter(Boolean).join(' · ');
+  return [brand, nilai, `kurang ${r.pct ? persen(gap) : angka(gap) + ' ' + UNIT[metric]} ke #${up.rank}`].filter(Boolean).join(' · ');
 }
 
 export default function Juara({ c, me, push }: { c: Ctx; me: Orang | null; push: Push }) {
@@ -41,7 +42,7 @@ export default function Juara({ c, me, push }: { c: Ctx; me: Orang | null; push:
       <div className="mt-2"><UnderTabs value={metric} onChange={setMetric} options={TABS} small /></div>
 
       <div className="px-4 pb-2 pt-4">
-        <Podium rows={rows} onOpen={open} reached={(r) => r.pct && (r.val || 0) >= 1} />
+        <Podium rows={rows} onOpen={open} reached={(r) => r.pct && (r.val || 0) >= 1} detail={pct ? salesDetail(metric) : undefined} />
       </div>
       <div className="flex justify-between gap-2 border-b border-neutral-200 px-4 py-2 text-[13px] text-neutral-500 dark:border-neutral-800">
         <span>{pct ? '% dari target' : per === 'minggu' ? `Jumlah ${UNIT[metric]} minggu ini` : `Jumlah ${UNIT[metric]} bulan ini`}</span>

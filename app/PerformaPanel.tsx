@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
+import { OverlayCtx } from './overlay';
 import type { Orang, Performa } from '../lib/performa-types';
 import { brandOf, buildCtx, findMe, stories, streak, type BrandKey, type Story } from '../lib/performa-calc';
 import { ThemeToggle } from './theme';
@@ -11,17 +12,18 @@ import Rute from './performa/Rute';
 import Saya from './performa/Saya';
 import Sorotan from './performa/Sorotan';
 
-// Halaman Performa ala aplikasi sosmed: Kabar (feed + papan juara + misi), Juara, Rute, Saya.
-// Semua akun terdaftar boleh melihat; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
+// Kerangka aplikasi (gaya sosmed): Kabar (feed + papan juara + misi), Juara, Rute, Cari (khusus owner/konsumen), Saya.
+// Data performa boleh dilihat semua akun terdaftar; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
 
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
-type Page = 'kabar' | 'juara' | 'rute' | 'saya';
+type Page = 'kabar' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas';
+type Slot = (reloadKey: number) => ReactNode;
 const SEEN_KEY = 'ck_story_seen';
 
 const readSeen = (): string[] => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch { return []; } };
 const storyKey = (s: Story) => `${s.o.nama}|${s.d}`;
 
-export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?: () => void }) {
+export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun; cari?: Slot; aktivitas?: Slot }) {
   const [data, setData] = useState<Performa | null>(null);
   const [kosong, setKosong] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -37,6 +39,19 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
   const [seen, setSeen] = useState<string[]>([]);
   const [pull, setPull] = useState(0);
   const pullStart = useRef<number | null>(null);
+
+  // Lembar/panel dari halaman lain (mis. detail di Cari) ikut ditutup tombol kembali Android
+  const overlays = useRef<(() => void)[]>([]);
+  const [ovN, setOvN] = useState(0);
+  const registerOverlay = useCallback((close: () => void) => {
+    overlays.current.push(close);
+    setOvN((n) => n + 1);
+    return () => {
+      const i = overlays.current.lastIndexOf(close);
+      if (i >= 0) overlays.current.splice(i, 1);
+      setOvN((n) => n - 1);
+    };
+  }, []);
 
   /* ---------- Muat data ---------- */
   useEffect(() => {
@@ -85,13 +100,14 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
 
   /* ---------- Tombol kembali Android: tutup panel / sorotan / balik ke Kabar ---------- */
   const push = (v: View) => setStack((s) => [...s, v]);
-  const depth = stack.length + (story !== null ? 1 : 0) + (page !== 'kabar' ? 1 : 0);
+  const depth = ovN + stack.length + (story !== null ? 1 : 0) + (page !== 'kabar' ? 1 : 0);
   const prevDepth = useRef(0);
   const fromPop = useRef(false);
   const ignorePop = useRef(0);
   const backOne = useRef<() => void>(() => {});
   backOne.current = () => {
-    if (story !== null) setStory(null);
+    if (overlays.current.length) overlays.current[overlays.current.length - 1]();
+    else if (story !== null) setStory(null);
     else if (stack.length) setStack((s) => s.slice(0, -1));
     else if (page !== 'kabar') setPage('kabar');
   };
@@ -120,7 +136,7 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
   const go = (p: Page) => { setPage(p); window.scrollTo({ top: 0 }); };
 
   /* ---------- Tarik ke bawah untuk muat ulang ---------- */
-  const overlay = stack.length > 0 || story !== null;
+  const overlay = ovN > 0 || stack.length > 0 || story !== null;
   const onTouchStart = (e: TouchEvent) => { pullStart.current = !overlay && window.scrollY <= 0 ? e.touches[0].clientY : null; };
   const onTouchMove = (e: TouchEvent) => {
     if (pullStart.current === null) return;
@@ -130,14 +146,16 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
   const onTouchEnd = () => { if (pull >= 64) reload(); setPull(0); pullStart.current = null; };
 
   const cabang = (data?.cabang || 'kendal').toLowerCase();
-  const TITLE: Record<Page, string> = { kabar: `${cabang}.team`, juara: 'Papan juara', rute: 'Rute visit', saya: 'Saya' };
+  const TITLE: Record<Page, string> = { kabar: `${cabang}.team`, juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim' };
 
-  const NAV: [Page | 'cari', string, string][] = [
-    ['kabar', 'home', 'Kabar'], ['juara', 'trophy', 'Juara'], ['rute', 'pin', 'Rute'], ['saya', 'user', 'Saya'],
-    ...(onExit ? [['cari', 'search', 'Cari'] as [Page | 'cari', string, string]] : []),
+  const NAV: [Page, string, string][] = [
+    ['kabar', 'home', 'Kabar'], ['juara', 'trophy', 'Juara'], ['rute', 'pin', 'Rute'],
+    ...(cari ? [['cari', 'search', 'Cari'] as [Page, string, string]] : []),
+    ['saya', 'user', 'Saya'],
   ];
 
   return (
+    <OverlayCtx.Provider value={registerOverlay}>
     <div className="min-h-dvh bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50"
       style={{ fontFamily: 'var(--font-instrument), system-ui, sans-serif' }}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
@@ -175,7 +193,7 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
           </div>
         )}
 
-        {loading && !data ? (
+        {page === 'cari' && cari ? cari(reloadKey) : page === 'aktivitas' && aktivitas ? aktivitas(reloadKey) : loading && !data ? (
           <div className="space-y-3 px-4 pt-4">
             <div className="flex gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 w-16 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-800" />)}</div>
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-[20px] bg-neutral-200/70 dark:bg-neutral-800/70" />)}
@@ -200,7 +218,7 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
             )}
             {page === 'juara' && <Juara c={c} me={me} push={push} />}
             {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onExit={onExit} />}
+            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} />}
           </>
         )}
       </div>
@@ -209,9 +227,9 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
       <nav aria-label="Menu utama" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <div className="mx-auto grid max-w-xl" style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}>
           {NAV.map(([k, icon, label]) => {
-            const on = k === page;
+            const on = k === page || (k === 'saya' && page === 'aktivitas');
             return (
-              <button key={k} onClick={() => (k === 'cari' ? onExit?.() : on ? window.scrollTo({ top: 0, behavior: 'smooth' }) : go(k))}
+              <button key={k} onClick={() => (on ? window.scrollTo({ top: 0, behavior: 'smooth' }) : go(k))}
                 aria-current={on ? 'page' : undefined}
                 className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${on ? 'font-bold text-neutral-900 dark:text-white' : 'font-medium text-neutral-500 dark:text-neutral-400'}`}>
                 <span className={`flex h-8 w-14 items-center justify-center rounded-full transition ${on ? 'bg-neutral-200/80 dark:bg-neutral-800' : ''}`}>
@@ -238,5 +256,6 @@ export default function PerformaPanel({ me: akun, onExit }: { me: Akun; onExit?:
           onClose={() => setStory(null)} onProfile={(o) => { setStory(null); push({ t: 'orang', o }); }} />
       )}
     </div>
+    </OverlayCtx.Provider>
   );
 }

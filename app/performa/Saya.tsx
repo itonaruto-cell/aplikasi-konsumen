@@ -4,10 +4,11 @@ import { badges, ranking, streak, type Ctx } from '../../lib/performa-calc';
 import { ThemeToggle } from '../theme';
 import { OrangDetail, nama, type Push } from './ui';
 import { Avatar, Card, Ico } from './parts';
+import { MONITORING_MOTORKU } from './Rute';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onExit }: { c: Ctx; me: Orang | null; akun: Me; push: Push; onExit?: () => void }) {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas }: { c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
   const st = me ? streak(c, me.nama) : 0;
@@ -78,13 +79,26 @@ export default function Saya({ c, me, akun, push, onExit }: { c: Ctx; me: Orang 
           <span className="flex-1 text-[15px]">Mode terang / gelap</span>
           <ThemeToggle className="h-11 w-11 border border-neutral-200 dark:border-neutral-800" />
         </div>
-        {onExit && (
-          <button onClick={onExit} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-            <Ico n="search" className="h-5 w-5 text-neutral-500" />
-            <span className="flex-1 text-[15px]">Buka Cari Konsumen</span>
+        {onAktivitas && (
+          <button onClick={onAktivitas} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+            <Ico n="users" className="h-5 w-5 text-neutral-500" />
+            <span className="flex-1 text-[15px]">Aktivitas tim (siapa yang buka aplikasi)</span>
             <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
           </button>
         )}
+        {onCari && (
+          <button onClick={onCari} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+            <Ico n="search" className="h-5 w-5 text-neutral-500" />
+            <span className="flex-1 text-[15px]">Cari konsumen</span>
+            <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+          </button>
+        )}
+        <a href={MONITORING_MOTORKU} target="_blank" rel="noreferrer"
+          className="flex min-h-14 items-center gap-3 border-b border-neutral-200 px-4 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+          <Ico n="map" className="h-5 w-5 text-neutral-500" />
+          <span className="flex-1 text-[15px]">Monitoring Visit Motorku</span>
+          <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+        </a>
         <a href="/api/auth/logout" className="flex min-h-14 items-center gap-3 px-4 text-red-700 active:bg-neutral-50 dark:text-red-400 dark:active:bg-neutral-900">
           <Ico n="logout" className="h-5 w-5" />
           <span className="flex-1 text-[15px] font-semibold">Keluar</span>

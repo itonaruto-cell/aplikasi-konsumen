@@ -6,7 +6,7 @@ import {
   type BrandKey, type Ctx, type FeedItem, type Story,
 } from '../../lib/performa-calc';
 import { angka, nama, persen, rp, tanggal, waktu, type Push } from './ui';
-import { Avatar, Card, Ico, Line, PillSeg, Podium, SectionTitle, shortName, twoNames } from './parts';
+import { Avatar, Card, Ico, Line, PillSeg, Podium, SectionTitle, salesDetail, shortName, twoNames } from './parts';
 
 const BR: ['mobilku' | 'motorku', string][] = [['mobilku', 'Mobilku'], ['motorku', 'Motorku']];
 const brands = (b: BrandKey) => (b === 'semua' ? BR.map((x) => x[0]) : [b]);
@@ -266,7 +266,7 @@ export default function Kabar({ c, me, brand, push, storyList, seen, openStory, 
         <PillSeg value={metric} onChange={setMetric} full options={[['amount', 'Amount'], ['unit', 'Unit'], ['visit', 'Visit']]} />
       </div>
       <div className="px-4 pt-4">
-        <Podium rows={rows} onOpen={(o) => push({ t: 'orang', o })} reached={(r) => r.pct && (r.val || 0) >= 1} />
+        <Podium rows={rows} onOpen={(o) => push({ t: 'orang', o })} reached={(r) => r.pct && (r.val || 0) >= 1} detail={metric === 'visit' ? undefined : salesDetail(metric)} />
       </div>
       {rest.map((r) => (
         <button key={r.o.nama} onClick={() => push({ t: 'orang', o: r.o })}
@@ -276,6 +276,7 @@ export default function Kabar({ c, me, brand, push, storyList, seen, openStory, 
           <span className="flex min-w-0 flex-1 flex-col gap-1.5">
             <span className="flex justify-between gap-2 text-[15px] font-bold"><span className="truncate">{twoNames(r.o.nama)}</span><span>{r.val === null ? '–' : r.pct ? persen(r.val) : angka(r.val)}</span></span>
             <Line v={r.ach} className="h-[5px]" color="bg-neutral-400 dark:bg-neutral-500" />
+            {salesDetail(metric)(r) && <span className="text-[13px] text-neutral-500">{salesDetail(metric)(r)}</span>}
           </span>
         </button>
       ))}

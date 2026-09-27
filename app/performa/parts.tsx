@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { RankRow } from '../../lib/performa-calc';
-import { initials, nama, persen, angka } from './ui';
+import { initials, nama, persen, angka, rp } from './ui';
 
 /* ---------- Ikon garis (tanpa library) ---------- */
 const P: Record<string, ReactNode> = {
@@ -110,11 +110,13 @@ export function MoveMark({ r }: { r: RankRow }) {
 }
 
 /* ---------- Podium juara 1–3 ---------- */
-export function Podium({ rows, onOpen, reached }: { rows: RankRow[]; onOpen: (o: Orang) => void; reached?: (r: RankRow) => boolean }) {
+export function Podium({ rows, onOpen, reached, detail }: {
+  rows: RankRow[]; onOpen: (o: Orang) => void; reached?: (r: RankRow) => boolean; detail?: (r: RankRow) => string;
+}) {
   const top = rows.filter((r) => r.rank).slice(0, 3);
   if (!top.length) return <p className="py-6 text-center text-sm text-neutral-500">Belum ada data untuk peringkat ini.</p>;
   const order = [top[1], top[0], top[2]];
-  const H = ['h-[84px]', 'h-[116px]', 'h-[68px]'];
+  const H = detail ? ['h-[100px]', 'h-[132px]', 'h-[84px]'] : ['h-[84px]', 'h-[116px]', 'h-[68px]'];
   const RING = ['ring-[#BFC3C9]', 'ring-[#F5C451]', 'ring-[#D9A37A]'];
   const champ = top[0];
   return (
@@ -137,6 +139,9 @@ export function Podium({ rows, onOpen, reached }: { rows: RankRow[]; onOpen: (o:
               ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
               : 'bg-neutral-100 dark:bg-neutral-900'}`}>
               <span className={`${i === 1 ? 'text-[26px]' : 'text-[22px]'} font-bold leading-none tracking-tight`}>{rankVal(r)}</span>
+              {detail && detail(r) && (
+                <span className={`max-w-full truncate px-1 text-xs font-semibold ${i === 1 ? 'text-neutral-300 dark:text-neutral-600' : 'text-neutral-600 dark:text-neutral-400'}`}>{detail(r)}</span>
+              )}
               <span className={`text-[13px] font-bold ${i === 1 ? 'text-[#F5C451] dark:text-[#B07800]' : 'text-neutral-500'}`}>#{r.rank}</span>
             </span>
           </button>
@@ -159,3 +164,9 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
     </div>
   );
 }
+
+// Nilai asli di bawah persen: amount → rupiah, unit → jumlah unit
+export const salesDetail = (metric: string) => (r: RankRow) =>
+  metric === 'amount' ? (typeof r.o.amount?.ini === 'number' ? rp(r.o.amount.ini) : '')
+    : metric === 'unit' ? (typeof r.o.unit?.ini === 'number' ? `${angka(r.o.unit.ini)} unit` : '')
+      : '';
