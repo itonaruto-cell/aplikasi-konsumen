@@ -1,9 +1,10 @@
 'use client';
 import { useMemo, useState } from 'react';
 import type { Metric, Orang } from '../../lib/performa-types';
-import { badges, ranking, shareJuara, type Ctx, type Period, type RankRow } from '../../lib/performa-calc';
+import { badges, ranking, shareJuara, type Ctx, type Period, type RankRow, type Story } from '../../lib/performa-calc';
 import { angka, persen, rp, type Push } from './ui';
-import { Avatar, Ico, Line, MoveMark, PillSeg, Podium, ShareBtn, UnderTabs, rankVal, salesDetail, shareText, shortName, twoNames } from './parts';
+import { StoryRow } from './Sorotan';
+import { Avatar, Ico, Kosong, Line, MoveMark, PillSeg, Podium, ShareBtn, UnderTabs, rankVal, salesDetail, shareText, shortName, twoNames } from './parts';
 
 const TABS: [Metric, string][] = [['amount', 'Amount'], ['unit', 'Unit'], ['visit', 'Visit'], ['bertemu', 'Temu'], ['maintain', 'Maintain']];
 const UNIT: Record<Metric, string> = { amount: '', unit: '', visit: 'visit', bertemu: 'bertemu', maintain: 'maintain' };
@@ -22,7 +23,9 @@ function subOf(r: RankRow, rows: RankRow[], metric: Metric) {
   return [brand, nilai, `kurang ${r.pct ? persen(gap) : angka(gap) + ' ' + UNIT[metric]} ke #${up.rank}`].filter(Boolean).join(' · ');
 }
 
-export default function Juara({ c, me, push }: { c: Ctx; me: Orang | null; push: Push }) {
+export default function Juara({ c, me, push, storyList = [], seen, openStory }: {
+  c: Ctx; me: Orang | null; push: Push; storyList?: Story[]; seen?: (s: Story) => boolean; openStory?: (i: number) => void;
+}) {
   const [metric, setMetric] = useState<Metric>('amount');
   const [period, setPeriod] = useState<Period>('bulan');
   const pct = metric === 'amount' || metric === 'unit';
@@ -34,6 +37,8 @@ export default function Juara({ c, me, push }: { c: Ctx; me: Orang | null; push:
 
   return (
     <div className="pb-28">
+      {openStory && seen && <StoryRow list={storyList} me={me} seen={seen} open={openStory} />}
+      {!rows.length && <Kosong art="bendera" title="Papan juara masih kosong" text="Belum ada angka untuk ukuran ini. Coba ukuran lain atau tunggu kiriman data berikutnya." />}
       <div className="px-4 pt-3">
         <PillSeg value={per} onChange={setPeriod} full
           options={[['bulan', 'Bulan ini'], ['minggu', 'Minggu ini', pct]]} />

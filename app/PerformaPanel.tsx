@@ -4,21 +4,22 @@ import { OverlayCtx } from './overlay';
 import type { Orang, Pengumuman, Performa } from '../lib/performa-types';
 import { PengumumanForm } from './performa/Pengumuman';
 import { refreshPush } from './push-client';
-import { brandOf, buildCtx, findMe, stories, streak, type BrandKey, type Story } from '../lib/performa-calc';
+import { brandOf, buildCtx, findMe, keyOf, ranking, stories, streak, type BrandKey, type Story } from '../lib/performa-calc';
 import { ThemeToggle } from './theme';
 import { Sheet, type View } from './performa/ui';
-import { Ico, UnderTabs } from './performa/parts';
-import Kabar from './performa/Kabar';
+import { Confetti, Ico, vibrate } from './performa/parts';
+import Pantau from './performa/Pantau';
+import Wrapped from './performa/Wrapped';
 import Juara from './performa/Juara';
 import Rute from './performa/Rute';
 import Saya from './performa/Saya';
 import Sorotan from './performa/Sorotan';
 
-// Kerangka aplikasi (gaya sosmed): Kabar (feed + papan juara + misi), Juara, Rute, Cari (khusus owner/konsumen), Saya.
+// Kerangka aplikasi (gaya sosmed): Pantau (pantauan cabang / Mobilku / Motorku), Juara, Rute, Cari (khusus owner/konsumen), Saya.
 // Data performa boleh dilihat semua akun terdaftar; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
 
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
-type Page = 'kabar' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas';
+type Page = 'pantau' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas';
 type Slot = (reloadKey: number) => ReactNode;
 const SEEN_KEY = 'ck_story_seen';
 
@@ -33,9 +34,11 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const [reloadKey, setReloadKey] = useState(0);
   const loadedAt = useRef(0);
 
-  const [page, setPage] = useState<Page>('kabar');
-  const [brand, setBrand] = useState<BrandKey>('semua');
-  const [rute, setRute] = useState<{ mode: 'belum' | 'ulang'; brand: BrandKey; n: number }>({ mode: 'belum', brand: 'semua', n: 0 });
+  const [page, setPage] = useState<Page>('pantau');
+  const brand: BrandKey = 'semua';
+  const [wrap, setWrap] = useState(false);
+  const [rayakan, setRayakan] = useState<string | null>(null);
+  const [rute] = useState<{ mode: 'belum' | 'ulang'; brand: BrandKey; n: number }>({ mode: 'belum', brand: 'semua', n: 0 });
   const [stack, setStack] = useState<View[]>([]);
   const [story, setStory] = useState<number | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
@@ -119,9 +122,34 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   // Simpan nama anggota di langganan notifikasi (supaya pesan pagi/sore sesuai orangnya)
   useEffect(() => { if (me) refreshPush(me.nama).catch(() => {}); }, [me?.nama]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ---------- Tombol kembali Android: tutup panel / sorotan / balik ke Kabar ---------- */
+  /* ---------- Perayaan: target tembus (sekali per bulan per ukuran) & naik peringkat (sekali per hari) ---------- */
+  useEffect(() => {
+    if (!c || !me) return;
+    const bln = c.today.slice(0, 7);
+    const get = (k: string) => { try { return localStorage.getItem(k); } catch { return '1'; } };
+    const set = (k: string) => { try { localStorage.setItem(k, '1'); } catch { /* abaikan */ } };
+    for (const m of ['amount', 'unit'] as const) {
+      const ach = me[m]?.ach;
+      const k = `ck_rayakan_${m}_${bln}`;
+      if (typeof ach === 'number' && ach >= 1 && !get(k)) {
+        set(k); vibrate();
+        setRayakan(m === 'amount' ? 'Target amount tembus!' : 'Target unit tembus!');
+        const t = setTimeout(() => setRayakan(null), 3800);
+        return () => clearTimeout(t);
+      }
+    }
+    const kemarin = data?.riwayat?.kemarin?.rank?.amount;
+    if (kemarin?.length) {
+      const before = kemarin.indexOf(keyOf(me.nama)) + 1;
+      const now = ranking(c, 'amount').find((r) => r.o === me)?.rank || 0;
+      const k = `ck_naik_${c.today}`;
+      if (before && now && now < before && !get(k)) { set(k); vibrate(); setToast(`Naik ke #${now} amount!`); }
+    }
+  }, [c, me]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ---------- Tombol kembali Android: tutup panel / sorotan / balik ke Pantau ---------- */
   const push = (v: View) => setStack((s) => [...s, v]);
-  const depth = ovN + stack.length + (story !== null ? 1 : 0) + (page !== 'kabar' ? 1 : 0);
+  const depth = ovN + stack.length + (story !== null ? 1 : 0) + (page !== 'pantau' ? 1 : 0);
   const prevDepth = useRef(0);
   const fromPop = useRef(false);
   const ignorePop = useRef(0);
@@ -130,7 +158,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     if (overlays.current.length) overlays.current[overlays.current.length - 1]();
     else if (story !== null) setStory(null);
     else if (stack.length) setStack((s) => s.slice(0, -1));
-    else if (page !== 'kabar') setPage('kabar');
+    else if (page !== 'pantau') setPage('pantau');
   };
   useEffect(() => {
     const d = depth - prevDepth.current;
@@ -150,14 +178,14 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = stack.length || story !== null ? 'hidden' : '';
+    document.body.style.overflow = stack.length || story !== null || wrap ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [stack.length, story]);
+  }, [stack.length, story, wrap]);
 
   const go = (p: Page) => { setPage(p); window.scrollTo({ top: 0 }); };
 
   /* ---------- Tarik ke bawah untuk muat ulang ---------- */
-  const overlay = ovN > 0 || stack.length > 0 || story !== null;
+  const overlay = ovN > 0 || stack.length > 0 || story !== null || wrap;
   const onTouchStart = (e: TouchEvent) => { pullStart.current = !overlay && window.scrollY <= 0 ? e.touches[0].clientY : null; };
   const onTouchMove = (e: TouchEvent) => {
     if (pullStart.current === null) return;
@@ -167,10 +195,10 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const onTouchEnd = () => { if (pull >= 64) reload(); setPull(0); pullStart.current = null; };
 
   const cabang = (data?.cabang || 'kendal').toLowerCase();
-  const TITLE: Record<Page, string> = { kabar: `${cabang}.team`, juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim' };
+  const TITLE: Record<Page, string> = { pantau: `${cabang}.team`, juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim' };
 
   const NAV: [Page, string, string][] = [
-    ['kabar', 'home', 'Kabar'], ['juara', 'trophy', 'Juara'], ['rute', 'pin', 'Rute'],
+    ['pantau', 'chart', 'Pantau'], ['juara', 'trophy', 'Juara'], ['rute', 'pin', 'Rute'],
     ...(cari ? [['cari', 'search', 'Cari'] as [Page, string, string]] : []),
     ['saya', 'user', 'Saya'],
   ];
@@ -183,7 +211,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       <div className="mx-auto max-w-xl pb-[calc(84px+env(safe-area-inset-bottom))]">
         {/* Header menempel di atas */}
         <header className="sticky top-0 z-30 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur dark:bg-neutral-950/95">
-          <div className={`flex items-center justify-between gap-2 pl-4 pr-1.5 pt-2 ${page === 'kabar' ? '' : 'border-b border-neutral-200 pb-2 dark:border-neutral-800'}`}>
+          <div className={`flex items-center justify-between gap-2 pl-4 pr-1.5 pt-2 ${page === 'pantau' ? '' : 'border-b border-neutral-200 pb-2 dark:border-neutral-800'}`}>
             <div className="min-w-0">
               <h1 className="truncate text-[22px] font-bold tracking-tight">{TITLE[page]}</h1>
             </div>
@@ -200,16 +228,15 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
               </button>
             </div>
           </div>
-          {page === 'kabar' && (
-            <UnderTabs value={brand} onChange={setBrand} options={[['semua', 'Semua'], ['mobilku', 'Mobilku'], ['motorku', 'Motorku']]} />
-          )}
         </header>
 
         {/* Indikator tarik untuk muat ulang */}
         {pull > 0 && (
           <div className="flex justify-center overflow-hidden" style={{ height: pull }}>
             <span className={`mt-3 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 ${pull >= 64 ? 'text-neutral-900 dark:text-white' : 'text-neutral-400'}`}>
-              <Ico n="refresh" className="h-5 w-5" sw={2} />
+              <span style={{ transform: `translateX(${Math.round((pull / 90) * 12 - 6)}px)` }} className={pull >= 64 ? 'ck-pop' : ''}>
+                <Ico n="car" className="h-5 w-5" sw={2} />
+              </span>
             </span>
           </div>
         )}
@@ -231,16 +258,14 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
           </div>
         ) : (
           <>
-            {page === 'kabar' && (
-              <Kabar c={c} me={me} brand={brand} push={push}
-                storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory}
+            {page === 'pantau' && (
+              <Pantau c={c} me={me} akun={akun} push={push}
                 pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
-                goJuara={() => go('juara')}
-                goRute={(mode, b) => { setRute((r) => ({ mode, brand: b, n: r.n + 1 })); go('rute'); }} />
+                openWrapped={() => setWrap(true)} />
             )}
-            {page === 'juara' && <Juara c={c} me={me} push={push} />}
+            {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
             {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} />}
+            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} />}
           </>
         )}
       </div>
@@ -280,6 +305,20 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       {toast && (
         <div className="fixed inset-x-0 bottom-[calc(96px+env(safe-area-inset-bottom))] z-50 flex justify-center px-5">
           <div className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">{toast}</div>
+        </div>
+      )}
+
+      {wrap && c && <Wrapped c={c} me={me} onClose={() => setWrap(false)} />}
+
+      {rayakan && (
+        <div className="pointer-events-none fixed inset-0 z-[60]" aria-live="polite">
+          <Confetti n={42} />
+          <div className="absolute inset-x-0 top-[calc(env(safe-area-inset-top)+84px)] flex justify-center px-5">
+            <div className="ck-pop rounded-2xl bg-neutral-900 px-5 py-3 text-center text-white shadow-lg dark:bg-white dark:text-neutral-900">
+              <p className="text-lg font-bold">{rayakan}</p>
+              <p className="text-[13px] opacity-75">Mantap! Pertahankan sampai akhir bulan.</p>
+            </div>
+          </div>
         </div>
       )}
 

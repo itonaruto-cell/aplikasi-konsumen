@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import { relDay, type Ctx, type Story } from '../../lib/performa-calc';
 import { angka, nama, persen } from './ui';
-import { Avatar, Ico, twoNames } from './parts';
+import { Avatar, Ico, shortName, twoNames } from './parts';
 
 type Slide = { key: string; label: string; big: string; text: string; list?: [string, string][]; foot?: string; tone?: 'up' | 'down' };
 
@@ -122,6 +122,33 @@ export default function Sorotan({ list, start, c, onSeen, onClose, onProfile }: 
         </div>
         <p className="px-6 pb-[calc(env(safe-area-inset-bottom)+20px)] text-center text-[13px] text-neutral-400">Ketuk kanan untuk lanjut · tahan untuk jeda</p>
       </div>
+    </div>
+  );
+}
+
+/* ---------- Sorotan (story) ---------- */
+export function StoryRow({ list, me, seen, open }: { list: Story[]; me: Orang | null; seen: (s: Story) => boolean; open: (i: number) => void }) {
+  if (!list.length) return null;
+  return (
+    <div className="flex gap-2.5 overflow-x-auto border-b border-neutral-200 px-4 py-3.5 [scrollbar-width:none] dark:border-neutral-800">
+      {list.map((s, i) => {
+        const done = seen(s);
+        return (
+          <button key={s.o.nama} onClick={() => open(i)} className="flex w-[68px] shrink-0 flex-col items-center gap-1.5 active:scale-95">
+            <span className={`relative flex h-16 w-16 rounded-full border-[2.5px] p-[3px] ${done ? 'border-neutral-300 dark:border-neutral-700' : 'border-neutral-900 dark:border-white'}`}>
+              <Avatar o={s.o} size={52} className="text-base" />
+              {s.count > 0 && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border-2 border-white bg-[#F5C451] px-1 text-xs font-bold text-neutral-900 dark:border-neutral-950">
+                  {s.count}
+                </span>
+              )}
+            </span>
+            <span className={`max-w-full truncate text-[13px] ${done ? 'font-medium text-neutral-500' : 'font-bold'}`}>
+              {me && s.o === me ? 'Kamu' : shortName(s.o.nama)}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

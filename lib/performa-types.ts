@@ -1,5 +1,5 @@
 // Bentuk data performa yang dikirim Apps Script: angka, daftar MA, dan daftar konsumen prioritas
-// beserta riwayat visit (tanpa no kontrak / no HP / alamat / no ref MA).
+// beserta no kontrak dan riwayat visit (tanpa no HP / alamat / no ref MA).
 // Dipakai bersama oleh server (lib/performa.ts) dan halaman (app/PerformaPanel.tsx).
 
 export type Sales = {
@@ -40,10 +40,10 @@ export type KonsumenVisit = { n: string; k: string; p: number; v: number; m: boo
 export type MaItem = { n: string; f: number; t: string; job: string; b?: string; i?: number };
 
 // Satu visit: ke = visit ke-, st = status, bd = bertemu dengan, h = hasil, kt = keterangan
-export type VisitRow = { ke: number; tgl: string; st: string; bd: string; h: string; kt: string; pic: string; note: string };
-// Konsumen prioritas lengkap: n = nama, k = kecamatan, p = prioritas, ket = kategori/keterangan,
+export type VisitRow = { ke: number; tgl: string; st: string; bd: string; h: string; kt: string; pic: string; note: string; f?: string };  // f = ID foto visit
+// Konsumen prioritas lengkap: n = nama, nk = no kontrak, k = kecamatan, p = prioritas, ket = kategori/keterangan,
 // info/pen = info & penawaran produk WOM, inj = tanggal inject, v = riwayat visit
-export type KonsumenFull = { n: string; k: string; p: number; ket: string; info: string; pen: string; inj: string; v: VisitRow[] };
+export type KonsumenFull = { n: string; nk?: string; k: string; p: number; ket: string; info: string; pen: string; inj: string; v: VisitRow[] };
 // MA lengkap: job = pekerjaan, cat = kategori, f = frekuensi, tgl = tanggal maintain tercatat,
 // t = terakhir, pic = MAO pemegang, inj = tanggal inject, sales = sales M-1
 export type MaFull = {
@@ -67,6 +67,7 @@ export type Performa = {
   cabangTotal: { unit: Sales | null; amount: Sales | null; oi: OrderIn | null };
   aktivitas?: Aktivitas;   // ringkasan cabang (motorku & mobilku)
   orang: Orang[];
+  blok?: Blok[];            // tabel pantauan dari sheet (s = cabang/mobilku/motorku, t = judul, h = kolom, r = baris)
   riwayat?: Riwayat;       // ditambahkan server: urutan peringkat hari sebelumnya (untuk panah naik/turun)
 };
 
@@ -77,3 +78,5 @@ export type Riwayat = { kemarin?: { tgl: string; rank: Peringkat } };
 
 // Pengumuman owner (tab PENGUMUMAN)
 export type Pengumuman = { id: string; judul: string; isi: string; untuk: 'semua' | 'mobilku' | 'motorku'; sampai: string; dibuat: string; oleh: string };
+
+export type Blok = { s: string; t: string; h: (string | null)[]; r: (string | number | null)[][] };

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
+import { FotoVisit } from './parts';
 import type { KonsumenFull, MaFull, Orang, Performa, RekrutRegist, Sales, VisitRow } from '../../lib/performa-types';
 
 /* ---------- Format ---------- */
@@ -184,7 +185,7 @@ function KListView({ items, mode, p0, pic, push }: { items: KonsumenFull[]; mode
   const base = visit === 'belum' && mode === 'cabang' ? belumVisit : temu === 'bertemu' ? bertemu : temu === 'tidak' ? tidak : sudahVisit;
   const ql = q.toLowerCase();
   const list = base
-    .filter((x) => !ql || `${x.k.n} ${x.k.k}`.toLowerCase().includes(ql))
+    .filter((x) => !ql || `${x.k.n} ${x.k.k} ${x.k.nk || ''}`.toLowerCase().includes(ql))
     .sort((a, b) => a.k.n.localeCompare(b.k.n));
   const count = (n: number) => items.filter((k) => !n || k.p === n).length;
 
@@ -203,7 +204,7 @@ function KListView({ items, mode, p0, pic, push }: { items: KonsumenFull[]; mode
             options={[['semua', `Semua (${sudahVisit.length})`], ['bertemu', `Bertemu (${bertemu.length})`], ['tidak', `Belum bertemu (${tidak.length})`]]} />
         </div>
       )}
-      {inP.length > 8 && <SearchBox value={q} onChange={setQ} placeholder="Cari nama atau kecamatan" />}
+      {inP.length > 8 && <SearchBox value={q} onChange={setQ} placeholder="Cari nama, kecamatan, atau no kontrak" />}
       <ul className="mt-3 divide-y divide-neutral-100 rounded-2xl border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
         {list.length === 0 && <li className="p-6 text-center text-sm text-neutral-500">Tidak ada konsumen di kategori ini.</li>}
         {list.map(({ k, s }, i) => (
@@ -222,6 +223,25 @@ function KListView({ items, mode, p0, pic, push }: { items: KonsumenFull[]; mode
         ))}
       </ul>
     </>
+  );
+}
+
+/* ---------- No kontrak + tombol salin ---------- */
+function KontrakRow({ nk }: { nk: string }) {
+  const [ok, setOk] = useState(false);
+  const salin = async () => {
+    try { await navigator.clipboard.writeText(nk); setOk(true); setTimeout(() => setOk(false), 1500); } catch { /* abaikan */ }
+  };
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <dt className="text-sm text-neutral-500">No kontrak</dt>
+      <dd className="flex items-center gap-2">
+        <span className="font-mono text-sm font-semibold tracking-wide">{nk}</span>
+        <button onClick={salin} className="min-h-9 rounded-full border border-neutral-300 px-3 text-xs font-semibold dark:border-neutral-700">
+          {ok ? 'Tersalin' : 'Salin'}
+        </button>
+      </dd>
+    </div>
   );
 }
 
@@ -253,6 +273,7 @@ function KDetail({ k, pic }: { k: KonsumenFull; pic?: string }) {
 
       <p className="mt-5 text-sm font-semibold text-neutral-500">Data konsumen</p>
       <dl className="mt-1 divide-y divide-neutral-100 dark:divide-neutral-800">
+        {k.nk && <KontrakRow nk={k.nk} />}
         <Field label="Kecamatan" value={k.k ? nama(k.k) : '–'} />
         <Field label="Prioritas" value={`P${k.p}`} />
         <Field label="Keterangan" value={k.ket} />
@@ -278,6 +299,7 @@ function KDetail({ k, pic }: { k: KonsumenFull; pic?: string }) {
                   <Field label="PIC visit" value={v.pic ? nama(v.pic) : ''} />
                 </dl>
                 {v.note && <p className="mt-1 rounded-xl bg-white px-3 py-2 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">{v.note}</p>}
+                {v.f && <FotoVisit id={v.f} alt={`Foto visit ${v.ke} ${nama(k.n)}`} />}
               </div>
             ))}
           </div>

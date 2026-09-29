@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { KonsumenFull, Performa } from '../../lib/performa-types';
 import { belumVisit, kecGroups, konsumenOf, perluUlang, type BrandKey } from '../../lib/performa-calc';
 import { nama, type Push } from './ui';
-import { Ico, PillSeg } from './parts';
+import { Ico, Kosong, PillSeg } from './parts';
 
 export const MONITORING_MOTORKU = 'https://monitoring-visit-motorku-kendal-fin.vercel.app/';
 
@@ -53,9 +53,9 @@ export default function Rute({ data, push, mode0, brand0 }: { data: Performa; pu
       )}
 
       {groups.length === 0 && (
-        <p className="mx-4 mt-6 rounded-2xl bg-neutral-100 p-6 text-center text-sm text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400">
-          {mode === 'belum' ? 'Semua konsumen di pilihan ini sudah dikunjungi.' : 'Tidak ada konsumen yang perlu visit ulang.'}
-        </p>
+        <Kosong art={brand === 'mobilku' ? 'mobil' : mode === 'belum' ? 'bendera' : 'motor'}
+          title={mode === 'belum' ? 'Semua sudah dikunjungi!' : 'Tidak ada yang perlu visit ulang'}
+          text={mode === 'belum' ? 'Konsumen di pilihan ini sudah kamu datangi semua. Keren, lanjut ke kecamatan lain.' : 'Semua konsumen di pilihan ini sudah ditemui. Mantap!'} />
       )}
 
       <div className="mt-3 flex flex-col gap-2.5 px-4">

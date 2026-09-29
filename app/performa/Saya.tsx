@@ -9,7 +9,7 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas }: { c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void }) {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped }: { c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
   const st = me ? streak(c, me.nama) : 0;
@@ -81,6 +81,13 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas }: { c: Ct
           <span className="flex-1 text-[15px]">Mode terang / gelap</span>
           <ThemeToggle className="h-11 w-11 border border-neutral-200 dark:border-neutral-800" />
         </div>
+        {onWrapped && (
+          <button onClick={onWrapped} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+            <Ico n="trophy" className="h-5 w-5 text-[#B07A00] dark:text-[#F5C451]" />
+            <span className="flex-1 text-[15px]">Kendal Wrapped bulan ini</span>
+            <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+          </button>
+        )}
         {onAktivitas && (
           <button onClick={onAktivitas} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
             <Ico n="users" className="h-5 w-5 text-neutral-500" />

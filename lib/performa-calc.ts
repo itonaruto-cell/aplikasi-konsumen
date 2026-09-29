@@ -466,3 +466,52 @@ export function notifMove(mv: ReturnType<typeof rankMoves>[number]): Notif {
     ? { title: 'Naik peringkat!', body: `Kamu sekarang #${mv.to} papan juara amount. Pertahankan!`, url: '/', tag: 'peringkat' }
     : { title: 'Posisimu disalip', body: `${short(mv.oleh || '')} menyalip kamu. Sekarang kamu #${mv.to} amount. Kejar lagi!`, url: '/', tag: 'peringkat' };
 }
+
+/* ---------- Kendal Wrapped: rangkuman bulan berjalan ---------- */
+export type WrappedData = {
+  bulan: string;              // "September"
+  tahun: string;
+  me: Orang | null;
+  visit: number; bertemu: number; maint: number; hariAktif: number; streak: number; kec: number;
+  topKec: string;
+  amountRank: number; unitRank: number; peserta: number;
+  badges: string[];
+  tim: { visit: number; bertemu: number; amountAch: number | null; unitAch: number | null; top: Orang[] };
+};
+export function wrapped(c: Ctx, me: Orang | null): WrappedData {
+  const bln = c.today.slice(0, 7);
+  const inMonth = (d: string) => d.slice(0, 7) === bln;
+  const sum = (names: string[]) => {
+    let visit = 0, bertemu = 0, maint = 0;
+    const days = new Set<string>(); const kec = new Map<string, number>();
+    names.forEach((n) => {
+      const a = actsOf(c, n);
+      a.visits.filter((v) => inMonth(v.d)).forEach((v) => {
+        visit++; if (v.met) bertemu++; days.add(v.d);
+        const k = String(v.k.k || '').trim(); if (k) kec.set(k, (kec.get(k) || 0) + 1);
+      });
+      a.maint.filter((m) => inMonth(m.d)).forEach((m) => { maint++; days.add(m.d); });
+    });
+    const topKec = [...kec.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    return { visit, bertemu, maint, hariAktif: days.size, kec: kec.size, topKec };
+  };
+  const all = (c.data.orang || []).map((o) => o.nama);
+  const mine = sum(me ? [me.nama] : all);
+  const tim = sum(all);
+  const am = ranking(c, 'amount'), un = ranking(c, 'unit');
+  const rankOf = (rows: RankRow[]) => (me ? rows.find((r) => r.o === me)?.rank || 0 : 0);
+  const bs = me ? badges(c).filter((b) => b.holders.includes(me)).map((b) => b.label) : [];
+  const d = new Date(c.today + 'T00:00:00Z');
+  return {
+    bulan: d.toLocaleDateString('id-ID', { month: 'long', timeZone: 'UTC' }),
+    tahun: String(d.getUTCFullYear()),
+    me, ...mine, streak: me ? streak(c, me.nama) : 0,
+    amountRank: rankOf(am), unitRank: rankOf(un), peserta: am.filter((r) => r.rank).length,
+    badges: bs,
+    tim: {
+      visit: tim.visit, bertemu: tim.bertemu,
+      amountAch: c.data.cabangTotal?.amount?.ach ?? null, unitAch: c.data.cabangTotal?.unit?.ach ?? null,
+      top: am.filter((r) => r.rank).slice(0, 3).map((r) => r.o),
+    },
+  };
+}

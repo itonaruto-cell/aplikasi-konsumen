@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useOverlay } from './overlay';
-import { Ico } from './performa/parts';
+import { Ico, Kosong } from './performa/parts';
 
 // Cari Konsumen: database konsumen (khusus owner & peran "konsumen"), gaya sama dengan halaman Performa.
 // Nomor HP hanya tampil untuk owner (server juga menyaringnya).
@@ -312,16 +312,15 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
             {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-[68px] animate-pulse rounded-2xl bg-neutral-200/70 dark:bg-neutral-800/70" />)}
           </div>
         ) : shown.length === 0 ? (
-          <div className="px-6 py-10 text-center">
-            <I n={mode === 'simpan' ? 'star' : 'user'} className="mx-auto h-8 w-8 text-neutral-400" />
-            <p className="mt-3 font-semibold">{mode === 'simpan' && !activeCount ? 'Belum ada konsumen disimpan' : 'Konsumen tidak ditemukan'}</p>
-            <p className="mt-1 text-sm text-neutral-500">
-              {activeCount ? 'Tidak ada yang cocok dengan kombinasi filter ini.'
-                : mode === 'simpan' ? 'Ketuk bintang di detail konsumen untuk menyimpannya.' : 'Coba nama lain, nopol, atau order no.'}
-            </p>
-            {activeCount > 0 && (
-              <button onClick={() => setFilters(EMPTY_FILTERS)} className="mt-4 min-h-11 rounded-full border border-neutral-300 px-5 text-sm font-semibold dark:border-neutral-700">Reset filter</button>
-            )}
+          <div>
+            <Kosong art={mode === 'simpan' ? 'bendera' : 'motor'}
+              title={mode === 'simpan' && !activeCount ? 'Belum ada konsumen disimpan' : 'Konsumen tidak ditemukan'}
+              text={activeCount ? 'Tidak ada yang cocok dengan kombinasi filter ini.'
+                : mode === 'simpan' ? 'Ketuk bintang di detail konsumen untuk menyimpannya.' : 'Coba nama lain, nopol, atau order no.'}>
+              {activeCount > 0 && (
+                <button onClick={() => setFilters(EMPTY_FILTERS)} className="min-h-11 rounded-full border border-neutral-300 px-5 text-sm font-semibold dark:border-neutral-700">Reset filter</button>
+              )}
+            </Kosong>
           </div>
         ) : (
           <ul>
