@@ -1,5 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Orang } from '../../lib/performa-types';
+import { keyOf } from '../../lib/performa-calc';
 import { SUMBER, type Bahan, type StatusBahan, type Sumber } from '../../lib/bahan-types';
 import { useOverlay } from '../overlay';
 import { rp } from './ui';
@@ -7,7 +9,8 @@ import { Ico, Kosong, shortName } from './parts';
 import { AngkaInput, FIELD } from './form';
 
 // Bahan survey: konsumen yang rencana disurvey / habis disurvey, per staff.
-// Staff melihat miliknya sendiri; owner melihat semua dan bisa menyaring per staff.
+// Tiap bahan punya PIC survey. Staff melihat bahan yang ia buat atau yang PIC-nya dia; owner melihat semua
+// dan bisa menyaring per PIC.
 
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
@@ -43,15 +46,19 @@ export function useBahan(reloadKey = 0) {
 const sumberLabel = (b: Pick<Bahan, 'sumber' | 'ket'>) =>
   b.sumber === 'Lainnya' ? b.ket || 'Lainnya' : b.sumber === 'Agent' && b.ket ? `Agent · ${b.ket}` : b.sumber;
 const STATUS_LABEL: Record<StatusBahan, string> = { aktif: 'Aktif', cair: 'Sudah cair', batal: 'Batal' };
+const picKey = (b: Pick<Bahan, 'pic'>) => keyOf(b.pic);
 
 /* ---------- Form tambah / ubah ---------- */
-function BahanForm({ awal, onClose, onSaved }: { awal: Bahan | null; onClose: () => void; onSaved: (pesan: string) => void }) {
+function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
+  awal: Bahan | null; tim: string[]; picAwal: string; onClose: () => void; onSaved: (pesan: string) => void;
+}) {
   useOverlay(true, onClose);
   const [konsumen, setKonsumen] = useState(awal?.konsumen || '');
   const [nominal, setNominal] = useState(awal?.nominal || 0);
   const [sumber, setSumber] = useState<Sumber>(awal?.sumber || 'Agent');
   const [ket, setKet] = useState(awal?.ket || '');
   const [step, setStep] = useState(awal?.step || '');
+  const [pic, setPic] = useState(awal ? awal.pic : picAwal);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -61,7 +68,7 @@ function BahanForm({ awal, onClose, onSaved }: { awal: Bahan | null; onClose: ()
     try {
       const res = await fetch('/api/bahan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, step, status }),
+        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, step, pic, status }),
       });
       const j = await res.json();
       if (!res.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
@@ -79,6 +86,8 @@ function BahanForm({ awal, onClose, onSaved }: { awal: Bahan | null; onClose: ()
   };
 
   const perluKet = sumber === 'Agent' || sumber === 'Lainnya';
+  // Pilihan PIC: anggota tim dari pantauan, ditambah PIC lama kalau namanya tidak ada di daftar
+  const pilihanPic = pic && !tim.some((t) => keyOf(t) === keyOf(pic)) ? [...tim, pic] : tim;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
@@ -96,6 +105,26 @@ function BahanForm({ awal, onClose, onSaved }: { awal: Bahan | null; onClose: ()
         <label className="mt-3 block text-[13px] font-semibold text-neutral-500">Nominal pencairan (Rp)
           <AngkaInput value={nominal} onChange={setNominal} placeholder="mis. 150.000.000" className="mt-1.5 h-12" />
         </label>
+
+        <p className="mt-3 text-[13px] font-semibold text-neutral-500">PIC survey</p>
+        {pilihanPic.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {pilihanPic.map((x) => {
+              const on = keyOf(x) === keyOf(pic);
+              return (
+                <button key={x} onClick={() => setPic(on ? '' : x)} aria-pressed={on}
+                  className={`min-h-10 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${on
+                    ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
+                    : 'border-neutral-300 dark:border-neutral-700'}`}>
+                  {shortName(x)}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <input value={pic} onChange={(e) => setPic(e.target.value)} maxLength={80} aria-label="PIC survey"
+            placeholder="Nama PIC survey" className={`${FIELD} mt-1.5 h-12`} />
+        )}
 
         <p className="mt-3 text-[13px] font-semibold text-neutral-500">Sumber order</p>
         <div className="mt-1.5 flex flex-wrap gap-2">
@@ -148,7 +177,7 @@ function BahanForm({ awal, onClose, onSaved }: { awal: Bahan | null; onClose: ()
 }
 
 /* ---------- Kartu satu bahan ---------- */
-function BahanCard({ b, showStaff, onClick }: { b: Bahan; showStaff: boolean; onClick: () => void }) {
+function BahanCard({ b, onClick }: { b: Bahan; onClick: () => void }) {
   return (
     <button onClick={onClick}
       className="flex w-full flex-col gap-2 rounded-[20px] border border-neutral-200 px-4 py-3.5 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
@@ -158,7 +187,9 @@ function BahanCard({ b, showStaff, onClick }: { b: Bahan; showStaff: boolean; on
       </span>
       <span className="flex flex-wrap gap-1.5">
         <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{sumberLabel(b)}</span>
-        {showStaff && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{shortName(b.nama)}</span>}
+        {b.pic
+          ? <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">PIC {shortName(b.pic)}</span>
+          : <span className="rounded-full bg-[#FFF4E0] px-2 py-0.5 text-xs font-semibold text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">PIC belum diisi</span>}
         {b.status !== 'aktif' && (
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${b.status === 'cair'
             ? 'bg-green-50 text-green-700 dark:bg-green-400/15 dark:text-green-300'
@@ -171,7 +202,9 @@ function BahanCard({ b, showStaff, onClick }: { b: Bahan; showStaff: boolean; on
 }
 
 /* ---------- Halaman ---------- */
-export default function BahanSurvey({ akun, reloadKey = 0, onInsentif }: { akun: Akun; reloadKey?: number; onInsentif: () => void }) {
+export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsentif }: {
+  akun: Akun; me: Orang | null; tim?: string[]; reloadKey?: number; onInsentif: () => void;
+}) {
   const { list, loading, err, reload } = useBahan(reloadKey);
   const isOwner = akun.role === 'owner';
   const [siapa, setSiapa] = useState('semua');
@@ -185,18 +218,21 @@ export default function BahanSurvey({ akun, reloadKey = 0, onInsentif }: { akun:
   }, [toast]);
 
   const staff = useMemo(() => {
-    const m = new Map<string, { email: string; nama: string; n: number }>();
+    const m = new Map<string, { key: string; nama: string; n: number }>();
     list.filter((b) => b.status === 'aktif').forEach((b) => {
-      const x = m.get(b.email) || { email: b.email, nama: b.nama, n: 0 };
-      x.n++; m.set(b.email, x);
+      const key = picKey(b);
+      const x = m.get(key) || { key, nama: b.pic || 'Tanpa PIC', n: 0 };
+      x.n++; m.set(key, x);
     });
     return [...m.values()].sort((a, b) => a.nama.localeCompare(b.nama));
   }, [list]);
-  const mine = list.filter((b) => !isOwner || siapa === 'semua' || b.email === siapa);
+  const mine = list.filter((b) => !isOwner || siapa === 'semua' || picKey(b) === siapa);
   const aktif = mine.filter((b) => b.status === 'aktif');
   const selesai = mine.filter((b) => b.status !== 'aktif');
   const total = aktif.reduce((s, b) => s + b.nominal, 0);
-  const judul = isOwner && siapa !== 'semua' ? shortName(staff.find((s) => s.email === siapa)?.nama || '').toUpperCase() : isOwner ? 'SEMUA STAFF' : 'KAMU';
+  const judul = isOwner && siapa !== 'semua' ? shortName(staff.find((s) => s.key === siapa)?.nama || '').toUpperCase() : isOwner ? 'SEMUA PIC' : 'KAMU';
+  // PIC bawaan saat menambah: diri sendiri kalau ia anggota tim
+  const picAwal = me && tim.some((t) => keyOf(t) === keyOf(me.nama)) ? me.nama : '';
 
   return (
     <div className="pb-8">
@@ -214,12 +250,12 @@ export default function BahanSurvey({ akun, reloadKey = 0, onInsentif }: { akun:
 
       {isOwner && staff.length > 1 && (
         <div className="mt-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
-          {[{ email: 'semua', nama: 'Semua', n: list.filter((b) => b.status === 'aktif').length }, ...staff].map((s) => (
-            <button key={s.email} onClick={() => setSiapa(s.email)} aria-pressed={siapa === s.email}
-              className={`min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${siapa === s.email
+          {[{ key: 'semua', nama: 'Semua', n: list.filter((b) => b.status === 'aktif').length }, ...staff].map((s) => (
+            <button key={s.key} onClick={() => setSiapa(s.key)} aria-pressed={siapa === s.key}
+              className={`min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${siapa === s.key
                 ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
                 : 'border-neutral-300 dark:border-neutral-700'}`}>
-              {s.email === 'semua' ? 'Semua' : shortName(s.nama)} · {s.n}
+              {s.key === 'semua' ? 'Semua' : s.key ? shortName(s.nama) : s.nama} · {s.n}
             </button>
           ))}
         </div>
@@ -247,7 +283,7 @@ export default function BahanSurvey({ akun, reloadKey = 0, onInsentif }: { akun:
               text="Catat konsumen yang rencana disurvey atau habis disurvey, supaya progresnya kelihatan dan ikut dihitung di simulasi insentif." />
           ) : (
             <div className="flex flex-col gap-2.5 px-4">
-              {aktif.map((b) => <BahanCard key={b.id} b={b} showStaff={isOwner && siapa === 'semua'} onClick={() => setForm(b)} />)}
+              {aktif.map((b) => <BahanCard key={b.id} b={b} onClick={() => setForm(b)} />)}
             </div>
           )}
 
@@ -267,7 +303,7 @@ export default function BahanSurvey({ akun, reloadKey = 0, onInsentif }: { akun:
               </button>
               {lama && (
                 <div className="mt-2 flex flex-col gap-2.5">
-                  {selesai.map((b) => <BahanCard key={b.id} b={b} showStaff={isOwner && siapa === 'semua'} onClick={() => setForm(b)} />)}
+                  {selesai.map((b) => <BahanCard key={b.id} b={b} onClick={() => setForm(b)} />)}
                 </div>
               )}
             </div>
@@ -276,7 +312,7 @@ export default function BahanSurvey({ akun, reloadKey = 0, onInsentif }: { akun:
       )}
 
       {form && (
-        <BahanForm awal={form === 'baru' ? null : form} onClose={() => setForm(null)}
+        <BahanForm awal={form === 'baru' ? null : form} tim={tim} picAwal={picAwal} onClose={() => setForm(null)}
           onSaved={(pesan) => { setForm(null); setToast(pesan); reload(); }} />
       )}
       {toast && (
