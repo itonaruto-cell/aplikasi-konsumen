@@ -14,12 +14,15 @@ import Juara from './performa/Juara';
 import Rute from './performa/Rute';
 import Saya from './performa/Saya';
 import Sorotan from './performa/Sorotan';
+import BahanSurvey from './performa/Bahan';
+import Insentif from './performa/Insentif';
 
 // Kerangka aplikasi (gaya sosmed): Pantau (pantauan cabang / Mobilku / Motorku), Juara, Rute, Cari (khusus owner/konsumen), Saya.
+// Bahan survey dan Insentif dibuka dari halaman Saya.
 // Data performa boleh dilihat semua akun terdaftar; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
 
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
-type Page = 'pantau' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas';
+type Page = 'pantau' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas' | 'bahan' | 'insentif';
 type Slot = (reloadKey: number) => ReactNode;
 const SEEN_KEY = 'ck_story_seen';
 
@@ -195,7 +198,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const onTouchEnd = () => { if (pull >= 64) reload(); setPull(0); pullStart.current = null; };
 
   const cabang = (data?.cabang || 'kendal').toLowerCase();
-  const TITLE: Record<Page, string> = { pantau: `${cabang}.team`, juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim' };
+  const TITLE: Record<Page, string> = { pantau: `${cabang}.team`, juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif' };
 
   const NAV: [Page, string, string][] = [
     ['pantau', 'chart', 'Pantau'], ['juara', 'trophy', 'Juara'], ['rute', 'pin', 'Rute'],
@@ -241,7 +244,10 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
           </div>
         )}
 
-        {page === 'cari' && cari ? cari(reloadKey) : page === 'aktivitas' && aktivitas ? aktivitas(reloadKey) : loading && !data ? (
+        {page === 'cari' && cari ? cari(reloadKey) : page === 'aktivitas' && aktivitas ? aktivitas(reloadKey)
+          : page === 'bahan' ? <BahanSurvey akun={akun} reloadKey={reloadKey} onInsentif={() => go('insentif')} />
+          : page === 'insentif' ? <Insentif c={c} me={me} akun={akun} reloadKey={reloadKey} onBahan={() => go('bahan')} />
+          : loading && !data ? (
           <div className="space-y-3 px-4 pt-4">
             <div className="flex gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 w-16 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-800" />)}</div>
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-[20px] bg-neutral-200/70 dark:bg-neutral-800/70" />)}
@@ -265,7 +271,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             )}
             {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
             {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} />}
+            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} />}
           </>
         )}
       </div>
@@ -274,9 +280,9 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       <nav aria-label="Menu utama" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <div className="mx-auto grid max-w-xl" style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}>
           {NAV.map(([k, icon, label]) => {
-            const on = k === page || (k === 'saya' && page === 'aktivitas');
+            const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif'));
             return (
-              <button key={k} onClick={() => (on ? window.scrollTo({ top: 0, behavior: 'smooth' }) : go(k))}
+              <button key={k} onClick={() => (k === page ? window.scrollTo({ top: 0, behavior: 'smooth' }) : go(k))}
                 aria-current={on ? 'page' : undefined}
                 className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${on ? 'font-bold text-neutral-900 dark:text-white' : 'font-medium text-neutral-500 dark:text-neutral-400'}`}>
                 <span className={`flex h-8 w-14 items-center justify-center rounded-full transition ${on ? 'bg-neutral-200/80 dark:bg-neutral-800' : ''}`}>

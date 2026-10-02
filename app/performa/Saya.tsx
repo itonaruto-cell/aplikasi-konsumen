@@ -9,7 +9,10 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped }: { c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void }) {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif }: {
+  c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
+  onBahan?: () => void; onInsentif?: () => void;
+}) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
   const st = me ? streak(c, me.nama) : 0;
@@ -65,6 +68,34 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
               : ' Minta owner mengisi nama kamu di kolom C tab AKSES.'}
           </p>
         </Card>
+      )}
+
+      {(onBahan || onInsentif) && (
+        <>
+          <p className="mt-8 text-[15px] font-bold">Survey & insentif</p>
+          <Card className="mt-2 overflow-hidden">
+            {onBahan && (
+              <button onClick={onBahan} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <Ico n="pin" className="h-5 w-5 text-neutral-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Bahan survey</span>
+                  <span className="block text-[13px] text-neutral-500">Rencana dan habis survey, nominal, step</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
+            {onInsentif && (
+              <button onClick={onInsentif} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <Ico n="chart" className="h-5 w-5 text-neutral-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Simulasi insentif</span>
+                  <span className="block text-[13px] text-neutral-500">Kurang berapa, butuh berapa unit lagi</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
+          </Card>
+        </>
       )}
 
       <p className="mt-8 text-[15px] font-bold">Akun</p>

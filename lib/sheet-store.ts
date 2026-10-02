@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 
-// Tabel kecil di Google Sheets aplikasi (dibuat otomatis): PENGUMUMAN dan PUSH.
+// Tabel kecil di Google Sheets aplikasi (dibuat otomatis): PENGUMUMAN, PUSH, dan BAHAN_SURVEY.
 // Baris 1 = judul kolom, data mulai baris 2. Jangan diubah manual kecuali menghapus baris.
 
 function sheets() {
@@ -53,4 +53,19 @@ export async function writeRows(tab: string, header: string[], rows: string[][])
   if (rows.length) {
     await api.spreadsheets.values.update({ spreadsheetId, range: `${tab}!A2`, valueInputOption: 'RAW', requestBody: { values: rows } });
   }
+}
+
+// Ubah satu baris berdasarkan ID di kolom A, tanpa menulis ulang seluruh tabel
+// (aman saat beberapa orang menyimpan bersamaan). Mengembalikan false kalau ID tidak ditemukan.
+export async function updateRowById(tab: string, header: string[], id: string, row: string[]): Promise<boolean> {
+  await ensureTab(tab, header);
+  const api = sheets();
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  const res = await api.spreadsheets.values.get({ spreadsheetId, range: `${tab}!A2:A` });
+  const i = ((res.data.values || []) as unknown[][]).findIndex((r) => String(r[0] ?? '') === id);
+  if (i < 0) return false;
+  await api.spreadsheets.values.update({
+    spreadsheetId, range: `${tab}!A${i + 2}`, valueInputOption: 'RAW', requestBody: { values: [row] },
+  });
+  return true;
 }
