@@ -176,6 +176,12 @@ export function hitung(s: Skema, j: Jenis, m: Masukan): Hasil | null {
   return k ? hitungMAO(k, m) : null;
 }
 
+// Skema yang sama dengan faktor NBQ diganti (untuk simulasi)
+export function denganNbq(s: Skema, j: Jenis, nbq: number): Skema {
+  const k = s[j];
+  return k ? ({ ...s, [j]: { ...k, nbq } } as Skema) : s;
+}
+
 /* ---------- Simulasi ---------- */
 export type Tambahan = { unit: number; amount: number; ma: number };
 // Unit tambahan dihitung ikut disurvey (CMO & MAO)

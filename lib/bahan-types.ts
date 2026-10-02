@@ -14,6 +14,7 @@ export type Bahan = {
   sumber: Sumber;
   ket: string;        // nama agent, atau sumber lain yang ditulis sendiri
   step: string;       // posisi terakhir, diisi bebas
+  pic: string;        // PIC survey: nama staff seperti di pantauan (boleh kosong)
   status: StatusBahan;
   dibuat: string;     // ISO
   diubah: string;     // ISO

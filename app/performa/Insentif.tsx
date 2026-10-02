@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import { brandOf, keyOf, todayJkt, type Ctx } from '../../lib/performa-calc';
 import {
-  JENIS_LABEL, KOSONG, butuhUntuk, hitung, langkahNaik, plafon, tambah, targetBawaan,
+  JENIS_LABEL, KOSONG, butuhUntuk, denganNbq, hitung, langkahNaik, plafon, tambah, targetBawaan,
   type Jenis, type Masukan, type Skema,
 } from '../../lib/insentif';
 import { rp } from './ui';
@@ -141,16 +141,18 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
   const bahan = useBahan(reloadKey);
   const punya = useMemo(() => {
     const aktif = bahan.list.filter((b) => b.status === 'aktif');
-    const list = !isOwner || siapa === CABANG ? aktif : aktif.filter((b) => keyOf(b.nama) === keyOf(siapa));
+    // Bahan dihitung untuk PIC survey-nya (bahan lama tanpa PIC: untuk pembuatnya)
+    const list = siapa === CABANG || !siapa ? aktif : aktif.filter((b) => keyOf(b.pic || b.nama) === keyOf(siapa));
     return { n: list.length, amt: list.reduce((s, b) => s + b.nominal, 0) };
-  }, [bahan.list, isOwner, siapa]);
+  }, [bahan.list, siapa]);
 
   /* ---------- Simulasi ---------- */
   const [sim, setSim] = useState({ unit: 0, jt: 0, ma: 0 });
   const [pakai, setPakai] = useState(false);
+  const [nbq, setNbq] = useState<number | null>(null);   // persen; null = bawaan skema
   const [target, setTarget] = useState(2_000_000);
   const [buka, setBuka] = useState(false);
-  useEffect(() => { setSim({ unit: 0, jt: 0, ma: 0 }); setPakai(false); }, [siapa, jenis]);
+  useEffect(() => { setSim({ unit: 0, jt: 0, ma: 0 }); setPakai(false); setNbq(null); }, [siapa, jenis]);
   // BMH: kategori & target dari HO wajib diisi dulu. Isian dibuka dan tetap terbuka selama diisi.
   const perluTarget = jenis === 'bmh' && (!dasar.kategori || !dasar.targetAmount || !dasar.targetUnit);
   useEffect(() => { if (perluTarget) setBuka(true); }, [perluTarget]);
@@ -160,17 +162,21 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
     const x = { unit: sim.unit + (pakai ? punya.n : 0), amount: sim.jt * 1e6 + (pakai ? punya.amt : 0), ma: sim.ma };
     const m = tambah(jenis, dasar, x);
     const aktual = hitung(skema, jenis, dasar);
-    const kini = hitung(skema, jenis, m);
-    if (!aktual || !kini) return null;
+    if (!aktual) return null;
+    const nbqBawaan = Math.round(aktual.nbq * 100);
+    const sk = nbq === null || nbq === nbqBawaan ? skema : denganNbq(skema, jenis, nbq / 100);
+    const kini = hitung(sk, jenis, m);
+    if (!kini) return null;
     const perUnit = m.unit > 0 ? m.amount / m.unit : m.targetUnit > 0 ? m.targetAmount / m.targetUnit : 150_000_000;
     return {
       m, aktual, kini, perUnit,
-      berubah: x.unit !== 0 || x.amount !== 0 || x.ma !== 0,
-      naik: langkahNaik(skema, jenis, m),
-      butuh: butuhUntuk(skema, jenis, m, target, perUnit),
-      plafon: plafon(skema, jenis, m),
+      nbqBawaan,
+      berubah: x.unit !== 0 || x.amount !== 0 || x.ma !== 0 || sk !== skema,
+      naik: langkahNaik(sk, jenis, m),
+      butuh: butuhUntuk(sk, jenis, m, target, perUnit),
+      plafon: plafon(sk, jenis, m),
     };
-  }, [skema, jenis, dasar, sim, pakai, punya, target]);
+  }, [skema, jenis, dasar, sim, pakai, punya, target, nbq]);
 
   /* ---------- Tampilan ---------- */
   if (loading && !skema) {
@@ -338,7 +344,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
       <div className="flex items-baseline justify-between gap-3 px-4 pb-2.5 pt-6">
         <h2 className="text-[17px] font-bold tracking-tight">Simulasi</h2>
         {hasil.berubah && (
-          <button onClick={() => { setSim({ unit: 0, jt: 0, ma: 0 }); setPakai(false); }}
+          <button onClick={() => { setSim({ unit: 0, jt: 0, ma: 0 }); setPakai(false); setNbq(null); }}
             className="-my-2 -mr-3 min-h-11 px-3 text-[13px] font-semibold text-neutral-500">Reset</button>
         )}
       </div>
@@ -369,6 +375,8 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
           <Stepper label="Tambah MA produktif" sub={`Jadi ${m.ma} dari target ${tMa} MA`} value={String(sim.ma)}
             onMinus={() => setSim((s) => ({ ...s, ma: Math.max(0, s.ma - 1) }))} onPlus={() => setSim((s) => ({ ...s, ma: s.ma + 1 }))} />
         )}
+        <Stepper label="Faktor NBQ" sub={`Bawaan skema ${hasil.nbqBawaan}%`} value={`${nbq ?? hasil.nbqBawaan}%`}
+          onMinus={() => setNbq((v) => Math.max(0, (v ?? hasil.nbqBawaan) - 5))} onPlus={() => setNbq((v) => Math.min(100, (v ?? hasil.nbqBawaan) + 5))} />
       </div>
 
       {/* Target insentif */}

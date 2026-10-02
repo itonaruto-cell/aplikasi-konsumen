@@ -26,6 +26,15 @@ async function ensureTab(tab: string, header: string[]) {
     await api.spreadsheets.values.update({
       spreadsheetId, range: `${tab}!A1`, valueInputOption: 'RAW', requestBody: { values: [header] },
     });
+  } else {
+    // Tab lama: samakan judul kolom kalau ada kolom baru (isi data tidak disentuh)
+    const cur = await api.spreadsheets.values.get({ spreadsheetId, range: `${tab}!1:1` });
+    const now = (((cur.data.values || []) as unknown[][])[0] || []);
+    if (header.some((h, i) => String(now[i] ?? '') !== h)) {
+      await api.spreadsheets.values.update({
+        spreadsheetId, range: `${tab}!A1`, valueInputOption: 'RAW', requestBody: { values: [header] },
+      });
+    }
   }
   ready.add(tab);
 }
