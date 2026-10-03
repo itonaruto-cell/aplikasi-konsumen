@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 
-// Tabel kecil di Google Sheets aplikasi (dibuat otomatis): PENGUMUMAN, PUSH, dan BAHAN_SURVEY.
+// Tabel kecil di Google Sheets aplikasi (dibuat otomatis): PENGUMUMAN, PUSH, BAHAN_SURVEY, dan INJECT_P3.
 // Baris 1 = judul kolom, data mulai baris 2. Jangan diubah manual kecuali menghapus baris.
 
 function sheets() {
@@ -50,6 +50,16 @@ export async function appendRow(tab: string, header: string[], row: string[]) {
   await sheets().spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID, range: `${tab}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
+  });
+}
+
+// Tambah beberapa baris sekaligus (satu kali kirim)
+export async function appendRows(tab: string, header: string[], rows: string[][]) {
+  if (!rows.length) return;
+  await ensureTab(tab, header);
+  await sheets().spreadsheets.values.append({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID, range: `${tab}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: rows },
   });
 }
 
