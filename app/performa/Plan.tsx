@@ -7,7 +7,7 @@ import {
   JENIS, JENIS_LABEL, MIN_AKTIVITAS, ringkas, tanggalPanjang, tanggalPendek, teksPlan, urutkan,
   type Jenis, type PlanItem, type StatusPlan,
 } from '../../lib/plan-types';
-import { Ico, Kosong, PillSeg, UnderTabs, shareText, shortName } from './parts';
+import { BrandChip, Ico, Kosong, PillSeg, UnderTabs, shareText, shortName, type BrandId } from './parts';
 import { FIELD, Lembar } from './form';
 import BahanSurvey, { useBahan } from './Bahan';
 
@@ -17,6 +17,8 @@ import BahanSurvey, { useBahan } from './Bahan';
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 type Tab = 'tim' | 'saya' | 'bahan' | 'report';
 type Pilihan = { jenis: Jenis; siapa: string; lokasi: string };
+// Staff yang ditagih plan: semua anggota di pantauan, Mobilku maupun Motorku
+export type Staf = { nama: string; brand: BrandId | '' };
 const CHIP = 'rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300';
 const CHIP_AMBER = 'rounded-full bg-[#FFF4E0] px-2 py-0.5 text-xs font-semibold text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]';
 const CHIP_HIJAU = 'rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-400/15 dark:text-green-300';
@@ -24,6 +26,7 @@ const CHIP_MERAH = 'rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold tex
 const PILIH = (on: boolean) => `min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${on
   ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
   : 'border-neutral-300 dark:border-neutral-700'}`;
+const URUT_BRAND: Record<BrandId | '', number> = { mobilku: 0, motorku: 1, '': 2 };
 const kunci = (x: { jenis: string; siapa: string }) => `${x.jenis}|${keyOf(x.siapa)}`;
 
 /* ---------- Muat plan satu hari ---------- */
@@ -407,8 +410,8 @@ function PilihHari({ tgl, hariIni, onChange }: { tgl: string; hariIni: string; o
 }
 
 /* ---------- Halaman ---------- */
-export default function Plan({ c, me, akun, tim = [], cabang = 'KENDAL', reloadKey = 0, onInsentif }: {
-  c: Ctx | null; me: Orang | null; akun: Akun; tim?: string[]; cabang?: string; reloadKey?: number; onInsentif: () => void;
+export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDAL', reloadKey = 0, onInsentif }: {
+  c: Ctx | null; me: Orang | null; akun: Akun; tim?: string[]; staf?: Staf[]; cabang?: string; reloadKey?: number; onInsentif: () => void;
 }) {
   const isOwner = akun.role === 'owner';
   const hariIni = todayJkt();
@@ -450,16 +453,16 @@ export default function Plan({ c, me, akun, tim = [], cabang = 'KENDAL', reloadK
 
   /* Tim (owner) */
   const staff = useMemo(() => {
-    const m = new Map<string, { nama: string; items: PlanItem[] }>();
-    tim.forEach((n) => m.set(keyOf(n), { nama: n, items: [] }));
+    const m = new Map<string, { nama: string; brand: BrandId | ''; items: PlanItem[] }>();
+    staf.forEach((o) => m.set(keyOf(o.nama), { ...o, items: [] }));
     list.forEach((x) => {
       const k = keyOf(x.nama);
-      const s = m.get(k) || { nama: x.nama, items: [] };
+      const s = m.get(k) || { nama: x.nama, brand: '' as const, items: [] };
       s.items.push(x); m.set(k, s);
     });
     return [...m.values()].map((s) => ({ ...s, items: urutkan(s.items), r: ringkas(s.items) }))
-      .sort((a, b) => a.nama.localeCompare(b.nama));
-  }, [list, tim]);
+      .sort((a, b) => URUT_BRAND[a.brand] - URUT_BRAND[b.brand] || a.nama.localeCompare(b.nama));
+  }, [list, staf]);
   const rTim = ringkas(list);
   const belumLengkap = staff.filter((s) => s.r.total < MIN_AKTIVITAS);
   const ingatkan = async (nama: string[]) => {
@@ -556,7 +559,7 @@ export default function Plan({ c, me, akun, tim = [], cabang = 'KENDAL', reloadK
                   <div key={s.nama} className="overflow-hidden rounded-[20px] border border-neutral-200 dark:border-neutral-800">
                     <button onClick={() => setBuka(on ? null : s.nama)} aria-expanded={on} className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left active:bg-neutral-50 dark:active:bg-neutral-900">
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-bold">{shortName(s.nama)}</span>
+                        <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-bold">{shortName(s.nama)}</span><BrandChip b={s.brand} /></span>
                         <span className="mt-1 flex flex-wrap gap-1.5">
                           {s.r.total === 0 ? <span className={CHIP_MERAH}>Belum isi plan</span>
                             : s.r.total < MIN_AKTIVITAS ? <span className={CHIP_AMBER}>Kurang {MIN_AKTIVITAS - s.r.total} aktivitas</span>

@@ -126,6 +126,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const storyList = useMemo(() => (c ? stories(c, brand, me) : []), [c, brand, me]);
   // Pilihan PIC survey di Bahan survey: anggota Mobilku dari pantauan
   const tim = useMemo(() => (data?.orang || []).filter((o) => brandOf(o) === 'mobilku').map((o) => o.nama), [data]);
+  // Yang ditagih plan aktivitas: semua anggota di pantauan (Mobilku dan Motorku), kecuali owner sendiri
+  const staf = useMemo(() => (data?.orang || []).filter((o) => !(akun.role === 'owner' && o === me)).map((o) => ({ nama: o.nama, brand: brandOf(o) })), [data, me, akun.role]);
   const myStreak = c && me ? streak(c, me.nama) : 0;
   // Simpan nama anggota di langganan notifikasi (supaya pesan pagi/sore sesuai orangnya)
   useEffect(() => { if (me) refreshPush(me.nama).catch(() => {}); }, [me?.nama]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -252,7 +254,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
         {page === 'cari' && cari ? cari(reloadKey) : page === 'aktivitas' && aktivitas ? aktivitas(reloadKey)
           : page === 'bahan' ? <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={() => go('insentif')} />
           : page === 'insentif' ? <Insentif c={c} me={me} akun={akun} reloadKey={reloadKey} onBahan={() => go('bahan')} />
-          : page === 'plan' ? <Plan c={c} me={me} akun={akun} tim={tim} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} />
+          : page === 'plan' ? <Plan c={c} me={me} akun={akun} tim={tim} staf={staf} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} />
           : page === 'inject' ? <InjectP3 akun={akun} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} />
           : loading && !data ? (
           <div className="space-y-3 px-4 pt-4">
