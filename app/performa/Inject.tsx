@@ -1,10 +1,9 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KET_BAWAAN, KOLOM_HO, barisHO, bulanLabel, kurang, type Calon, type Inject } from '../../lib/inject-types';
 import { buatXlsx, TIPE_XLSX } from '../../lib/xlsx-mini';
-import { useOverlay } from '../overlay';
 import { Ico, Kosong, shareText, shortName } from './parts';
-import { FIELD } from './form';
+import { FIELD, Lembar } from './form';
 
 // Inject P3: staff memilih konsumen dari database (Cari konsumen) untuk diajukan,
 // owner mengunduh daftarnya (Excel, format HO) atau membagikannya.
@@ -44,23 +43,6 @@ function useInject(reloadKey = 0) {
   }, [reloadKey, n]);
   const reload = useCallback(() => setN((x) => x + 1), []);
   return { list, bulanIni, loading, err, reload };
-}
-
-function Lembar({ judul, onClose, children }: { judul: string; onClose: () => void; children: ReactNode }) {
-  useOverlay(true, onClose);
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col rounded-t-3xl bg-white pt-3 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-50">
-        <div className="mx-auto mb-3 h-1.5 w-10 shrink-0 rounded-full bg-neutral-300 dark:bg-neutral-700" />
-        <div className="flex shrink-0 items-center justify-between px-5">
-          <p className="text-lg font-bold">{judul}</p>
-          <button onClick={onClose} className="-mr-2 flex min-h-11 items-center px-2 text-[15px] text-neutral-500">Tutup</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 /* ---------- Ajukan: cari di database konsumen, pilih, kirim ---------- */
@@ -164,7 +146,7 @@ function AjukanSheet({ cabang, sudah, onClose, onSaved }: {
                         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${on
                           ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
                           : 'border-neutral-300 dark:border-neutral-600'}`}>
-                          {on && <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>}
+                          {on && <Ico n="check" className="h-4 w-4" sw={3} />}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] font-bold">{c.nama}</span>

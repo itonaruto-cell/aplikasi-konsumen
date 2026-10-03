@@ -394,9 +394,9 @@ function BrandTab({ c, b, push }: { c: Ctx; b: BrandId; push: Push }) {
 type Tab = 'cabang' | BrandId;
 const TABS: Tab[] = ['cabang', 'mobilku', 'motorku'];
 
-export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped }: {
+export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped, plan }: {
   c: Ctx; me: Orang | null; akun: { name?: string }; push: Push;
-  pengumuman: Pengumuman[]; isOwner: boolean; onPengumuman: () => void; buatPengumuman: () => void; openWrapped: () => void;
+  pengumuman: Pengumuman[]; isOwner: boolean; onPengumuman: () => void; buatPengumuman: () => void; openWrapped: () => void; plan?: ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>('cabang');
   const [dir, setDir] = useState<'kanan' | 'kiri'>('kanan');
@@ -461,6 +461,7 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
               </span>
               <span className="text-sm leading-snug"><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {sapa}</span>
             </div>
+            {plan}
             <PengumumanList list={pengumuman} brand="semua" isOwner={isOwner} onChanged={onPengumuman} onCreate={buatPengumuman} />
             <NotifPrompt nama={me?.nama || ''} />
             {showWrapped && (

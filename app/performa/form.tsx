@@ -1,5 +1,7 @@
 'use client';
-// Isian angka yang dipakai bersama halaman Bahan survey dan Insentif.
+import type { ReactNode } from 'react';
+import { useOverlay } from '../overlay';
+// Isian dan lembar bawah yang dipakai bersama halaman Bahan survey, Insentif, Inject P3, dan Plan.
 
 const DASAR = 'rounded-xl border border-neutral-300 bg-white px-3 text-base font-normal text-neutral-900 outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50';
 export const FIELD = `w-full ${DASAR}`;
@@ -33,6 +35,24 @@ export function Stepper({ label, sub, value, onMinus, onPlus }: {
       <span className="w-14 shrink-0 whitespace-nowrap text-center text-[15px] font-bold">{value}</span>
       <button onClick={onPlus} aria-label={`Tambah ${label.toLowerCase()}`}
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xl font-semibold text-white active:scale-95 dark:bg-white dark:text-neutral-900">+</button>
+    </div>
+  );
+}
+
+// Lembar bawah dengan judul dan tombol Tutup; isi diatur pemakainya (bagian yang bisa digulir + kaki)
+export function Lembar({ judul, onClose, children }: { judul: string; onClose: () => void; children: ReactNode }) {
+  useOverlay(true, onClose);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[92dvh] w-full max-w-xl flex-col rounded-t-3xl bg-white pt-3 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-50">
+        <div className="mx-auto mb-3 h-1.5 w-10 shrink-0 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+        <div className="flex shrink-0 items-center justify-between px-5">
+          <p className="text-lg font-bold">{judul}</p>
+          <button onClick={onClose} className="-mr-2 flex min-h-11 items-center px-2 text-[15px] text-neutral-500">Tutup</button>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
