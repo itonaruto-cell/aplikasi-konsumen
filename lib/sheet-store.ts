@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 
-// Tabel kecil di Google Sheets aplikasi (dibuat otomatis): PENGUMUMAN, PUSH, BAHAN_SURVEY, dan INJECT_P3.
+// Tabel kecil di Google Sheets aplikasi (dibuat otomatis): PENGUMUMAN, PUSH, BAHAN_SURVEY, INJECT_P3, dan PLAN.
 // Baris 1 = judul kolom, data mulai baris 2. Jangan diubah manual kecuali menghapus baris.
 
 function sheets() {
