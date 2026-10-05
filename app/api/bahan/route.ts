@@ -12,17 +12,17 @@ export const dynamic = 'force-dynamic';
 // Staff melihat & mengubah bahan yang ia buat atau yang PIC survey-nya dia; owner melihat semua.
 // Menghapus = menandai status "hapus" (baris tidak dibuang, supaya aman saat banyak yang menyimpan bersamaan).
 const TAB = 'BAHAN_SURVEY';
-const HEAD = ['ID', 'EMAIL', 'NAMA', 'KONSUMEN', 'NOMINAL', 'SUMBER', 'KETERANGAN_SUMBER', 'STEP', 'STATUS', 'DIBUAT', 'DIUBAH', 'PIC_SURVEY'];
+const HEAD = ['ID', 'EMAIL', 'NAMA', 'KONSUMEN', 'NOMINAL', 'SUMBER', 'KETERANGAN_SUMBER', 'STEP', 'STATUS', 'DIBUAT', 'DIUBAH', 'PIC_SURVEY', 'AGGREGATOR'];
 const STATUS: StatusBahan[] = ['aktif', 'cair', 'batal'];
 
 const toObj = (r: string[]): Bahan => ({
   id: r[0], email: r[1].toLowerCase(), nama: r[2], konsumen: r[3], nominal: Number(r[4]) || 0,
   sumber: (SUMBER as readonly string[]).includes(r[5]) ? (r[5] as Sumber) : 'Lainnya',
   ket: r[6], step: r[7], status: (STATUS as string[]).includes(r[8]) ? (r[8] as StatusBahan) : 'aktif',
-  dibuat: r[9], diubah: r[10] || r[9], pic: r[11] || '',
+  dibuat: r[9], diubah: r[10] || r[9], pic: r[11] || '', agg: r[5] === 'Agent' && r[12] === '1',
 });
 const toRow = (b: Bahan, status: string = b.status): string[] =>
-  [b.id, b.email, b.nama, b.konsumen, String(b.nominal), b.sumber, b.ket, b.step, status, b.dibuat, b.diubah, b.pic];
+  [b.id, b.email, b.nama, b.konsumen, String(b.nominal), b.sumber, b.ket, b.step, status, b.dibuat, b.diubah, b.pic, b.agg ? '1' : ''];
 
 async function session(req: NextRequest) {
   const s = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
   const ket = sumber === 'Agent' || sumber === 'Lainnya' ? String(b?.ket || '').trim().slice(0, 80) : '';
   const step = String(b?.step || '').trim().slice(0, 300);
   const pic = String(b?.pic || '').trim().slice(0, 80);
+  const agg = sumber === 'Agent' && b?.agg === true;
   const status: StatusBahan = (STATUS as string[]).includes(b?.status) ? b.status : 'aktif';
   if (!konsumen) return NextResponse.json({ error: 'Nama konsumen wajib diisi.' }, { status: 400 });
   if (nominal < 0 || nominal > 100_000_000_000) return NextResponse.json({ error: 'Nominal pencairan tidak wajar.' }, { status: 400 });
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
       const email = s.email.toLowerCase();
       const baru: Bahan = {
         id: randomUUID().slice(0, 8), email, nama: (await getPerfName(email)) || s.name || email,
-        konsumen, nominal, sumber, ket, step, pic, status, dibuat: now, diubah: now,
+        konsumen, nominal, sumber, ket, agg, step, pic, status, dibuat: now, diubah: now,
       };
       await appendRow(TAB, HEAD, toRow(baru));
       return NextResponse.json({ ok: true, bahan: baru });
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     const lama = (await readRows(TAB, HEAD)).filter((r) => r[0] === id && r[8] !== 'hapus').map(toObj)[0];
     if (!lama) return NextResponse.json({ error: 'Bahan tidak ditemukan.' }, { status: 404 });
     if (!(await akses(s.email, role))(lama)) return NextResponse.json({ error: 'Bukan bahan kamu.' }, { status: 403 });
-    const ubah: Bahan = { ...lama, konsumen, nominal, sumber, ket, step, pic, status, diubah: now };
+    const ubah: Bahan = { ...lama, konsumen, nominal, sumber, ket, agg, step, pic, status, diubah: now };
     await updateRowById(TAB, HEAD, id, toRow(ubah));
     return NextResponse.json({ ok: true, bahan: ubah });
   } catch (err) {

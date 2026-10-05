@@ -143,23 +143,35 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
     const aktif = bahan.list.filter((b) => b.status === 'aktif');
     // Bahan dihitung untuk PIC survey-nya (bahan lama tanpa PIC: untuk pembuatnya)
     const list = siapa === CABANG || !siapa ? aktif : aktif.filter((b) => keyOf(b.pic || b.nama) === keyOf(siapa));
-    return { n: list.length, amt: list.reduce((s, b) => s + b.nominal, 0) };
+    const agg = list.filter((b) => b.agg);   // dari MA aggregator
+    return {
+      n: list.length, amt: list.reduce((s, b) => s + b.nominal, 0),
+      nAgg: agg.length, amtAgg: agg.reduce((s, b) => s + b.nominal, 0),
+    };
   }, [bahan.list, siapa]);
 
   /* ---------- Simulasi ---------- */
-  const [sim, setSim] = useState({ unit: 0, jt: 0, ma: 0 });
+  // unit / jt: tambahan biasa (MAO: sales retail). unitAgg / jtAgg: tambahan dari MA aggregator (hanya MAO)
+  const SIM0 = { unit: 0, jt: 0, ma: 0, unitAgg: 0, jtAgg: 0 };
+  const [sim, setSim] = useState(SIM0);
   const [pakai, setPakai] = useState(false);
   const [nbq, setNbq] = useState<number | null>(null);   // persen; null = bawaan skema
   const [target, setTarget] = useState(2_000_000);
   const [buka, setBuka] = useState(false);
-  useEffect(() => { setSim({ unit: 0, jt: 0, ma: 0 }); setPakai(false); setNbq(null); }, [siapa, jenis]);
+  useEffect(() => { setSim({ unit: 0, jt: 0, ma: 0, unitAgg: 0, jtAgg: 0 }); setPakai(false); setNbq(null); }, [siapa, jenis]);
   // BMH: kategori & target dari HO wajib diisi dulu. Isian dibuka dan tetap terbuka selama diisi.
   const perluTarget = jenis === 'bmh' && (!dasar.kategori || !dasar.targetAmount || !dasar.targetUnit);
   useEffect(() => { if (perluTarget) setBuka(true); }, [perluTarget]);
 
   const hasil = useMemo(() => {
     if (!skema || !jenis) return null;
-    const x = { unit: sim.unit + (pakai ? punya.n : 0), amount: sim.jt * 1e6 + (pakai ? punya.amt : 0), ma: sim.ma };
+    // MAO: bahan dari MA aggregator dihitung terpisah (tanpa pencari order dan extra)
+    const pisah = jenis === 'mao' || jenis === 'maoBaru';
+    const bAgg = pakai && pisah ? { n: punya.nAgg, amt: punya.amtAgg } : { n: 0, amt: 0 };
+    const x = {
+      unit: sim.unit + (pakai ? punya.n - bAgg.n : 0), amount: sim.jt * 1e6 + (pakai ? punya.amt - bAgg.amt : 0), ma: sim.ma,
+      unitAgg: pisah ? sim.unitAgg + bAgg.n : 0, amountAgg: pisah ? sim.jtAgg * 1e6 + bAgg.amt : 0,
+    };
     const m = tambah(jenis, dasar, x);
     const aktual = hitung(skema, jenis, dasar);
     if (!aktual) return null;
@@ -171,7 +183,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
     return {
       m, aktual, kini, perUnit,
       nbqBawaan,
-      berubah: x.unit !== 0 || x.amount !== 0 || x.ma !== 0 || sk !== skema,
+      berubah: x.unit !== 0 || x.amount !== 0 || x.ma !== 0 || x.unitAgg !== 0 || x.amountAgg !== 0 || sk !== skema,
       naik: langkahNaik(sk, jenis, m),
       butuh: butuhUntuk(sk, jenis, m, target, perUnit),
       plafon: plafon(sk, jenis, m),
@@ -213,6 +225,10 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
   const tMa = kMao?.target.ma ?? 0;
   const kategori = jenis === 'bmh' && skema.bmh ? Object.keys(skema.bmh.tarif).sort() : [];
   const isian = 'h-11 shrink-0 text-right text-[15px]';
+  // MAO: selama sales retail belum dipisahkan, semua sales terhitung aggregator (pencari order dan extra = 0)
+  const perluPisah = mao && dasar.unit > 0 && manual.pencari === undefined && manual.nonAggregator === undefined;
+  const aggUnit = dasar.unit - dasar.pencari, aggAmount = dasar.amount - dasar.nonAggregator;
+  const ret = mao ? ' retail' : '';
 
   return (
     <div className="pb-8">
@@ -258,6 +274,13 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
         </div>
       )}
 
+      {perluPisah && (
+        <button onClick={() => setBuka(true)} role="status"
+          className="mx-4 mt-3 block w-[calc(100%-32px)] rounded-2xl bg-[#FFF4E0] px-3.5 py-3 text-left text-sm leading-snug text-[#5C2F00] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">
+          <b>Pisahkan sales retail dan aggregator dulu.</b> Selama unit retail dan sales retail belum diisi di <b>Angka bulan ini</b>, semua sales dianggap dari aggregator, jadi insentif pencari order dan extra dihitung Rp 0.
+        </button>
+      )}
+
       {/* Rincian */}
       <div className="mx-4 mt-3 overflow-hidden rounded-[20px] border border-neutral-200 dark:border-neutral-800">
         <p className="px-4 pb-1 pt-3 text-[13px] font-semibold text-neutral-500">{kini.bagian.map((b) => `${b.label} ${persen(b.nilai)}`).join(' + ')}</p>
@@ -278,8 +301,8 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F5C451] text-[#6B4A00]"><Ico n="up" className="h-5 w-5" sw={2.2} /></span>
         <div className="text-sm leading-snug">
           <b>Supaya naik</b>
-          <p>{naik.amount ? `Tambah ${rp(naik.amount.tambah)} amount → ${rupiah(naik.amount.total)}` : 'Amount saja belum cukup untuk naik.'}</p>
-          <p>{naik.unit ? `Tambah ${naik.unit.tambah} unit → ${rupiah(naik.unit.total)}` : 'Unit saja belum cukup untuk naik.'}</p>
+          <p>{naik.amount ? `Tambah ${rp(naik.amount.tambah)} amount${ret} → ${rupiah(naik.amount.total)}` : 'Amount saja belum cukup untuk naik.'}</p>
+          <p>{naik.unit ? `Tambah ${naik.unit.tambah} unit${ret} → ${rupiah(naik.unit.total)}` : 'Unit saja belum cukup untuk naik.'}</p>
         </div>
       </div>
 
@@ -316,8 +339,8 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
               <Baris label="Target unit"><AngkaInput value={dasar.targetUnit} onChange={(v) => ubah('targetUnit', v)} lebar="w-[84px]" className={isian} /></Baris>
             </>
           )}
-          <Baris label="Sales amount"><AngkaInput value={dasar.amount} onChange={(v) => ubah('amount', v)} lebar="w-[150px]" className={isian} /></Baris>
-          <Baris label="Sales unit"><AngkaInput value={dasar.unit} onChange={(v) => ubah('unit', v)} lebar="w-[84px]" className={isian} /></Baris>
+          <Baris label="Sales amount" hint={mao ? 'semua: retail + aggregator' : undefined}><AngkaInput value={dasar.amount} onChange={(v) => ubah('amount', v)} lebar="w-[150px]" className={isian} /></Baris>
+          <Baris label="Sales unit" hint={mao ? 'semua: retail + aggregator' : undefined}><AngkaInput value={dasar.unit} onChange={(v) => ubah('unit', v)} lebar="w-[84px]" className={isian} /></Baris>
           {jenis === 'bmh' && (
             <Baris label="Sales tgl 1–15" hint="untuk bonus tengah bulan"><AngkaInput value={dasar.tengahBulan} onChange={(v) => ubah('tengahBulan', v)} lebar="w-[150px]" className={isian} /></Baris>
           )}
@@ -326,10 +349,15 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
           )}
           {mao && (
             <>
+              <Baris label="Unit retail" hint="non aggregator, dasar insentif pencari order"><AngkaInput value={dasar.pencari} onChange={(v) => ubah('pencari', v)} lebar="w-[84px]" className={isian} /></Baris>
+              <Baris label="Sales retail" hint="non aggregator, dasar extra insentif"><AngkaInput value={dasar.nonAggregator} onChange={(v) => ubah('nonAggregator', v)} lebar="w-[150px]" className={isian} /></Baris>
+              <p className={`border-b border-neutral-200 px-4 py-2.5 text-[13px] leading-snug dark:border-neutral-800 ${aggUnit < 0 || aggAmount < 0 ? 'text-red-700 dark:text-red-400' : 'text-neutral-500'}`}>
+                {aggUnit < 0 || aggAmount < 0
+                  ? 'Angka retail melebihi total sales. Periksa lagi isiannya.'
+                  : `Sisanya dari aggregator: ${aggUnit} unit · ${rupiah(aggAmount)}. Ikut dihitung di performa dan survey, tanpa pencari order dan extra.`}
+              </p>
               <Baris label="MA produktif" hint={`target ${tMa}`}><AngkaInput value={dasar.ma} onChange={(v) => ubah('ma', v)} lebar="w-[84px]" className={isian} /></Baris>
               <Baris label="MA produktif non leasing"><AngkaInput value={dasar.maNonLeasing} onChange={(v) => ubah('maNonLeasing', v)} lebar="w-[84px]" className={isian} /></Baris>
-              <Baris label="Unit pencari order"><AngkaInput value={dasar.pencari} onChange={(v) => ubah('pencari', v)} lebar="w-[84px]" className={isian} /></Baris>
-              <Baris label="Sales non aggregator"><AngkaInput value={dasar.nonAggregator} onChange={(v) => ubah('nonAggregator', v)} lebar="w-[150px]" className={isian} /></Baris>
             </>
           )}
           {adaKoreksi && (
@@ -344,7 +372,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
       <div className="flex items-baseline justify-between gap-3 px-4 pb-2.5 pt-6">
         <h2 className="text-[17px] font-bold tracking-tight">Simulasi</h2>
         {hasil.berubah && (
-          <button onClick={() => { setSim({ unit: 0, jt: 0, ma: 0 }); setPakai(false); setNbq(null); }}
+          <button onClick={() => { setSim(SIM0); setPakai(false); setNbq(null); }}
             className="-my-2 -mr-3 min-h-11 px-3 text-[13px] font-semibold text-neutral-500">Reset</button>
         )}
       </div>
@@ -353,7 +381,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold">Ikutkan bahan survey</p>
             <p className="truncate text-[13px] text-neutral-500">
-              {bahan.loading ? 'Memuat…' : punya.n ? `${punya.n} bahan · ${rp(punya.amt)}` : 'Belum ada bahan aktif'}
+              {bahan.loading ? 'Memuat…' : punya.n ? `${punya.n} bahan · ${rp(punya.amt)}${mao && punya.nAgg ? ` · ${punya.nAgg} aggregator` : ''}` : 'Belum ada bahan aktif'}
             </p>
           </div>
           {punya.n > 0 ? (
@@ -367,10 +395,18 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
             <button onClick={onBahan} className="min-h-10 shrink-0 rounded-full border border-neutral-300 px-4 text-sm font-semibold dark:border-neutral-700">Isi bahan</button>
           )}
         </div>
-        <Stepper label="Tambah unit" sub={`Jadi ${m.unit} dari target ${m.targetUnit} unit`} value={String(sim.unit)}
+        <Stepper label={mao ? 'Tambah unit retail' : 'Tambah unit'} sub={mao ? `Non aggregator · jadi ${m.pencari} unit retail` : `Jadi ${m.unit} dari target ${m.targetUnit} unit`} value={String(sim.unit)}
           onMinus={() => setSim((s) => ({ ...s, unit: Math.max(0, s.unit - 1) }))} onPlus={() => setSim((s) => ({ ...s, unit: s.unit + 1 }))} />
-        <Stepper label="Tambah amount" sub={`Jadi ${rp(m.amount)} dari ${rp(m.targetAmount)}`} value={sim.jt ? `+${sim.jt} jt` : '0'}
+        <Stepper label={mao ? 'Tambah amount retail' : 'Tambah amount'} sub={mao ? `Non aggregator · jadi ${rp(m.nonAggregator)}` : `Jadi ${rp(m.amount)} dari ${rp(m.targetAmount)}`} value={sim.jt ? `+${sim.jt} jt` : '0'}
           onMinus={() => setSim((s) => ({ ...s, jt: Math.max(0, s.jt - 25) }))} onPlus={() => setSim((s) => ({ ...s, jt: s.jt + 25 }))} />
+        {mao && (
+          <>
+            <Stepper label="Tambah unit aggregator" sub="Performa dan survey saja" value={String(sim.unitAgg)}
+              onMinus={() => setSim((s) => ({ ...s, unitAgg: Math.max(0, s.unitAgg - 1) }))} onPlus={() => setSim((s) => ({ ...s, unitAgg: s.unitAgg + 1 }))} />
+            <Stepper label="Tambah amount aggregator" sub={`Total jadi ${m.unit} unit · ${rp(m.amount)}`} value={sim.jtAgg ? `+${sim.jtAgg} jt` : '0'}
+              onMinus={() => setSim((s) => ({ ...s, jtAgg: Math.max(0, s.jtAgg - 25) }))} onPlus={() => setSim((s) => ({ ...s, jtAgg: s.jtAgg + 25 }))} />
+          </>
+        )}
         {mao && (
           <Stepper label="Tambah MA produktif" sub={`Jadi ${m.ma} dari target ${tMa} MA`} value={String(sim.ma)}
             onMinus={() => setSim((s) => ({ ...s, ma: Math.max(0, s.ma - 1) }))} onPlus={() => setSim((s) => ({ ...s, ma: s.ma + 1 }))} />
@@ -399,7 +435,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
       </div>
       <div className="mx-4 mt-3 flex flex-col gap-1 rounded-[20px] border border-neutral-200 px-4 py-3.5 dark:border-neutral-800">
         <p className="text-xl font-bold tracking-tight">
-          {!target ? 'Isi target dulu' : butuh ? (butuh.unit === 0 ? 'Sudah tercapai' : `Butuh ${butuh.unit} unit lagi`) : 'Belum terjangkau'}
+          {!target ? 'Isi target dulu' : butuh ? (butuh.unit === 0 ? 'Sudah tercapai' : `Butuh ${butuh.unit} unit${ret} lagi`) : 'Belum terjangkau'}
         </p>
         <p className="text-sm leading-snug text-neutral-600 dark:text-neutral-400">
           {!target ? 'Ketik nominal insentif yang ingin dicapai.'
@@ -415,7 +451,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
 
       <p className="px-4 pt-4 text-[13px] leading-relaxed text-neutral-500">
         {mao
-          ? 'Di bawah batas minimal performa, insentif MAO belum keluar. Unit tambahan dihitung ikut disurvey; pencari order dan sales non aggregator tetap seperti yang diisi.'
+          ? 'Di bawah batas minimal performa, insentif MAO belum keluar. Performa dihitung dari semua sales (retail + aggregator); insentif pencari order dan extra hanya dari sales retail. Unit tambahan dihitung ikut disurvey, dan saran di atas memakai unit retail.'
           : jenis === 'cmo'
             ? 'Unit tambahan dihitung ikut disurvey. Bonus Booking Mandiri belum termasuk.'
             : 'Bonus tengah bulan mengikuti sales tanggal 1–15 dan tidak ikut berubah di simulasi.'}

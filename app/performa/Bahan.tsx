@@ -43,8 +43,9 @@ export function useBahan(reloadKey = 0) {
   return { list, loading, err, reload };
 }
 
-const sumberLabel = (b: Pick<Bahan, 'sumber' | 'ket'>) =>
-  b.sumber === 'Lainnya' ? b.ket || 'Lainnya' : b.sumber === 'Agent' && b.ket ? `Agent · ${b.ket}` : b.sumber;
+const sumberLabel = (b: Pick<Bahan, 'sumber' | 'ket' | 'agg'>) =>
+  b.sumber === 'Lainnya' ? b.ket || 'Lainnya'
+    : b.sumber === 'Agent' ? [b.agg ? 'Aggregator' : 'Agent', b.ket].filter(Boolean).join(' · ') : b.sumber;
 const STATUS_LABEL: Record<StatusBahan, string> = { aktif: 'Aktif', cair: 'Sudah cair', batal: 'Batal' };
 const picKey = (b: Pick<Bahan, 'pic'>) => keyOf(b.pic);
 
@@ -57,6 +58,7 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
   const [nominal, setNominal] = useState(awal?.nominal || 0);
   const [sumber, setSumber] = useState<Sumber>(awal?.sumber || 'Agent');
   const [ket, setKet] = useState(awal?.ket || '');
+  const [agg, setAgg] = useState(!!awal?.agg);
   const [step, setStep] = useState(awal?.step || '');
   const [pic, setPic] = useState(awal ? awal.pic : picAwal);
   const [busy, setBusy] = useState(false);
@@ -68,7 +70,7 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
     try {
       const res = await fetch('/api/bahan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, step, pic, status }),
+        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, agg: sumber === 'Agent' && agg, step, pic, status }),
       });
       const j = await res.json();
       if (!res.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
@@ -142,6 +144,21 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
             aria-label={sumber === 'Agent' ? 'Nama agent' : 'Sumber order lain'}
             placeholder={sumber === 'Agent' ? 'Nama agent' : 'Tulis sumber order'}
             className={`${FIELD} mt-2 h-12`} />
+        )}
+        {sumber === 'Agent' && (
+          <>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {([[false, 'MA retail'], [true, 'MA aggregator']] as const).map(([v, t]) => (
+                <button key={t} onClick={() => setAgg(v)} aria-pressed={agg === v}
+                  className={`min-h-10 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${agg === v
+                    ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
+                    : 'border-neutral-300 dark:border-neutral-700'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[13px] leading-snug text-neutral-500">Order dari MA aggregator tidak mendapat insentif pencari order dan extra untuk MAO, jadi dipisah di simulasi insentif.</p>
+          </>
         )}
 
         <label className="mt-3 block text-[13px] font-semibold text-neutral-500">Step sekarang

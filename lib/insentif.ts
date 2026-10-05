@@ -42,8 +42,8 @@ export type Masukan = {
   survey: number;          // CMO & MAO
   ma: number;              // MAO: MA produktif
   maNonLeasing: number;    // MAO: MA produktif non leasing
-  pencari: number;         // MAO: unit pencari order
-  nonAggregator: number;   // MAO: sales non aggregator (rupiah)
+  pencari: number;         // MAO: unit retail (non aggregator) = unit pencari order
+  nonAggregator: number;   // MAO: sales retail / non aggregator (rupiah)
 };
 
 export type Baris = { label: string; nilai: number };
@@ -160,9 +160,9 @@ function hitungMAO(k: SkemaMAO, m: Masukan): Hasil {
     perf,
     bagian: [{ label: 'Amount', nilai: A }, { label: 'Unit', nilai: U }, { label: 'MA', nilai: r6(MA + NL) }],
     rincian: [
-      { label: `Pencari order ${m.pencari} × ${ribuan(tarifPencari)}`, nilai: pencari },
+      { label: `Pencari order ${m.pencari} unit retail × ${ribuan(tarifPencari)}`, nilai: pencari },
       { label: `Survey ${m.survey} × ${ribuan(k.perSurvey)}`, nilai: survey },
-      { label: 'Extra non aggregator', nilai: extra },
+      { label: `Extra ${String(Math.round((t ? t.extra : 0) * 1e4) / 100).replace('.', ',')}% × sales retail`, nilai: extra },
       { label: `MA produktif (${m.ma} MA)`, nilai: ma },
     ],
     kotor, nbq: k.nbq, total: kotor * k.nbq,
@@ -183,19 +183,27 @@ export function denganNbq(s: Skema, j: Jenis, nbq: number): Skema {
 }
 
 /* ---------- Simulasi ---------- */
-export type Tambahan = { unit: number; amount: number; ma: number };
-// Unit tambahan dihitung ikut disurvey (CMO & MAO)
+// unit / amount = tambahan biasa; untuk MAO berarti sales RETAIL (non aggregator).
+// unitAgg / amountAgg = tambahan dari MA aggregator (hanya MAO).
+export type Tambahan = { unit: number; amount: number; ma: number; unitAgg?: number; amountAgg?: number };
+// Unit tambahan dihitung ikut disurvey (CMO & MAO).
+// MAO: sales aggregator ikut menaikkan performa dan insentif survey, tetapi insentif pencari order dan
+// extra insentif hanya dihitung dari sales retail.
 export function tambah(j: Jenis, m: Masukan, x: Tambahan): Masukan {
+  const mao = j === 'mao' || j === 'maoBaru';
+  const uAgg = mao ? x.unitAgg || 0 : 0, aAgg = mao ? x.amountAgg || 0 : 0;
   return {
     ...m,
-    unit: m.unit + x.unit,
-    amount: m.amount + x.amount,
-    survey: j === 'bmh' ? m.survey : m.survey + x.unit,
+    unit: m.unit + x.unit + uAgg,
+    amount: m.amount + x.amount + aAgg,
+    survey: j === 'bmh' ? m.survey : m.survey + x.unit + uAgg,
     ma: m.ma + x.ma,
+    pencari: mao ? m.pencari + x.unit : m.pencari,
+    nonAggregator: mao ? m.nonAggregator + x.amount : m.nonAggregator,
   };
 }
 
-// Langkah terdekat supaya insentif naik: tambah amount saja, atau tambah unit saja
+// Langkah terdekat supaya insentif naik: tambah amount saja, atau tambah unit saja (MAO: dihitung sebagai sales retail)
 export function langkahNaik(s: Skema, j: Jenis, m: Masukan) {
   const kini = hitung(s, j, m);
   if (!kini) return { amount: null, unit: null };
