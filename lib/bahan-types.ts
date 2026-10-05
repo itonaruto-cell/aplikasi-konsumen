@@ -13,6 +13,7 @@ export type Bahan = {
   nominal: number;    // nominal pencairan (rupiah)
   sumber: Sumber;
   ket: string;        // nama agent, atau sumber lain yang ditulis sendiri
+  agg: boolean;       // sumber Agent: MA aggregator (bukan MA retail). Menentukan hitungan insentif MAO
   step: string;       // posisi terakhir, diisi bebas
   pic: string;        // PIC survey: nama staff seperti di pantauan (boleh kosong)
   status: StatusBahan;
