@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { Calon } from '../../lib/inject-types';
 import { addDays, belumVisit, brandOf, keyOf, konsumenOf, perluUlang, todayJkt, type BrandKey, type Ctx } from '../../lib/performa-calc';
@@ -381,13 +381,22 @@ function DetailSheet({ x, onClose, onSaved }: { x: PlanItem; onClose: () => void
   const [status, setStatus] = useState<StatusPlan>(x.status);
   const [hasil, setHasil] = useState(x.hasil);
   const [catatan, setCatatan] = useState(x.wajib && x.id.startsWith('wajib:') ? '' : x.catatan);
+  const [siapa, setSiapa] = useState(x.siapa);
+  const [lokasi, setLokasi] = useState(x.lokasi);
+  // Nama visit harus dari Cari konsumen dan map pencairan wajib mengikuti survey-nya, jadi keduanya tidak diketik ulang
+  const namaBisaDiubah = x.jenis !== 'visit' && !x.wajib;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const cepat = x.jenis === 'visit' ? ['Bertemu', 'Tidak bertemu'] : x.jenis === 'maintain' ? ['Ada bahan order', 'Belum ada order'] : [];
   const simpan = async () => {
     setBusy(true); setErr('');
     try {
-      const res = await fetch('/api/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: x.id, status, hasil, catatan }) });
+      const res = await fetch('/api/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          id: x.id, status, hasil, catatan,
+          ...(namaBisaDiubah && siapa.trim() && siapa.trim() !== x.siapa ? { siapa: siapa.trim() } : {}),
+          ...(lokasi.trim() !== x.lokasi ? { lokasi: lokasi.trim() } : {}),
+        }),
+      });
       const j = await res.json();
       if (!res.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
       onSaved('Aktivitas tersimpan');
@@ -403,10 +412,16 @@ function DetailSheet({ x, onClose, onSaved }: { x: PlanItem; onClose: () => void
     } catch { setErr('Koneksi bermasalah.'); } finally { setBusy(false); }
   };
   return (
-    <Lembar judul={JENIS_LABEL[x.jenis]} onClose={onClose}>
+    <Lembar judul={x.punyaku ? JENIS_LABEL[x.jenis] : `${JENIS_LABEL[x.jenis]} · ${shortName(x.nama)}`} onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+20px)]">
-        <p className="mt-1 text-[17px] font-bold">{x.siapa}</p>
-        {x.lokasi && <p className="text-sm text-neutral-500">{x.lokasi}</p>}
+        {namaBisaDiubah ? (
+          <label className="mt-1 block text-[13px] font-semibold text-neutral-500">{x.jenis === 'lainnya' ? 'Aktivitas' : 'Nama'}
+            <input value={siapa} onChange={(e) => setSiapa(e.target.value)} maxLength={80} className={`${FIELD} mt-1.5 h-12`} />
+          </label>
+        ) : <p className="mt-1 text-[17px] font-bold">{x.siapa}</p>}
+        <label className="mt-3 block text-[13px] font-semibold text-neutral-500">Lokasi
+          <input value={lokasi} onChange={(e) => setLokasi(e.target.value)} maxLength={60} placeholder="Kecamatan / desa" className={`${FIELD} mt-1.5 h-12`} />
+        </label>
         {x.wajib && <p className="mt-2 rounded-xl bg-[#FFF4E0] p-3 text-[13px] leading-relaxed text-[#5C2F00] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">Survey konsumen ini sudah selesai, jadi map pencairannya wajib dilengkapi pagi ini.</p>}
 
         <p className="mt-4 text-[13px] font-semibold text-neutral-500">Status</p>
@@ -473,6 +488,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
   const [detail, setDetail] = useState<PlanItem | null>(null);
   const [buka, setBuka] = useState<string | null>(null);
   const [modePilih, setMode] = useState<'plan' | 'report' | null>(null);   // null = otomatis
+  const [ubahan, setUbahan] = useState<{ kunci: string; teks: string } | null>(null);   // teks report yang diketik ulang
   const [toast, setToast] = useState('');
   const [mengingatkan, setMengingatkan] = useState(false);
   useEffect(() => {
@@ -536,7 +552,11 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
     plan || (bahanAktif.length ? `*BAHAN SURVEY · ${cabang.toUpperCase()}*\n${tanggalPanjang(tgl)}` : ''),
     bahanAktif.length ? teksBahan(bahanAktif) : '',
   ].filter(Boolean).join('\n\n');
-  const teks = denganBahan(sumber.length ? teksPlan(sumber, tgl, cabang, mode, shortName) : '');
+  const teksAsli = denganBahan(sumber.length ? teksPlan(sumber, tgl, cabang, mode, shortName) : '');
+  // Teks boleh diubah dulu sebelum dikirim. Ubahan berlaku untuk hari dan jenis (plan / report) yang sedang dibuka.
+  const kunciTeks = `${tgl}|${mode}`;
+  const diubah = ubahan?.kunci === kunciTeks;
+  const teks = diubah && ubahan ? ubahan.teks : teksAsli;
   const teksOtomatis = (items: PlanItem[]) => denganBahan(teksPlan(items, tgl, cabang, modeOtomatis(items), shortName));
   const labelWa = (items: PlanItem[]) => `Kirim ${modeOtomatis(items) === 'plan' ? 'plan' : 'report'} ke WhatsApp`;
   const salin = async () => {
@@ -593,7 +613,12 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
               </button>
             </div>
           )}
-          {mine.length > 0 && <div className="px-4 pt-2.5"><TombolWa teks={teksOtomatis(mine)} label={labelWa(mine)} onInfo={setToast} /></div>}
+          {mine.length > 0 && (
+            <div className="px-4 pt-2.5">
+              <TombolWa teks={teksOtomatis(mine)} label={labelWa(mine)} onInfo={setToast} />
+              {!isOwner && <button onClick={() => setTab('report')} className="mx-auto mt-1 flex min-h-11 items-center px-3 text-[13px] font-semibold text-neutral-600 underline underline-offset-4 dark:text-neutral-300">Ubah teksnya dulu</button>}
+            </div>
+          )}
         </>
       ) : tab === 'tim' ? (
         <>
@@ -612,6 +637,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
             )}
           </section>
 
+          {staff.length > 0 && bisaUbah && <p className="px-4 pt-3 text-[13px] leading-snug text-neutral-500">Buka nama staff, lalu ketuk aktivitasnya untuk merevisi: centang, hasil, catatan, atau hapus.</p>}
           {staff.length === 0 ? (
             <Kosong art="bendera" title="Belum ada plan" text="Plan staff muncul di sini begitu mereka mengisinya." />
           ) : (
@@ -638,7 +664,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
                     </button>
                     {on && (
                       <div className="flex flex-col gap-2 border-t border-neutral-200 p-3 dark:border-neutral-800">
-                        {s.items.length ? s.items.map((x) => <Baris key={x.id} x={x} />)
+                        {s.items.length ? s.items.map((x) => <Baris key={x.id} x={x} onCentang={bisaUbah ? () => centang(x) : undefined} onBuka={bisaUbah ? () => setDetail(x) : undefined} />)
                           : <p className="px-1 py-2 text-sm text-neutral-500">Belum ada aktivitas di hari ini.</p>}
                       </div>
                     )}
@@ -647,18 +673,32 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
               })}
             </div>
           )}
-          {timList.length > 0 && <div className="px-4 pt-3"><TombolWa teks={teksOtomatis(timList)} label={`${labelWa(timList).replace(' ke WhatsApp', '')} tim ke WhatsApp`} onInfo={setToast} /></div>}
+          {timList.length > 0 && (
+            <div className="px-4 pt-3">
+              <TombolWa teks={teksOtomatis(timList)} label={`${labelWa(timList).replace(' ke WhatsApp', '')} tim ke WhatsApp`} onInfo={setToast} />
+              <button onClick={() => setTab('report')} className="mx-auto mt-1 flex min-h-11 items-center px-3 text-[13px] font-semibold text-neutral-600 underline underline-offset-4 dark:text-neutral-300">Ubah teksnya dulu</button>
+            </div>
+          )}
         </>
       ) : (
         <>
           <div className="flex justify-center px-4 pt-2">
             <PillSeg value={mode} onChange={setMode} options={[['plan', 'Plan pagi'], ['report', 'Report sore']]} />
           </div>
-          {!teks ? (
+          {!teksAsli ? (
             <Kosong art="bendera" title="Belum ada yang bisa dilaporkan" text="Report dibuat otomatis dari plan, centang realisasi, dan bahan survey di hari ini." />
           ) : (
             <>
-              <pre className="mx-4 mt-3 whitespace-pre-wrap break-words rounded-[20px] border border-neutral-200 p-4 font-[inherit] text-sm leading-relaxed dark:border-neutral-800">{teks}</pre>
+              <div className="flex items-center justify-between gap-3 px-4 pt-3">
+                <p className="text-[13px] leading-snug text-neutral-500">{diubah ? 'Teks sudah kamu ubah. Yang dikirim adalah teks di bawah ini.' : 'Ketuk teksnya kalau mau diubah dulu sebelum dikirim.'}</p>
+                {diubah && <button onClick={() => setUbahan(null)} className="-my-2 min-h-11 shrink-0 px-1 text-[13px] font-semibold text-neutral-600 underline underline-offset-4 dark:text-neutral-300">Kembalikan</button>}
+              </div>
+              <div className="px-4 pt-2">
+                <textarea value={teks} onChange={(e) => setUbahan({ kunci: kunciTeks, teks: e.target.value })} aria-label="Teks report"
+                  rows={Math.min(40, Math.max(6, teks.split('\n').length + 2))} spellCheck={false}
+                  style={{ fieldSizing: 'content' } as CSSProperties}
+                  className="block w-full resize-none rounded-[20px] border border-neutral-200 bg-transparent p-4 text-sm leading-relaxed outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-300 dark:border-neutral-800 dark:focus:border-neutral-600 dark:focus:ring-neutral-700" />
+              </div>
               <div className="px-4 pt-3"><TombolWa teks={teks} label="Kirim ke WhatsApp" onInfo={setToast} /></div>
               <div className="flex gap-2 px-4 pt-2.5">
                 <button onClick={salin} className="min-h-12 flex-1 rounded-2xl border border-neutral-300 px-5 text-[15px] font-bold dark:border-neutral-700">Salin teks</button>

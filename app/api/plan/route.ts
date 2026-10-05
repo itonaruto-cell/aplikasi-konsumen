@@ -9,7 +9,8 @@ import { addDays, keyOf, todayJkt } from '../../../lib/performa-calc';
 export const dynamic = 'force-dynamic';
 
 // Plan aktivitas harian, disimpan di tab PLAN (dibuat otomatis). Satu baris = satu aktivitas.
-// Staff mengisi dan mencentang plan miliknya sendiri; owner melihat plan semua staff.
+// Staff mengisi dan mencentang plan miliknya sendiri; owner melihat plan semua staff dan boleh merevisinya
+// (centang, hasil, catatan, hapus).
 // Aturan map pencairan: survey yang sudah selesai dalam 4 hari terakhir dan belum punya map pencairan
 // muncul sebagai aktivitas WAJIB di plan hari ini (baru benar-benar tersimpan saat dicentang / dibatalkan).
 const TAB = 'PLAN';
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
       });
       if (id.startsWith('wajib:')) {
         // Map pencairan wajib: disimpan saat pertama kali dicentang / dibatalkan
-        const v = wajibHariIni(semua, hariIni).find((x) => x.id === id && x.email === email);
+        const v = wajibHariIni(semua, hariIni).find((x) => x.id === id && (x.email === email || role === 'owner'));
         if (!v) return NextResponse.json({ error: 'Aktivitas tidak ditemukan. Muat ulang dulu.' }, { status: 404 });
         const baru = ubah({ ...v, id: randomUUID().slice(0, 8), catatan: '', dibuat: now });
         await appendRows(TAB, HEAD, [toRow(baru)]);
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
       }
       const lama = semua.find((x) => x.id === id && !x.hapus);
       if (!lama) return NextResponse.json({ error: 'Aktivitas tidak ditemukan.' }, { status: 404 });
-      if (lama.email !== email) return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
+      if (lama.email !== email && role !== 'owner') return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
       const baru = ubah(lama);
       await updateRowById(TAB, HEAD, id, toRow(baru));
       return NextResponse.json({ ok: true, item: keluar(baru, email) });
@@ -162,7 +163,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const lama = (await semuaBaris()).find((x) => x.id === id && !x.hapus);
     if (!lama) return NextResponse.json({ ok: true });
-    if (lama.email !== s.email.toLowerCase()) return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
+    if (lama.email !== s.email.toLowerCase() && role !== 'owner') return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
     if (lama.ref) return NextResponse.json({ error: 'Map pencairan wajib tidak bisa dihapus. Tandai selesai atau batal.' }, { status: 400 });
     await updateRowById(TAB, HEAD, id, toRow({ ...lama, diubah: new Date().toISOString() }, 'hapus'));
     return NextResponse.json({ ok: true });
