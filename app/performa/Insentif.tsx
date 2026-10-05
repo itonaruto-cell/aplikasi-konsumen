@@ -130,11 +130,19 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
     if (jenis === 'bmh' && TETAP.includes(f)) simpan({ ...simpanan, tetap: { ...simpanan.tetap, [f]: v } });
     else simpan({ ...simpanan, isi: { ...simpanan.isi, [kunci]: { ...manual, [f]: v } } });
   };
-  const adaKoreksi = Object.keys(manual).length > 0;
+  // BMH: target yang diketik sendiri berlaku lintas bulan. Kalau pantauan punya targetnya, target itu juga bisa dikembalikan.
+  const targetPantauan = useMemo(() => {
+    const p = jenis === 'bmh' ? dariPantauan(c, siapa) : {};
+    return !!p.targetAmount && !!p.targetUnit;
+  }, [jenis, c, siapa]);
+  const targetDiketik = jenis === 'bmh' && targetPantauan && (simpanan.tetap.targetAmount !== undefined || simpanan.tetap.targetUnit !== undefined);
+  const adaKoreksi = Object.keys(manual).length > 0 || targetDiketik;
   const kembalikan = () => {
     const isi = { ...simpanan.isi };
     delete isi[kunci];
-    simpan({ ...simpanan, isi });
+    const tetap = { ...simpanan.tetap };
+    if (targetDiketik) { delete tetap.targetAmount; delete tetap.targetUnit; }
+    simpan({ ...simpanan, isi, tetap });
   };
 
   /* ---------- Bahan survey orang ini ---------- */
@@ -335,7 +343,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
                   ))}
                 </div>
               </div>
-              <Baris label="Target amount"><AngkaInput value={dasar.targetAmount} onChange={(v) => ubah('targetAmount', v)} lebar="w-[150px]" className={isian} /></Baris>
+              <Baris label="Target amount" hint={targetPantauan ? (targetDiketik ? 'diketik sendiri' : 'dari pantauan') : undefined}><AngkaInput value={dasar.targetAmount} onChange={(v) => ubah('targetAmount', v)} lebar="w-[150px]" className={isian} /></Baris>
               <Baris label="Target unit"><AngkaInput value={dasar.targetUnit} onChange={(v) => ubah('targetUnit', v)} lebar="w-[84px]" className={isian} /></Baris>
             </>
           )}
@@ -356,7 +364,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
                   ? 'Angka retail melebihi total sales. Periksa lagi isiannya.'
                   : `Sisanya dari aggregator: ${aggUnit} unit · ${rupiah(aggAmount)}. Ikut dihitung di performa dan survey, tanpa pencari order dan extra.`}
               </p>
-              <Baris label="MA produktif" hint={`target ${tMa}`}><AngkaInput value={dasar.ma} onChange={(v) => ubah('ma', v)} lebar="w-[84px]" className={isian} /></Baris>
+              <Baris label="MA produktif" hint={`target ${tMa} · MA aggregator tidak dihitung`}><AngkaInput value={dasar.ma} onChange={(v) => ubah('ma', v)} lebar="w-[84px]" className={isian} /></Baris>
               <Baris label="MA produktif non leasing"><AngkaInput value={dasar.maNonLeasing} onChange={(v) => ubah('maNonLeasing', v)} lebar="w-[84px]" className={isian} /></Baris>
             </>
           )}
@@ -408,7 +416,7 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
           </>
         )}
         {mao && (
-          <Stepper label="Tambah MA produktif" sub={`Jadi ${m.ma} dari target ${tMa} MA`} value={String(sim.ma)}
+          <Stepper label="Tambah MA produktif" sub={`MA retail · jadi ${m.ma} dari target ${tMa}`} value={String(sim.ma)}
             onMinus={() => setSim((s) => ({ ...s, ma: Math.max(0, s.ma - 1) }))} onPlus={() => setSim((s) => ({ ...s, ma: s.ma + 1 }))} />
         )}
         <Stepper label="Faktor NBQ" sub={`Bawaan skema ${hasil.nbqBawaan}%`} value={`${nbq ?? hasil.nbqBawaan}%`}
