@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
-import { getPerfName, getRole } from '../../../lib/access';
+import { getAccessList, getPerfName, getRole } from '../../../lib/access';
 import { appendRows, readRows, updateRowById } from '../../../lib/sheet-store';
 import { JENIS, type Jenis, type PlanItem, type StatusPlan } from '../../../lib/plan-types';
 import { addDays, keyOf, todayJkt } from '../../../lib/performa-calc';
@@ -18,7 +18,7 @@ const STATUS: StatusPlan[] = ['rencana', 'selesai', 'batal'];
 const MAKS_SEKALI = 20;
 const HARI_WAJIB = 4;
 
-type Baris = Omit<PlanItem, 'punyaku' | 'wajib'> & { email: string; ref: string; hapus: boolean };
+type Baris = Omit<PlanItem, 'punyaku' | 'wajib' | 'spv'> & { email: string; ref: string; hapus: boolean };
 const toObj = (r: string[]): Baris => ({
   id: r[0], tgl: r[1], email: r[2].toLowerCase(), nama: r[3],
   jenis: (JENIS as readonly string[]).includes(r[4]) ? (r[4] as Jenis) : 'lainnya',
@@ -28,9 +28,10 @@ const toObj = (r: string[]): Baris => ({
 });
 const toRow = (b: Baris, status: string = b.status): string[] =>
   [b.id, b.tgl, b.email, b.nama, b.jenis, b.siapa, b.lokasi, b.catatan, status, b.hasil, b.dibuat, b.diubah, b.ref];
-const keluar = (b: Baris, email: string): PlanItem => ({
+const keluar = (b: Baris, email: string, owner?: Set<string>): PlanItem => ({
   id: b.id, tgl: b.tgl, nama: b.nama, jenis: b.jenis, siapa: b.siapa, lokasi: b.lokasi, catatan: b.catatan,
   status: b.status, hasil: b.hasil, dibuat: b.dibuat, diubah: b.diubah, wajib: !!b.ref, punyaku: b.email === email,
+  spv: !!owner?.has(b.email),
 });
 
 const teks = (v: unknown, maks: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, maks);
@@ -72,9 +73,11 @@ export async function GET(req: NextRequest) {
     const semua = await semuaBaris();
     const hari = semua.filter((x) => !x.hapus && x.tgl === tgl);
     const list = [...hari, ...(tgl === hariIni ? wajibHariIni(semua, hariIni) : [])]
-      .filter((x) => role === 'owner' || x.email === email)
-      .map((x) => keluar(x, email));
-    return NextResponse.json({ tgl, hariIni, list }, { headers: { 'Cache-Control': 'no-store' } });
+      .filter((x) => role === 'owner' || x.email === email);
+    // Owner adalah SPV: aktivitas miliknya ditandai, dan namanya dikirim supaya tidak ikut ditagih di plan tim
+    const owner = new Set((await getAccessList()).filter((a) => a.role === 'owner').map((a) => a.email.toLowerCase()));
+    const spv = role === 'owner' ? (await Promise.all([...owner].map((e) => getPerfName(e)))).filter((n): n is string => !!n) : [];
+    return NextResponse.json({ tgl, hariIni, list: list.map((x) => keluar(x, email, owner)), spv }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('Gagal membaca plan aktivitas:', err);
     return NextResponse.json({ error: 'Plan aktivitas belum bisa dibaca. Coba lagi sebentar.' }, { status: 500 });

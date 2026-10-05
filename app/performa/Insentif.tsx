@@ -99,7 +99,8 @@ export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
   }, [reloadKey, coba]);
 
   /* ---------- Siapa & skema mana ---------- */
-  const orang = useMemo(() => (c?.data.orang || []).filter((o) => brandOf(o) !== 'motorku'), [c]);
+  // Owner (SPV) dihitung lewat "Cabang", jadi tidak muncul sebagai perorangan
+  const orang = useMemo(() => (c?.data.orang || []).filter((o) => brandOf(o) !== 'motorku' && !(isOwner && o === me)), [c, isOwner, me]);
   const [siapa, setSiapa] = useState<string>(isOwner ? CABANG : me?.nama || '');
   useEffect(() => { if (!isOwner) setSiapa(me?.nama || ''); }, [isOwner, me?.nama]);
   const o = siapa && siapa !== CABANG ? orang.find((x) => x.nama === siapa) || null : null;

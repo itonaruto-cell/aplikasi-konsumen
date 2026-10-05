@@ -23,6 +23,7 @@ export type PlanItem = {
   hasil: string;      // hasil singkat setelah dikerjakan
   wajib: boolean;     // map pencairan dari survey hari sebelumnya
   punyaku: boolean;
+  spv: boolean;       // milik akun owner (SPV): tidak masuk plan tim dan report
   dibuat: string;
   diubah: string;
 };

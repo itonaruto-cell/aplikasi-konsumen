@@ -155,23 +155,30 @@ export function rivalry(rows: RankRow[]) {
 }
 
 /* ---------- Anggota yang sedang login ---------- */
-export function findMe(data: Performa, perfName?: string | null, googleName?: string | null): Orang | null {
+const hurufSaja = (s: string) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+export function findMe(data: Performa, perfName?: string | null, googleName?: string | null, email?: string | null): Orang | null {
   const list = data.orang || [];
+  // Terakhir: nama lengkap yang termuat di alamat email (mis. BUDI SANTOSO ↔ budisantoso12@…)
+  const dariEmail = (): Orang | null => {
+    const e = hurufSaja(String(email || '').split('@')[0]);
+    const hit = e.length >= 6 ? list.filter((o) => { const n = hurufSaja(o.nama); return n.length >= 6 && e.includes(n); }) : [];
+    return hit.length === 1 ? hit[0] : null;
+  };
   if (perfName) {
     const k = keyOf(perfName);
     const hit = list.find((o) => keyOf(o.nama) === k) || list.find((o) => keyOf(o.nama).includes(k));
     if (hit) return hit;
   }
   const words = keyOf(googleName || '').split(' ').filter((w) => w.length >= 3);
-  if (!words.length) return null;
+  if (!words.length) return dariEmail();
   let best: Orang | null = null, score = 0, tie = false;
   list.forEach((o) => {
     const parts = keyOf(o.nama).split(' ');
     const s = words.filter((w) => parts.includes(w)).length;
     if (s > score) { best = o; score = s; tie = false; } else if (s && s === score) tie = true;
   });
-  if (!best || tie) return null;
-  return score >= 2 || (score === 1 && words.length === 1) ? best : null;
+  if (best && !tie && (score >= 2 || (score === 1 && words.length === 1))) return best;
+  return dariEmail();
 }
 
 /* ---------- Streak: hari kerja (Senin–Sabtu) berturut-turut ada visit / maintain ---------- */

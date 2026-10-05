@@ -122,12 +122,14 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
   /* ---------- Hitungan ---------- */
   const c = useMemo(() => (data ? buildCtx(data) : null), [data]);
-  const me: Orang | null = useMemo(() => (data ? findMe(data, akun.perfName, akun.name) : null), [data, akun.perfName, akun.name]);
+  const me: Orang | null = useMemo(() => (data ? findMe(data, akun.perfName, akun.name, akun.email) : null), [data, akun.perfName, akun.name, akun.email]);
   const storyList = useMemo(() => (c ? stories(c, brand, me) : []), [c, brand, me]);
+  // Owner adalah SPV: tidak ikut ditagih plan, bukan pilihan PIC survey, dan tidak punya hitungan insentif perorangan
+  const spv = akun.role === 'owner' ? me : null;
   // Pilihan PIC survey di Bahan survey: anggota Mobilku dari pantauan
-  const tim = useMemo(() => (data?.orang || []).filter((o) => brandOf(o) === 'mobilku').map((o) => o.nama), [data]);
+  const tim = useMemo(() => (data?.orang || []).filter((o) => brandOf(o) === 'mobilku' && o !== spv).map((o) => o.nama), [data, spv]);
   // Yang ditagih plan aktivitas: semua anggota di pantauan (Mobilku dan Motorku), kecuali owner sendiri
-  const staf = useMemo(() => (data?.orang || []).filter((o) => !(akun.role === 'owner' && o === me)).map((o) => ({ nama: o.nama, brand: brandOf(o) })), [data, me, akun.role]);
+  const staf = useMemo(() => (data?.orang || []).filter((o) => o !== spv).map((o) => ({ nama: o.nama, brand: brandOf(o) })), [data, spv]);
   const myStreak = c && me ? streak(c, me.nama) : 0;
   // Simpan nama anggota di langganan notifikasi (supaya pesan pagi/sore sesuai orangnya)
   useEffect(() => { if (me) refreshPush(me.nama).catch(() => {}); }, [me?.nama]); // eslint-disable-line react-hooks/exhaustive-deps
