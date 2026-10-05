@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { Calon } from '../../lib/inject-types';
 import { addDays, belumVisit, brandOf, keyOf, konsumenOf, perluUlang, todayJkt, type BrandKey, type Ctx } from '../../lib/performa-calc';
@@ -9,7 +9,9 @@ import {
 } from '../../lib/plan-types';
 import { BrandChip, Ico, Kosong, PillSeg, UnderTabs, shareText, shortName, type BrandId } from './parts';
 import { FIELD, Lembar } from './form';
-import BahanSurvey, { useBahan } from './Bahan';
+import BahanSurvey, { sumberLabel, useBahan } from './Bahan';
+import type { Bahan } from '../../lib/bahan-types';
+import { rp } from './ui';
 
 // Plan aktivitas: rencana pagi (minimal 5 aktivitas per staff), realisasi dicentang sepanjang hari,
 // dan report sore siap kirim ke WhatsApp. Semua diisi manual di aplikasi, jadi langsung terlihat owner.
@@ -35,9 +37,23 @@ const kunci = (x: { jenis: string; siapa: string }) => `${x.jenis}|${keyOf(x.sia
 const waUrl = (teks: string) => `https://wa.me/?text=${encodeURIComponent(teks)}`;
 // Sebelum ada yang dicentang yang dikirim plan pagi; sesudahnya report
 const modeOtomatis = (items: PlanItem[]): 'plan' | 'report' => (items.some((x) => x.status !== 'rencana') ? 'report' : 'plan');
-function TombolWa({ teks, label }: { teks: string; label: string }) {
+// Tautan yang terlalu panjang bisa ditolak WhatsApp: teks panjang dikirim lewat lembar bagikan HP, atau disalin
+const MAKS_TAUTAN = 6000;
+function TombolWa({ teks, label, onInfo }: { teks: string; label: string; onInfo?: (pesan: string) => void }) {
+  const panjang = waUrl(teks).length > MAKS_TAUTAN;
+  const kirimPanjang = async (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!panjang) return;
+    e.preventDefault();
+    try {
+      if (navigator.share) { await navigator.share({ text: teks }); return; }
+      await navigator.clipboard.writeText(teks);
+      onInfo?.('Teksnya panjang, jadi sudah disalin. Tempel di WhatsApp.');
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') onInfo?.('Teksnya terlalu panjang. Pakai Salin teks di tab Report.');
+    }
+  };
   return (
-    <a href={waUrl(teks)} target="_blank" rel="noopener noreferrer"
+    <a href={panjang ? 'https://wa.me/' : waUrl(teks)} onClick={kirimPanjang} target="_blank" rel="noopener noreferrer"
       className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0F8048] px-4 text-[15px] font-bold text-white active:scale-[0.99]">
       <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" /><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1" />
@@ -47,10 +63,24 @@ function TombolWa({ teks, label }: { teks: string; label: string }) {
   );
 }
 
+/* ---------- Bahan survey di dalam report ---------- */
+function teksBahan(list: Bahan[]): string {
+  // Urut per PIC; yang belum punya PIC di paling bawah
+  const urut = [...list].sort((a, b) => Number(!a.pic) - Number(!b.pic) || a.pic.localeCompare(b.pic) || a.konsumen.localeCompare(b.konsumen));
+  return [
+    `*BAHAN SURVEY* · ${urut.length} bahan · ${rp(urut.reduce((s, b) => s + b.nominal, 0))}`,
+    ...urut.map((b, i) => [
+      `${i + 1}. ${b.konsumen} · ${b.nominal ? rp(b.nominal) : 'nominal belum diisi'} · PIC ${b.pic ? shortName(b.pic) : 'belum diisi'}`,
+      `   Sumber: ${sumberLabel(b)}`,
+      `   Step: ${b.step || 'belum diisi'}`,
+    ].join('\n')),
+  ].join('\n');
+}
+
 /* ---------- Muat plan satu hari ---------- */
 export function usePlan(tgl: string, reloadKey = 0) {
   // Daftar disimpan bersama tanggalnya, supaya saat pindah hari isi hari sebelumnya tidak sempat tampil
-  const [isi, setIsi] = useState<{ tgl: string; list: PlanItem[] }>({ tgl: '', list: [] });
+  const [isi, setIsi] = useState<{ tgl: string; list: PlanItem[]; spv: string[] }>({ tgl: '', list: [], spv: [] });
   const list = useMemo(() => (isi.tgl === tgl ? isi.list : []), [isi, tgl]);
   const setList = useCallback((f: (prev: PlanItem[]) => PlanItem[]) => setIsi((p) => ({ ...p, list: f(p.list) })), []);
   const [loading, setLoading] = useState(true);
@@ -65,7 +95,7 @@ export function usePlan(tgl: string, reloadKey = 0) {
         if (res.status === 401) { window.location.href = '/login'; return; }
         const json = await res.json();
         if (!alive) return;
-        if (res.ok && Array.isArray(json?.list)) setIsi({ tgl, list: json.list as PlanItem[] });
+        if (res.ok && Array.isArray(json?.list)) setIsi({ tgl, list: json.list as PlanItem[], spv: Array.isArray(json.spv) ? (json.spv as string[]) : [] });
         else setErr(json?.error || 'Plan aktivitas gagal dimuat.');
       } catch {
         if (alive) setErr('Koneksi bermasalah. Periksa internet lalu coba lagi.');
@@ -76,7 +106,8 @@ export function usePlan(tgl: string, reloadKey = 0) {
     return () => { alive = false; };
   }, [tgl, reloadKey, n]);
   const reload = useCallback(() => setN((x) => x + 1), []);
-  return { list, setList, loading, err, reload };
+  // Saat baru pindah hari, daftar hari itu belum ada: dianggap masih memuat (supaya "belum diisi" tidak sempat berkedip)
+  return { list, spv: isi.spv, setList, loading: loading || (isi.tgl !== tgl && !err), err, reload };
 }
 
 /* ---------- Kartu ringkas di halaman Pantau ---------- */
@@ -84,8 +115,9 @@ export function PlanKartu({ akun, reloadKey = 0, onOpen }: { akun: Akun; reloadK
   const { list, loading, err } = usePlan(todayJkt(), reloadKey);
   if (err) return null;
   const isOwner = akun.role === 'owner';
-  const r = ringkas(isOwner ? list : list.filter((x) => x.punyaku));
-  const staff = new Set(list.filter((x) => x.status !== 'batal').map((x) => x.nama)).size;
+  const timList = list.filter((x) => !x.spv);   // owner (SPV) tidak ikut dihitung
+  const r = ringkas(isOwner ? timList : list.filter((x) => x.punyaku));
+  const staff = new Set(timList.filter((x) => x.status !== 'batal').map((x) => x.nama)).size;
   const kosong = !loading && r.total === 0;
   const teks = loading && !list.length ? 'Memuat plan hari ini…'
     : isOwner ? (kosong ? 'Belum ada staff yang mengisi plan.' : `${staff} staff sudah isi · ${r.selesai}/${r.total} aktivitas selesai`)
@@ -435,7 +467,8 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
   const hariIni = todayJkt();
   const [tab, setTab] = useState<Tab>(isOwner ? 'tim' : 'saya');
   const [tgl, setTgl] = useState(hariIni);
-  const { list, setList, loading, err, reload } = usePlan(tgl, reloadKey);
+  const { list, spv, setList, loading, err, reload } = usePlan(tgl, reloadKey);
+  const bahan = useBahan(reloadKey);
   const [tambah, setTambah] = useState(false);
   const [detail, setDetail] = useState<PlanItem | null>(null);
   const [buka, setBuka] = useState<string | null>(null);
@@ -469,19 +502,21 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
     } catch { setToast('Koneksi bermasalah.'); reload(); }
   };
 
-  /* Tim (owner) */
+  /* Tim (owner). Owner adalah SPV: aktivitas dan namanya tidak masuk plan tim, pengingat, maupun report. */
+  const timList = useMemo(() => list.filter((x) => !x.spv), [list]);
   const staff = useMemo(() => {
+    const bukan = new Set([...spv, ...list.filter((x) => x.spv).map((x) => x.nama)].map(keyOf));
     const m = new Map<string, { nama: string; brand: BrandId | ''; items: PlanItem[] }>();
-    staf.forEach((o) => m.set(keyOf(o.nama), { ...o, items: [] }));
-    list.forEach((x) => {
+    staf.filter((o) => !bukan.has(keyOf(o.nama))).forEach((o) => m.set(keyOf(o.nama), { ...o, items: [] }));
+    timList.forEach((x) => {
       const k = keyOf(x.nama);
       const s = m.get(k) || { nama: x.nama, brand: '' as const, items: [] };
       s.items.push(x); m.set(k, s);
     });
     return [...m.values()].map((s) => ({ ...s, items: urutkan(s.items), r: ringkas(s.items) }))
       .sort((a, b) => URUT_BRAND[a.brand] - URUT_BRAND[b.brand] || a.nama.localeCompare(b.nama));
-  }, [list, staf]);
-  const rTim = ringkas(list);
+  }, [list, timList, staf, spv]);
+  const rTim = ringkas(timList);
   const belumLengkap = staff.filter((s) => s.r.total < MIN_AKTIVITAS);
   const ingatkan = async (nama: string[]) => {
     setMengingatkan(true);
@@ -493,10 +528,16 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
   };
 
   /* Report */
-  const sumber = isOwner ? list : mine;
+  const sumber = isOwner ? timList : mine;
   const mode = modePilih ?? modeOtomatis(sumber);
-  const teks = sumber.length ? teksPlan(sumber, tgl, cabang, mode, shortName) : '';
-  const teksOtomatis = (items: PlanItem[]) => teksPlan(items, tgl, cabang, modeOtomatis(items), shortName);
+  // Bahan survey aktif ikut di report hari ini (staff: bahan miliknya / yang ia PIC; owner: semua)
+  const bahanAktif = useMemo(() => (tgl === hariIni ? bahan.list.filter((b) => b.status === 'aktif') : []), [bahan.list, tgl, hariIni]);
+  const denganBahan = (plan: string) => [
+    plan || (bahanAktif.length ? `*BAHAN SURVEY · ${cabang.toUpperCase()}*\n${tanggalPanjang(tgl)}` : ''),
+    bahanAktif.length ? teksBahan(bahanAktif) : '',
+  ].filter(Boolean).join('\n\n');
+  const teks = denganBahan(sumber.length ? teksPlan(sumber, tgl, cabang, mode, shortName) : '');
+  const teksOtomatis = (items: PlanItem[]) => denganBahan(teksPlan(items, tgl, cabang, modeOtomatis(items), shortName));
   const labelWa = (items: PlanItem[]) => `Kirim ${modeOtomatis(items) === 'plan' ? 'plan' : 'report'} ke WhatsApp`;
   const salin = async () => {
     try { await navigator.clipboard.writeText(teks); setToast('Teks disalin'); } catch { setToast('Tidak bisa menyalin. Pakai Kirim ke WhatsApp.'); }
@@ -552,7 +593,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
               </button>
             </div>
           )}
-          {mine.length > 0 && <div className="px-4 pt-2.5"><TombolWa teks={teksOtomatis(mine)} label={labelWa(mine)} /></div>}
+          {mine.length > 0 && <div className="px-4 pt-2.5"><TombolWa teks={teksOtomatis(mine)} label={labelWa(mine)} onInfo={setToast} /></div>}
         </>
       ) : tab === 'tim' ? (
         <>
@@ -606,7 +647,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
               })}
             </div>
           )}
-          {list.length > 0 && <div className="px-4 pt-3"><TombolWa teks={teksOtomatis(list)} label={`${labelWa(list).replace(' ke WhatsApp', '')} tim ke WhatsApp`} /></div>}
+          {timList.length > 0 && <div className="px-4 pt-3"><TombolWa teks={teksOtomatis(timList)} label={`${labelWa(timList).replace(' ke WhatsApp', '')} tim ke WhatsApp`} onInfo={setToast} /></div>}
         </>
       ) : (
         <>
@@ -614,11 +655,11 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
             <PillSeg value={mode} onChange={setMode} options={[['plan', 'Plan pagi'], ['report', 'Report sore']]} />
           </div>
           {!teks ? (
-            <Kosong art="bendera" title="Belum ada yang bisa dilaporkan" text="Report dibuat otomatis dari plan dan centang realisasi di hari ini." />
+            <Kosong art="bendera" title="Belum ada yang bisa dilaporkan" text="Report dibuat otomatis dari plan, centang realisasi, dan bahan survey di hari ini." />
           ) : (
             <>
               <pre className="mx-4 mt-3 whitespace-pre-wrap break-words rounded-[20px] border border-neutral-200 p-4 font-[inherit] text-sm leading-relaxed dark:border-neutral-800">{teks}</pre>
-              <div className="px-4 pt-3"><TombolWa teks={teks} label="Kirim ke WhatsApp" /></div>
+              <div className="px-4 pt-3"><TombolWa teks={teks} label="Kirim ke WhatsApp" onInfo={setToast} /></div>
               <div className="flex gap-2 px-4 pt-2.5">
                 <button onClick={salin} className="min-h-12 flex-1 rounded-2xl border border-neutral-300 px-5 text-[15px] font-bold dark:border-neutral-700">Salin teks</button>
                 <button onClick={() => shareText(teks)}

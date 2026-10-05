@@ -43,7 +43,7 @@ export function useBahan(reloadKey = 0) {
   return { list, loading, err, reload };
 }
 
-const sumberLabel = (b: Pick<Bahan, 'sumber' | 'ket' | 'agg'>) =>
+export const sumberLabel = (b: Pick<Bahan, 'sumber' | 'ket' | 'agg'>) =>
   b.sumber === 'Lainnya' ? b.ket || 'Lainnya'
     : b.sumber === 'Agent' ? [b.agg ? 'Aggregator' : 'Agent', b.ket].filter(Boolean).join(' · ') : b.sumber;
 const STATUS_LABEL: Record<StatusBahan, string> = { aktif: 'Aktif', cair: 'Sudah cair', batal: 'Batal' };
