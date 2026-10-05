@@ -29,6 +29,24 @@ const PILIH = (on: boolean) => `min-h-10 shrink-0 whitespace-nowrap rounded-full
 const URUT_BRAND: Record<BrandId | '', number> = { mobilku: 0, motorku: 1, '': 2 };
 const kunci = (x: { jenis: string; siapa: string }) => `${x.jenis}|${keyOf(x.siapa)}`;
 
+/* ---------- Kirim ke WhatsApp ---------- */
+// Tautan langsung ke WhatsApp (pilih kontak / grup di sana). Sengaja berupa tautan biasa, bukan lembar bagikan HP,
+// supaya selalu terbuka di WhatsApp dan tidak terhalang pemblokir jendela baru.
+const waUrl = (teks: string) => `https://wa.me/?text=${encodeURIComponent(teks)}`;
+// Sebelum ada yang dicentang yang dikirim plan pagi; sesudahnya report
+const modeOtomatis = (items: PlanItem[]): 'plan' | 'report' => (items.some((x) => x.status !== 'rencana') ? 'report' : 'plan');
+function TombolWa({ teks, label }: { teks: string; label: string }) {
+  return (
+    <a href={waUrl(teks)} target="_blank" rel="noopener noreferrer"
+      className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0F8048] px-4 text-[15px] font-bold text-white active:scale-[0.99]">
+      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" /><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1" />
+      </svg>
+      {label}
+    </a>
+  );
+}
+
 /* ---------- Muat plan satu hari ---------- */
 export function usePlan(tgl: string, reloadKey = 0) {
   // Daftar disimpan bersama tanggalnya, supaya saat pindah hari isi hari sebelumnya tidak sempat tampil
@@ -421,7 +439,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
   const [tambah, setTambah] = useState(false);
   const [detail, setDetail] = useState<PlanItem | null>(null);
   const [buka, setBuka] = useState<string | null>(null);
-  const [mode, setMode] = useState<'plan' | 'report'>('report');
+  const [modePilih, setMode] = useState<'plan' | 'report' | null>(null);   // null = otomatis
   const [toast, setToast] = useState('');
   const [mengingatkan, setMengingatkan] = useState(false);
   useEffect(() => {
@@ -476,9 +494,12 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
 
   /* Report */
   const sumber = isOwner ? list : mine;
+  const mode = modePilih ?? modeOtomatis(sumber);
   const teks = sumber.length ? teksPlan(sumber, tgl, cabang, mode, shortName) : '';
+  const teksOtomatis = (items: PlanItem[]) => teksPlan(items, tgl, cabang, modeOtomatis(items), shortName);
+  const labelWa = (items: PlanItem[]) => `Kirim ${modeOtomatis(items) === 'plan' ? 'plan' : 'report'} ke WhatsApp`;
   const salin = async () => {
-    try { await navigator.clipboard.writeText(teks); setToast('Teks disalin'); } catch { setToast('Tidak bisa menyalin. Pakai Bagikan.'); }
+    try { await navigator.clipboard.writeText(teks); setToast('Teks disalin'); } catch { setToast('Tidak bisa menyalin. Pakai Kirim ke WhatsApp.'); }
   };
 
   const TABS: [Tab, string][] = [...(isOwner ? [['tim', 'Tim'] as [Tab, string]] : []), ['saya', 'Plan saya'], ['bahan', 'Bahan'], ['report', 'Report']];
@@ -531,6 +552,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
               </button>
             </div>
           )}
+          {mine.length > 0 && <div className="px-4 pt-2.5"><TombolWa teks={teksOtomatis(mine)} label={labelWa(mine)} /></div>}
         </>
       ) : tab === 'tim' ? (
         <>
@@ -584,6 +606,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
               })}
             </div>
           )}
+          {list.length > 0 && <div className="px-4 pt-3"><TombolWa teks={teksOtomatis(list)} label={`${labelWa(list).replace(' ke WhatsApp', '')} tim ke WhatsApp`} /></div>}
         </>
       ) : (
         <>
@@ -595,12 +618,13 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
           ) : (
             <>
               <pre className="mx-4 mt-3 whitespace-pre-wrap break-words rounded-[20px] border border-neutral-200 p-4 font-[inherit] text-sm leading-relaxed dark:border-neutral-800">{teks}</pre>
-              <div className="flex gap-2 px-4 pt-3">
+              <div className="px-4 pt-3"><TombolWa teks={teks} label="Kirim ke WhatsApp" /></div>
+              <div className="flex gap-2 px-4 pt-2.5">
+                <button onClick={salin} className="min-h-12 flex-1 rounded-2xl border border-neutral-300 px-5 text-[15px] font-bold dark:border-neutral-700">Salin teks</button>
                 <button onClick={() => shareText(teks)}
-                  className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white dark:bg-white dark:text-neutral-900">
-                  <Ico n="share" className="h-[18px] w-[18px]" sw={2} />Bagikan ke WhatsApp
+                  className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-neutral-300 px-5 text-[15px] font-bold dark:border-neutral-700">
+                  <Ico n="share" className="h-[18px] w-[18px]" sw={2} />Aplikasi lain
                 </button>
-                <button onClick={salin} className="min-h-12 rounded-2xl border border-neutral-300 px-5 text-[15px] font-bold dark:border-neutral-700">Salin</button>
               </div>
             </>
           )}
