@@ -24,8 +24,10 @@ const signed = (v: number | null | undefined, money = false) => {
   const s = v > 0 ? '+' : v < 0 ? '−' : '';
   return s + (money ? rp(Math.abs(v)).replace('Rp ', '') : angka(Math.abs(v)));
 };
+const bulanLalu = (s: { lalu?: number | null; ini?: number | null; diffLalu?: number | null } | null | undefined): number | null =>
+  !s ? null : isNum(s.lalu) ? s.lalu : isNum(s.ini) && isNum(s.diffLalu) ? s.ini - s.diffLalu : null;
 const DiffTxt = ({ v, money = false }: { v: number | null | undefined; money?: boolean }) => (
-  <b className={isNum(v) && v < 0 ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>{signed(v, money)}</b>
+  <span className={isNum(v) && v < 0 ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>{signed(v, money)}</span>
 );
 
 function Sec({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
@@ -75,7 +77,15 @@ function Hero({ title, amount, unit, today, b }: { title: string; amount: Sales 
             <span className="text-[34px] font-bold leading-none tracking-tight"><CountPct v={s?.ach} /></span>
             <Line v={s?.ach} color={isNum(s?.ach) && (s!.ach as number) >= 0.5 ? 'bg-[#F5C451]' : 'bg-[#FF8A8A]'} track="bg-white/20" />
             <span className="truncate text-xs text-white/70">{s ? (money ? `${rp(s.ini)} / ${rp(s.target).replace('Rp ', '')}` : `${angka(s.ini)} / ${angka(s.target)} unit`) : '–'}</span>
-            {s && isNum(s.diffLalu) && <span className="text-xs">vs bln lalu <b className={s.diffLalu < 0 ? 'text-[#FFB4B4]' : 'text-[#9FE3BF]'}>{signed(s.diffLalu, money)}</b></span>}
+            {/* Bulan lalu: sekadar informasi, jadi dibuat redup */}
+            {s && isNum(bulanLalu(s)) && (
+              <span className="truncate text-xs text-white/55">
+                Bln lalu {money ? rp(bulanLalu(s)) : `${angka(bulanLalu(s))} unit`}
+                {isNum(s.diffLalu) && s.diffLalu !== 0 && (
+                  <span className={`ml-1 ${s.diffLalu < 0 ? 'text-[#FFB4B4]' : 'text-[#9FE3BF]'}`} aria-label={s.diffLalu < 0 ? 'bulan ini masih di bawah bulan lalu' : 'bulan ini sudah di atas bulan lalu'}>{s.diffLalu < 0 ? '▼' : '▲'}</span>
+                )}
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -116,7 +126,10 @@ function PicList({ c, push, filter }: { c: Ctx; push: Push; filter: 'semua' | Br
                         <b className="text-neutral-900 dark:text-white">{pct(s?.ach)}</b>
                       </span>
                       <Line v={s?.ach} className="h-[5px]" color={pctTone(s?.ach)} />
-                      <span className="text-[11px] text-neutral-500">vs bln lalu <DiffTxt v={s?.diffLalu} money={k === 'amount'} /></span>
+                      <span className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">
+                        Bln lalu {isNum(bulanLalu(s)) ? (k === 'amount' ? rp(bulanLalu(s)).replace('Rp ', '') : angka(bulanLalu(s))) : '–'}
+                        {isNum(s?.diffLalu) && <> (<DiffTxt v={s?.diffLalu} money={k === 'amount'} />)</>}
+                      </span>
                     </span>
                   ))}
                 </span>
