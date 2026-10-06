@@ -18,7 +18,7 @@ import { rp } from './ui';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 type Tab = 'tim' | 'saya' | 'bahan' | 'report';
-type Pilihan = { jenis: Jenis; siapa: string; lokasi: string };
+type Pilihan = { jenis: Jenis; siapa: string; lokasi: string; request?: boolean };
 // Staff yang ditagih plan: semua anggota di pantauan, Mobilku maupun Motorku
 export type Staf = { nama: string; brand: BrandId | '' };
 const CHIP = 'rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300';
@@ -167,6 +167,7 @@ function Baris({ x, onCentang, onBuka }: { x: PlanItem; onCentang?: () => void; 
         <span className="flex flex-wrap items-center gap-1.5">
           <span className={x.wajib ? CHIP_AMBER : CHIP}>{JENIS_LABEL[x.jenis]}</span>
           {x.wajib && <span className={CHIP_AMBER}>Wajib</span>}
+          {x.request && <span className={CHIP}>By request CMO</span>}
           {batal && <span className={CHIP}>Batal</span>}
         </span>
         <span className={`truncate text-[15px] font-bold ${batal ? 'text-neutral-400 line-through' : ''}`}>{x.siapa}</span>
@@ -252,7 +253,8 @@ function TambahSheet({ c, me, tgl, hariIni, sudah, reloadKey, onClose, onSaved }
     const siapa = q.replace(/\s+/g, ' ').trim();
     if (!siapa) { setErr('Isi dulu siapa / apa aktivitasnya.'); return; }
     setErr('');
-    setPilih((prev) => new Map(prev).set(kunci({ jenis, siapa }), { jenis, siapa, lokasi: lokasi.trim() }));
+    // Visit yang diketik sendiri = by request CMO (konsumennya belum ada di database)
+    setPilih((prev) => new Map(prev).set(kunci({ jenis, siapa }), { jenis, siapa: jenis === 'visit' ? siapa.toUpperCase() : siapa, lokasi: lokasi.trim(), ...(jenis === 'visit' ? { request: true } : {}) }));
     setQ(''); setLokasi('');
   };
   const ganti = (j: Jenis) => { setJenis(j); setQ(''); setLokasi(''); setErr(''); };
@@ -343,8 +345,18 @@ function TambahSheet({ c, me, tgl, hariIni, sudah, reloadKey, onClose, onSaved }
                 {!tampil.length && !dariDb.length && (
                   <p className="px-1 py-6 text-center text-sm leading-relaxed text-neutral-500">
                     {!cariDb ? 'Ketik minimal 3 huruf untuk mencari di database Cari konsumen.'
-                      : mencari ? 'Mencari…' : 'Tidak ketemu. Konsumen yang divisit harus ada di Cari konsumen; kalau belum ada, minta owner menambahkannya.'}
+                      : mencari ? 'Mencari…' : 'Tidak ada di database. Kalau ini permintaan CMO, masukkan sebagai by request di bawah.'}
                   </p>
+                )}
+                {cariDb && !mencari && ![...cocok, ...dariDb].some((s) => keyOf(s.siapa) === keyOf(q)) && (
+                  <div className="mt-3 rounded-2xl border border-dashed border-neutral-300 p-3 dark:border-neutral-700">
+                    <p className="text-[13px] font-semibold text-neutral-500">Belum ada di database? Tambahkan by request CMO</p>
+                    <input value={lokasi} onChange={(e) => setLokasi(e.target.value)} maxLength={60} aria-label="Lokasi by request" placeholder="Lokasi (kecamatan / desa)" className={`${FIELD} mt-2 h-11`} />
+                    <button onClick={tulisSendiri}
+                      className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-neutral-100 px-3 text-sm font-semibold dark:bg-neutral-800">
+                      <span className="text-lg leading-none">+</span><span className="truncate">Pakai “{q.trim().toUpperCase()}” · by request CMO</span>
+                    </button>
+                  </div>
                 )}
               </>
             ) : (
@@ -394,8 +406,8 @@ function DetailSheet({ x, onClose, onSaved }: { x: PlanItem; onClose: () => void
   const [catatan, setCatatan] = useState(x.wajib && x.id.startsWith('wajib:') ? '' : x.catatan);
   const [siapa, setSiapa] = useState(x.siapa);
   const [lokasi, setLokasi] = useState(x.lokasi);
-  // Nama visit harus dari Cari konsumen dan map pencairan wajib mengikuti survey-nya, jadi keduanya tidak diketik ulang
-  const namaBisaDiubah = x.jenis !== 'visit' && !x.wajib;
+  // Nama visit dari database dan map pencairan wajib tidak diketik ulang; visit by request CMO boleh diperbaiki
+  const namaBisaDiubah = (x.jenis !== 'visit' || x.request) && !x.wajib;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const cepat = x.jenis === 'visit' ? ['Bertemu', 'Tidak bertemu'] : x.jenis === 'maintain' ? ['Ada bahan order', 'Belum ada order'] : [];

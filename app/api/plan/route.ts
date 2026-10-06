@@ -14,25 +14,25 @@ export const dynamic = 'force-dynamic';
 // Aturan map pencairan: survey yang sudah selesai dalam 4 hari terakhir dan belum punya map pencairan
 // muncul sebagai aktivitas WAJIB di plan hari ini (baru benar-benar tersimpan saat dicentang / dibatalkan).
 const TAB = 'PLAN';
-const HEAD = ['ID', 'TANGGAL', 'EMAIL', 'NAMA', 'JENIS', 'SIAPA', 'LOKASI', 'CATATAN', 'STATUS', 'HASIL', 'DIBUAT', 'DIUBAH', 'REF'];
+const HEAD = ['ID', 'TANGGAL', 'EMAIL', 'NAMA', 'JENIS', 'SIAPA', 'LOKASI', 'CATATAN', 'STATUS', 'HASIL', 'DIBUAT', 'DIUBAH', 'REF', 'BY_REQUEST'];
 const STATUS: StatusPlan[] = ['rencana', 'selesai', 'batal'];
 const MAKS_SEKALI = 20;
 const HARI_WAJIB = 4;
 
-type Baris = Omit<PlanItem, 'punyaku' | 'wajib' | 'spv'> & { email: string; ref: string; hapus: boolean };
+type Baris = Omit<PlanItem, 'punyaku' | 'wajib' | 'spv'> & { email: string; ref: string; hapus: boolean };   // request ikut PlanItem
 const toObj = (r: string[]): Baris => ({
   id: r[0], tgl: r[1], email: r[2].toLowerCase(), nama: r[3],
   jenis: (JENIS as readonly string[]).includes(r[4]) ? (r[4] as Jenis) : 'lainnya',
   siapa: r[5], lokasi: r[6], catatan: r[7],
   status: (STATUS as string[]).includes(r[8]) ? (r[8] as StatusPlan) : 'rencana', hapus: r[8] === 'hapus',
-  hasil: r[9], dibuat: r[10], diubah: r[11] || r[10], ref: r[12],
+  hasil: r[9], dibuat: r[10], diubah: r[11] || r[10], ref: r[12], request: r[4] === 'visit' && r[13] === '1',
 });
 const toRow = (b: Baris, status: string = b.status): string[] =>
-  [b.id, b.tgl, b.email, b.nama, b.jenis, b.siapa, b.lokasi, b.catatan, status, b.hasil, b.dibuat, b.diubah, b.ref];
+  [b.id, b.tgl, b.email, b.nama, b.jenis, b.siapa, b.lokasi, b.catatan, status, b.hasil, b.dibuat, b.diubah, b.ref, b.request ? '1' : ''];
 const keluar = (b: Baris, email: string, owner?: Set<string>): PlanItem => ({
   id: b.id, tgl: b.tgl, nama: b.nama, jenis: b.jenis, siapa: b.siapa, lokasi: b.lokasi, catatan: b.catatan,
   status: b.status, hasil: b.hasil, dibuat: b.dibuat, diubah: b.diubah, wajib: !!b.ref, punyaku: b.email === email,
-  spv: !!owner?.has(b.email),
+  spv: !!owner?.has(b.email), request: b.request,
 });
 
 const teks = (v: unknown, maks: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, maks);
@@ -59,7 +59,7 @@ function wajibHariIni(semua: Baris[], hariIni: string): Baris[] {
     .filter((sv) => !semua.some((m) => !m.hapus && m.jenis === 'map' && m.email === sv.email && m.tgl >= sv.tgl && keyOf(m.siapa) === keyOf(sv.siapa)))
     .map((sv) => ({
       ...sv, id: `wajib:${sv.id}`, tgl: hariIni, jenis: 'map' as Jenis, status: 'rencana' as StatusPlan, hasil: '',
-      catatan: 'Wajib: survey sudah selesai, lengkapi map pencairan', ref: sv.id, dibuat: sv.diubah, diubah: sv.diubah,
+      catatan: 'Wajib: survey sudah selesai, lengkapi map pencairan', ref: sv.id, dibuat: sv.diubah, diubah: sv.diubah, request: false,
     }));
 }
 
@@ -146,6 +146,8 @@ export async function POST(req: NextRequest) {
       baru.push({
         id: randomUUID().slice(0, 8), tgl, email, nama, jenis, siapa, lokasi: teks(it?.lokasi, 60), catatan: teks(it?.catatan, 200),
         status: 'rencana', hapus: false, hasil: '', dibuat: now, diubah: now, ref: '',
+        // Visit by request CMO: konsumen yang belum ada di database, diketik sendiri
+        request: jenis === 'visit' && it?.request === true,
       });
     }
     if (!baru.length && !dilewati) return NextResponse.json({ error: 'Isi dulu siapa / apa aktivitasnya.' }, { status: 400 });

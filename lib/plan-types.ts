@@ -24,6 +24,7 @@ export type PlanItem = {
   wajib: boolean;     // map pencairan dari survey hari sebelumnya
   punyaku: boolean;
   spv: boolean;       // milik akun owner (SPV): tidak masuk plan tim dan report
+  request: boolean;   // visit by request CMO: konsumen diketik sendiri karena belum ada di database
   dibuat: string;
   diubah: string;
 };
@@ -49,7 +50,7 @@ export const tanggalPendek = (tgl: string, hariIni: string) =>
     : `${HARI[dayOfWeek(tgl)].slice(0, 3)}, ${Number(tgl.slice(8, 10))} ${BULAN[Number(tgl.slice(5, 7)) - 1].slice(0, 3)}`;
 
 const baris = (x: PlanItem, mode: 'plan' | 'report') => {
-  const inti = `${JENIS_LABEL[x.jenis]} · ${x.siapa}${x.lokasi ? ` (${x.lokasi})` : ''}`;
+  const inti = `${JENIS_LABEL[x.jenis]} · ${x.siapa}${x.lokasi ? ` (${x.lokasi})` : ''}${x.request ? ' · by request CMO' : ''}`;
   if (mode === 'plan') return `• ${inti}${x.catatan ? `, ${x.catatan}` : ''}`;
   const tanda = x.status === 'selesai' ? '✅' : x.status === 'batal' ? '✖️' : '⬜';
   const ket = x.hasil || (x.status === 'batal' ? 'batal' : '');
