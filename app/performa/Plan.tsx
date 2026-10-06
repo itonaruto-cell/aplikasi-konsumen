@@ -65,16 +65,27 @@ function TombolWa({ teks, label, onInfo }: { teks: string; label: string; onInfo
 
 /* ---------- Bahan survey di dalam report ---------- */
 function teksBahan(list: Bahan[]): string {
-  // Urut per PIC; yang belum punya PIC di paling bawah
-  const urut = [...list].sort((a, b) => Number(!a.pic) - Number(!b.pic) || a.pic.localeCompare(b.pic) || a.konsumen.localeCompare(b.konsumen));
+  // Dikelompokkan per PIC survey (jumlah bahan dan nominal tiap PIC), total semua bahan di baris paling atas.
+  // Yang belum punya PIC dikumpulkan di paling bawah.
+  const total = (x: Bahan[]) => `${x.length} bahan · ${rp(x.reduce((s, b) => s + b.nominal, 0))}`;
+  const grup = new Map<string, { nama: string; items: Bahan[] }>();
+  list.forEach((b) => {
+    const k = keyOf(b.pic);
+    const g = grup.get(k) || { nama: b.pic ? shortName(b.pic) : '', items: [] };
+    g.items.push(b); grup.set(k, g);
+  });
+  const urut = [...grup.values()].sort((a, b) => Number(!a.nama) - Number(!b.nama) || a.nama.localeCompare(b.nama));
   return [
-    `*BAHAN SURVEY* · ${urut.length} bahan · ${rp(urut.reduce((s, b) => s + b.nominal, 0))}`,
-    ...urut.map((b, i) => [
-      `${i + 1}. ${b.konsumen} · ${b.nominal ? rp(b.nominal) : 'nominal belum diisi'} · PIC ${b.pic ? shortName(b.pic) : 'belum diisi'}`,
-      `   Sumber: ${sumberLabel(b)}`,
-      `   Step: ${b.step || 'belum diisi'}`,
+    `*BAHAN SURVEY* · ${total(list)}`,
+    ...urut.map((g) => [
+      `*PIC ${g.nama || 'belum diisi'}* · ${total(g.items)}`,
+      ...[...g.items].sort((a, b) => a.konsumen.localeCompare(b.konsumen)).map((b, i) => [
+        `${i + 1}. ${b.konsumen} · ${b.nominal ? rp(b.nominal) : 'nominal belum diisi'}`,
+        `   Sumber: ${sumberLabel(b)}`,
+        `   Step: ${b.step || 'belum diisi'}`,
+      ].join('\n')),
     ].join('\n')),
-  ].join('\n');
+  ].join('\n\n');
 }
 
 /* ---------- Muat plan satu hari ---------- */
