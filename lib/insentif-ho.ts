@@ -4,6 +4,8 @@
 // Bentuknya sengaja umum (kelompok label + nilai yang sudah berupa teks), supaya sheet bulan berikutnya
 // yang kolomnya berbeda tetap bisa ditampilkan tanpa mengubah aplikasi.
 
+import { keyOf } from './performa-calc';
+
 export type KelompokHO = { judul: string; isi: [string, string][] };
 export type LainHO = { label: string; nilai: number; ket?: string };   // dibayar terpisah, mis. bonus booking mandiri
 export type OrangHO = {
@@ -36,4 +38,18 @@ export function parseHO(text: string | undefined | null): InsentifHO | null {
   } catch {
     return null;
   }
+}
+
+// Cocokkan satu nama ke daftar HO secara ketat: semua kata (3 huruf ke atas) dari nama yang lebih pendek
+// harus ada di nama yang lebih panjang, dan hanya boleh cocok ke satu orang. Nama yang cocok ke dua orang
+// (mis. hanya "Muhammad") tidak dianggap cocok, supaya insentif orang lain tidak pernah ikut terkirim.
+const kata = (s: string) => keyOf(s).replace(/[^A-Z ]/g, ' ').split(/\s+/).filter((w) => w.length >= 3);
+export function cocokHO<T extends { nama: string }>(list: T[], nama: string | null | undefined): T | null {
+  const a = kata(nama || '');
+  if (!a.length) return null;
+  const hit = list.filter((o) => {
+    const b = kata(o.nama);
+    return b.length > 0 && (a.every((w) => b.includes(w)) || b.every((w) => a.includes(w)));
+  });
+  return hit.length === 1 ? hit[0] : null;
 }
