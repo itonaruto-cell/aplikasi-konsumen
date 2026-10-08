@@ -88,8 +88,8 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
               <button onClick={onInsentif} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
                 <Ico n="chart" className="h-5 w-5 text-neutral-500" />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Simulasi insentif</span>
-                  <span className="block text-[13px] text-neutral-500">Kurang berapa, butuh berapa unit lagi</span>
+                  <span className="block text-[15px]">Insentif</span>
+                  <span className="block text-[13px] text-neutral-500">Hasil hitungan HO dan simulasi bulan ini</span>
                 </span>
                 <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
               </button>

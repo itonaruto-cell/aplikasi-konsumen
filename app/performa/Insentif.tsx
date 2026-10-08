@@ -8,7 +8,8 @@ import {
 } from '../../lib/insentif';
 import { rp } from './ui';
 import { Ico, Kosong, PillSeg, shortName } from './parts';
-import { AngkaInput, Stepper, rupiah } from './form';
+import { AngkaInput, Lembar, Stepper, rupiah } from './form';
+import type { InsentifHO, OrangHO } from '../../lib/insentif-ho';
 import { useBahan } from './Bahan';
 
 // Simulasi insentif: pencapaian bulan ini (dari pantauan, bisa dikoreksi) dihitung dengan skema dari server.
@@ -67,7 +68,88 @@ function Baris({ label, children, hint }: { label: string; children: ReactNode; 
   );
 }
 
-export default function Insentif({ c, me, akun, reloadKey = 0, onBahan }: {
+/* ---------- Insentif hasil hitungan HO (dari sheet monitoring) ---------- */
+function DetailHO({ o, d, onClose }: { o: OrangHO; d: InsentifHO; onClose: () => void }) {
+  return (
+    <Lembar judul={`${shortName(o.nama)} · ${o.peran}`} onClose={onClose}>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+20px)]">
+        <p className="mt-1 text-[13px] font-semibold text-neutral-500">Insentif {d.bulan} · hitungan HO</p>
+        <p className="text-[30px] font-bold leading-tight tracking-tight">{rupiah(o.total)}</p>
+        {(o.lain || []).map((l) => (
+          <p key={l.label} className="mt-1 text-sm leading-snug text-neutral-600 dark:text-neutral-300">
+            + {l.label} <b className="whitespace-nowrap">{rupiah(l.nilai)}</b>{l.ket ? <span className="text-neutral-500"> · {l.ket}</span> : null}
+          </p>
+        ))}
+        {o.grup.map((g) => (
+          <div key={g.judul} className="mt-4 overflow-hidden rounded-[20px] border border-neutral-200 dark:border-neutral-800">
+            <p className="px-4 pb-1 pt-3 text-[13px] font-semibold text-neutral-500">{g.judul}</p>
+            {g.isi.map(([l, v]) => (
+              <div key={l} className="flex items-baseline justify-between gap-4 border-t border-neutral-100 px-4 py-2.5 text-sm dark:border-neutral-800">
+                <span className="text-neutral-500">{l}</span>
+                <span className="text-right font-semibold">{v}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        <p className="pt-4 text-[13px] leading-relaxed text-neutral-500">
+          Sumber: {d.sumber}{d.diambil ? `, disalin ${new Date(d.diambil + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}` : ''}. Angka resmi tetap mengikuti HO.
+        </p>
+      </div>
+    </Lembar>
+  );
+}
+
+function InsentifDariHO({ reloadKey = 0 }: { reloadKey?: number }) {
+  const [d, setD] = useState<InsentifHO | null>(null);
+  const [buka, setBuka] = useState<OrangHO | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/insentif/ho', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive) setD((j?.data as InsentifHO | null) || null); }).catch(() => {});
+    return () => { alive = false; };
+  }, [reloadKey]);
+  if (!d) return null;
+  return (
+    <section className="pt-3">
+      <div className="px-4 pb-2">
+        <h2 className="text-[17px] font-bold tracking-tight">Insentif {d.bulan}</h2>
+        <p className="text-[13px] text-neutral-500">Hitungan HO · ketuk untuk rincian</p>
+      </div>
+      <div className="mx-4 overflow-hidden rounded-[20px] border border-neutral-200 dark:border-neutral-800">
+        {d.orang.map((o) => (
+          <button key={o.nama} onClick={() => setBuka(o)}
+            className="flex min-h-16 w-full items-center gap-3 border-b border-neutral-200 px-4 py-3 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5">
+                <span className="truncate text-[15px] font-bold">{shortName(o.nama)}</span>
+                <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{o.peran}</span>
+              </span>
+              <span className="block truncate text-[13px] text-neutral-500">{o.ringkas}</span>
+              {(o.lain || []).map((l) => <span key={l.label} className="block text-[13px] leading-snug text-neutral-500">+ {l.label} {rupiah(l.nilai)}</span>)}
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-[17px] font-bold">{rupiah(o.total)}</span>
+            <Ico n="right" className="h-[18px] w-[18px] shrink-0 text-neutral-400" sw={2} />
+          </button>
+        ))}
+      </div>
+      {buka && <DetailHO o={buka} d={d} onClose={() => setBuka(null)} />}
+      <h2 className="px-4 pt-6 text-[17px] font-bold tracking-tight">Simulasi bulan ini</h2>
+    </section>
+  );
+}
+
+type Props = { c: Ctx | null; me: Orang | null; akun: Akun; reloadKey?: number; onBahan: () => void };
+// Halaman Insentif: hasil hitungan HO (kalau ada), lalu simulasi bulan berjalan
+export default function Insentif(p: Props) {
+  return (
+    <>
+      <InsentifDariHO reloadKey={p.reloadKey} />
+      <Simulasi {...p} />
+    </>
+  );
+}
+
+function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
   c: Ctx | null; me: Orang | null; akun: Akun; reloadKey?: number; onBahan: () => void;
 }) {
   const isOwner = akun.role === 'owner';
