@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import { brandOf, keyOf, todayJkt, type Ctx } from '../../lib/performa-calc';
 import {
-  JENIS_LABEL, KOSONG, butuhUntuk, denganNbq, hitung, langkahNaik, plafon, tambah, targetBawaan,
+  JENIS_LABEL, KOSONG, butuhUntuk, denganNbq, hitung, kurangAktivitas, langkahNaik, plafon, tambah, targetBawaan,
   type Jenis, type Masukan, type Skema,
 } from '../../lib/insentif';
 import { rp } from './ui';
@@ -37,7 +37,7 @@ const num = (v: unknown) => (typeof v === 'number' && isFinite(v) ? v : undefine
 const buang = (o: Partial<Masukan>): Partial<Masukan> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<Masukan>;
 
-// Angka yang bisa diambil dari pantauan: sales amount & unit bulan berjalan
+// Angka yang bisa diambil dari pantauan: sales amount & unit bulan berjalan, dan aktivitas (visit + order in)
 function dariPantauan(c: Ctx | null, key: string): Partial<Masukan> {
   if (!c) return {};
   if (key === CABANG) {
@@ -53,7 +53,10 @@ function dariPantauan(c: Ctx | null, key: string): Partial<Masukan> {
   }
   const o = (c.data.orang || []).find((x) => x.nama === key);
   if (!o) return {};
-  return buang({ amount: num(o.amount?.ini), unit: num(o.unit?.ini) });
+  return buang({
+    amount: num(o.amount?.ini), unit: num(o.unit?.ini),
+    aktivitas: o.visit ? (num(o.visit.total) ?? 0) + (num(o.oi?.total) ?? 0) : undefined,
+  });
 }
 
 function Baris({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
@@ -243,13 +246,13 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
 
   /* ---------- Simulasi ---------- */
   // unit / jt: tambahan biasa (MAO: sales retail). unitAgg / jtAgg: tambahan dari MA aggregator (hanya MAO)
-  const SIM0 = { unit: 0, jt: 0, ma: 0, unitAgg: 0, jtAgg: 0 };
+  const SIM0 = { unit: 0, jt: 0, ma: 0, unitAgg: 0, jtAgg: 0, akt: 0 };
   const [sim, setSim] = useState(SIM0);
   const [pakai, setPakai] = useState(false);
   const [nbq, setNbq] = useState<number | null>(null);   // persen; null = bawaan skema
   const [target, setTarget] = useState(2_000_000);
   const [buka, setBuka] = useState(false);
-  useEffect(() => { setSim({ unit: 0, jt: 0, ma: 0, unitAgg: 0, jtAgg: 0 }); setPakai(false); setNbq(null); }, [siapa, jenis]);
+  useEffect(() => { setSim({ unit: 0, jt: 0, ma: 0, unitAgg: 0, jtAgg: 0, akt: 0 }); setPakai(false); setNbq(null); }, [siapa, jenis]);
   // BMH: kategori & target dari HO wajib diisi dulu. Isian dibuka dan tetap terbuka selama diisi.
   const perluTarget = jenis === 'bmh' && (!dasar.kategori || !dasar.targetAmount || !dasar.targetUnit);
   useEffect(() => { if (perluTarget) setBuka(true); }, [perluTarget]);
@@ -262,6 +265,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
     const x = {
       unit: sim.unit + (pakai ? punya.n - bAgg.n : 0), amount: sim.jt * 1e6 + (pakai ? punya.amt - bAgg.amt : 0), ma: sim.ma,
       unitAgg: pisah ? sim.unitAgg + bAgg.n : 0, amountAgg: pisah ? sim.jtAgg * 1e6 + bAgg.amt : 0,
+      aktivitas: jenis === 'cmo' ? sim.akt : 0,
     };
     const m = tambah(jenis, dasar, x);
     const aktual = hitung(skema, jenis, dasar);
@@ -274,7 +278,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
     return {
       m, aktual, kini, perUnit,
       nbqBawaan,
-      berubah: x.unit !== 0 || x.amount !== 0 || x.ma !== 0 || x.unitAgg !== 0 || x.amountAgg !== 0 || sk !== skema,
+      berubah: x.unit !== 0 || x.amount !== 0 || x.ma !== 0 || x.unitAgg !== 0 || x.amountAgg !== 0 || x.aktivitas !== 0 || sk !== skema,
       naik: langkahNaik(sk, jenis, m),
       butuh: butuhUntuk(sk, jenis, m, target, perUnit),
       plafon: plafon(sk, jenis, m),
@@ -320,6 +324,24 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
   const perluPisah = mao && dasar.unit > 0 && manual.pencari === undefined && manual.nonAggregator === undefined;
   const aggUnit = dasar.unit - dasar.pencari, aggAmount = dasar.amount - dasar.nonAggregator;
   const ret = mao ? ' retail' : '';
+  // CMO: tunjangan dari aktivitas (visit + OI)
+  const tj = jenis === 'cmo' ? skema.cmo?.tunjangan : undefined;
+  const naikTj = tj && skema.cmo ? kurangAktivitas(skema.cmo, m.aktivitas) : null;
+  // Faktor NBQ: kalau skema punya tabel NBQ, pilihannya hanya faktor di tabel itu
+  const tierNbq = skema.nbqTier || [];
+  const pilihanNbq = [...new Set(tierNbq.map((t) => Math.round(t.faktor * 100)))].sort((a, b) => a - b);
+  const nbqKini = nbq ?? hasil.nbqBawaan;
+  const geserNbq = (arah: 1 | -1) => setNbq((v) => {
+    const kini = v ?? hasil.nbqBawaan;
+    if (!pilihanNbq.length) return Math.max(0, Math.min(100, kini + arah * 5));
+    return (arah > 0 ? pilihanNbq.find((x) => x > kini) : [...pilihanNbq].reverse().find((x) => x < kini)) ?? kini;
+  });
+  const ketNbq = (() => {
+    const i = tierNbq.findIndex((t) => Math.round(t.faktor * 100) === nbqKini);
+    if (i < 0) return `Bawaan skema ${hasil.nbqBawaan}%`;
+    const atas = tierNbq[i + 1]?.min;
+    return atas === undefined ? `NBQ ${tierNbq[i].min}% ke atas` : tierNbq[i].min <= 0 ? `NBQ di bawah ${atas}%` : `NBQ ${tierNbq[i].min}% sampai di bawah ${atas}%`;
+  })();
 
   return (
     <div className="pb-8">
@@ -394,6 +416,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
           <b>Supaya naik</b>
           <p>{naik.amount ? `Tambah ${rp(naik.amount.tambah)} amount${ret} → ${rupiah(naik.amount.total)}` : 'Amount saja belum cukup untuk naik.'}</p>
           <p>{naik.unit ? `Tambah ${naik.unit.tambah} unit${ret} → ${rupiah(naik.unit.total)}` : 'Unit saja belum cukup untuk naik.'}</p>
+          {tj && <p>{naikTj ? `Tambah ${naikTj.kurang} aktivitas → tunjangan ${rupiah(naikTj.nilai)}` : 'Tunjangan CMO sudah paling tinggi.'}</p>}
         </div>
       </div>
 
@@ -437,6 +460,9 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
           )}
           {jenis !== 'bmh' && (
             <Baris label="Jumlah survey"><AngkaInput value={dasar.survey} onChange={(v) => ubah('survey', v)} lebar="w-[84px]" className={isian} /></Baris>
+          )}
+          {tj && (
+            <Baris label="Aktivitas (visit + OI)" hint={`target ${tj.target} · untuk tunjangan CMO`}><AngkaInput value={dasar.aktivitas} onChange={(v) => ubah('aktivitas', v)} lebar="w-[84px]" className={isian} /></Baris>
           )}
           {mao && (
             <>
@@ -502,8 +528,11 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
           <Stepper label="Tambah MA produktif" sub={`MA retail · jadi ${m.ma} dari target ${tMa}`} value={String(sim.ma)}
             onMinus={() => setSim((s) => ({ ...s, ma: Math.max(0, s.ma - 1) }))} onPlus={() => setSim((s) => ({ ...s, ma: s.ma + 1 }))} />
         )}
-        <Stepper label="Faktor NBQ" sub={`Bawaan skema ${hasil.nbqBawaan}%`} value={`${nbq ?? hasil.nbqBawaan}%`}
-          onMinus={() => setNbq((v) => Math.max(0, (v ?? hasil.nbqBawaan) - 5))} onPlus={() => setNbq((v) => Math.min(100, (v ?? hasil.nbqBawaan) + 5))} />
+        {tj && (
+          <Stepper label="Tambah aktivitas" sub={`Visit + OI · jadi ${m.aktivitas} dari target ${tj.target}`} value={String(sim.akt)}
+            onMinus={() => setSim((s) => ({ ...s, akt: Math.max(0, s.akt - 5) }))} onPlus={() => setSim((s) => ({ ...s, akt: s.akt + 5 }))} />
+        )}
+        <Stepper label="Faktor NBQ" sub={ketNbq} value={`${nbqKini}%`} onMinus={() => geserNbq(-1)} onPlus={() => geserNbq(1)} />
       </div>
 
       {/* Target insentif */}
@@ -544,7 +573,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
         {mao
           ? 'Di bawah batas minimal performa, insentif MAO belum keluar. Performa dihitung dari semua sales (retail + aggregator); insentif pencari order dan extra hanya dari sales retail. Unit tambahan dihitung ikut disurvey, dan saran di atas memakai unit retail.'
           : jenis === 'cmo'
-            ? 'Unit tambahan dihitung ikut disurvey. Bonus Booking Mandiri belum termasuk.'
+            ? 'Unit tambahan dihitung ikut disurvey. Tunjangan CMO mengikuti visit + OI dan tidak bergantung pada sales. Bonus Booking Mandiri belum termasuk.'
             : 'Bonus tengah bulan mengikuti sales tanggal 1–15 dan tidak ikut berubah di simulasi.'}
         {' '}Koreksi angka hanya tersimpan di HP ini.
       </p>

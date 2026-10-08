@@ -19,6 +19,9 @@ export type SkemaCMO = {
   bobot: { amount: number; unit: number };
   tier: { min: number; dasar: number; extra: number }[];   // min = total perf (%), urut naik
   perSurvey: number;
+  // Tunjangan CMO dari aktivitas (visit + OI) dibanding target. min = nilai aktivitas (%);
+  // lebih = baru berlaku kalau nilainya DI ATAS min (tepat di min belum). Tidak bergantung pada sales.
+  tunjangan?: { target: number; tier: { min: number; lebih?: boolean; nilai: number }[] };
   nbq: number;
 };
 export type SkemaMAO = {
@@ -29,7 +32,9 @@ export type SkemaMAO = {
   maProduktif: { min: number; bonus: number }[];           // urut naik
   nbq: number;
 };
-export type Skema = { versi?: string; bmh?: SkemaBMH; cmo?: SkemaCMO; mao?: SkemaMAO; maoBaru?: SkemaMAO };
+// nbq di tiap skema = faktor pembayaran bawaan (0..1). nbqTier = faktor menurut nilai NBQ (%), urut naik.
+export type NbqTier = { min: number; faktor: number };
+export type Skema = { versi?: string; nbqTier?: NbqTier[]; bmh?: SkemaBMH; cmo?: SkemaCMO; mao?: SkemaMAO; maoBaru?: SkemaMAO };
 
 // Angka pencapaian satu orang (atau cabang, untuk BMH). Yang tidak dipakai skemanya diabaikan.
 export type Masukan = {
@@ -40,6 +45,7 @@ export type Masukan = {
   unit: number;
   tengahBulan: number;     // BMH: sales tanggal 1–15
   survey: number;          // CMO & MAO
+  aktivitas: number;       // CMO: visit + OI bulan ini (untuk tunjangan CMO)
   ma: number;              // MAO: MA produktif
   maNonLeasing: number;    // MAO: MA produktif non leasing
   pencari: number;         // MAO: unit retail (non aggregator) = unit pencari order
@@ -59,7 +65,7 @@ export type Hasil = {
 export const JENIS_LABEL: Record<Jenis, string> = { bmh: 'BMH', cmo: 'CMO', mao: 'MAO', maoBaru: 'MAO < 3 bln' };
 export const KOSONG: Masukan = {
   kategori: '', targetAmount: 0, targetUnit: 0, amount: 0, unit: 0, tengahBulan: 0,
-  survey: 0, ma: 0, maNonLeasing: 0, pencari: 0, nonAggregator: 0,
+  survey: 0, aktivitas: 0, ma: 0, maNonLeasing: 0, pencari: 0, nonAggregator: 0,
 };
 
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -80,6 +86,10 @@ export function parseSkema(text: string | undefined | null): Skema | null {
     if (!isObj(j)) return null;
     const out: Skema = {};
     if (typeof j.versi === 'string') out.versi = j.versi;
+    if (Array.isArray(j.nbqTier)) {
+      const t = j.nbqTier.filter(isObj).map((x) => ({ min: Number(x.min), faktor: Number(x.faktor) })).filter((x) => isFinite(x.min) && isFinite(x.faktor));
+      if (t.length) out.nbqTier = t.sort((a, b) => a.min - b.min);
+    }
     if (isObj(j.bmh) && Array.isArray(j.bmh.pengali) && isObj(j.bmh.tarif)) out.bmh = j.bmh as unknown as SkemaBMH;
     if (isObj(j.cmo) && Array.isArray(j.cmo.tier) && isObj(j.cmo.target)) out.cmo = j.cmo as unknown as SkemaCMO;
     if (isObj(j.mao) && Array.isArray(j.mao.tier) && isObj(j.mao.target)) out.mao = j.mao as unknown as SkemaMAO;
@@ -122,6 +132,35 @@ function hitungBMH(k: SkemaBMH, m: Masukan): Hasil {
   };
 }
 
+// Tunjangan CMO: nilai aktivitas = (visit + OI) ÷ target. Tidak bergantung pada pencapaian sales.
+export function tunjanganCMO(k: SkemaCMO, aktivitas: number): number {
+  const tj = k.tunjangan;
+  if (!tj || !(tj.target > 0)) return 0;
+  const v = r6((aktivitas / tj.target) * 100);
+  let nilai = 0;
+  for (const t of tj.tier) if (t.lebih ? v > t.min : v >= t.min) nilai = t.nilai;
+  return nilai;
+}
+// Aktivitas yang masih kurang untuk naik ke tunjangan berikutnya (null = sudah paling atas / tidak ada tunjangan)
+export function kurangAktivitas(k: SkemaCMO, aktivitas: number): { kurang: number; nilai: number } | null {
+  const kini = tunjanganCMO(k, aktivitas);
+  if (!k.tunjangan) return null;
+  for (let n = 1; n <= 400; n++) {
+    const v = tunjanganCMO(k, aktivitas + n);
+    if (v > kini) return { kurang: n, nilai: v };
+  }
+  return null;
+}
+
+// Faktor pembayaran menurut nilai NBQ (0..1). Tanpa tabel NBQ: null.
+export function faktorNbq(s: Skema, nbq: number): number | null {
+  if (!s.nbqTier?.length) return null;
+  const v = r6(nbq * 100);
+  let f = s.nbqTier[0].faktor;
+  for (const t of s.nbqTier) if (v >= t.min) f = t.faktor;
+  return f;
+}
+
 function hitungCMO(k: SkemaCMO, m: Masukan): Hasil {
   const A = r6(bagi(m.amount, m.targetAmount || k.target.amount) * k.bobot.amount);
   const U = r6(bagi(m.unit, m.targetUnit || k.target.unit) * k.bobot.unit);
@@ -130,7 +169,8 @@ function hitungCMO(k: SkemaCMO, m: Masukan): Hasil {
   const dasar = t ? t.dasar : 0;
   const survey = t ? m.survey * k.perSurvey : 0;
   const extra = t ? t.extra : 0;
-  const kotor = dasar + survey + extra;
+  const tj = tunjanganCMO(k, m.aktivitas);
+  const kotor = dasar + survey + extra + tj;
   return {
     perf,
     bagian: [{ label: 'Amount', nilai: A }, { label: 'Unit', nilai: U }],
@@ -138,6 +178,7 @@ function hitungCMO(k: SkemaCMO, m: Masukan): Hasil {
       { label: 'Insentif CMO', nilai: dasar },
       { label: `Survey ${m.survey} × ${ribuan(k.perSurvey)}`, nilai: survey },
       { label: 'Extra insentif', nilai: extra },
+      ...(k.tunjangan ? [{ label: `Tunjangan CMO (aktivitas ${m.aktivitas} dari ${k.tunjangan.target})`, nilai: tj }] : []),
     ],
     kotor, nbq: k.nbq, total: kotor * k.nbq,
   };
@@ -185,7 +226,7 @@ export function denganNbq(s: Skema, j: Jenis, nbq: number): Skema {
 /* ---------- Simulasi ---------- */
 // unit / amount = tambahan biasa; untuk MAO berarti sales RETAIL (non aggregator).
 // unitAgg / amountAgg = tambahan dari MA aggregator (hanya MAO).
-export type Tambahan = { unit: number; amount: number; ma: number; unitAgg?: number; amountAgg?: number };
+export type Tambahan = { unit: number; amount: number; ma: number; unitAgg?: number; amountAgg?: number; aktivitas?: number };
 // Unit tambahan dihitung ikut disurvey (CMO & MAO).
 // MAO: sales aggregator ikut menaikkan performa dan insentif survey, tetapi insentif pencari order dan
 // extra insentif hanya dihitung dari sales retail.
@@ -198,6 +239,7 @@ export function tambah(j: Jenis, m: Masukan, x: Tambahan): Masukan {
     amount: m.amount + x.amount + aAgg,
     survey: j === 'bmh' ? m.survey : m.survey + x.unit + uAgg,
     ma: m.ma + x.ma,
+    aktivitas: j === 'cmo' ? m.aktivitas + (x.aktivitas || 0) : m.aktivitas,
     pencari: mao ? m.pencari + x.unit : m.pencari,
     nonAggregator: mao ? m.nonAggregator + x.amount : m.nonAggregator,
   };
