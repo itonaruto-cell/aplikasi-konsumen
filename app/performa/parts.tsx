@@ -21,6 +21,7 @@ const P: Record<string, ReactNode> = {
   right: <path d="m9 6 6 6-6 6" />,
   left: <path d="m15 6-6 6 6 6" />,
   check: <path d="m5 12 5 5L20 7" />,
+  edit: (<><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>),
   list: (<><path d="M10 6h10M10 12h10M10 18h10" /><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17" /></>),
   x: <path d="M6 6l12 12M18 6 6 18" />,
   lock: (<><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>),
