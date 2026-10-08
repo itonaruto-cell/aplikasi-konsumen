@@ -53,7 +53,10 @@ export default function Home() {
       <main className="flex min-h-dvh flex-col bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50"
         style={{ fontFamily: 'var(--font-instrument), system-ui, sans-serif' }}>
         <div className="mx-auto w-full max-w-xl px-4 pt-[calc(env(safe-area-inset-top)+14px)]">
-          <p className="text-[22px] font-bold tracking-tight">kendal.team</p>
+          <p className="flex items-center gap-2.5 text-[21px] font-bold tracking-tight">
+            <img src="/icon-192.png" alt="" width={30} height={30} className="h-[30px] w-[30px] shrink-0 rounded-full bg-white" />
+            Marketing Kendal
+          </p>
           {error ? (
             <div className="mt-6 rounded-2xl bg-red-50 p-4 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">
               {error}

@@ -207,7 +207,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const onTouchEnd = () => { if (pull >= 64) reload(); setPull(0); pullStart.current = null; };
 
   const cabang = (data?.cabang || 'kendal').toLowerCase();
-  const TITLE: Record<Page, string> = { pantau: `${cabang}.team`, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3' };
+  const namaApp = `Marketing ${cabang.replace(/\b\w/g, (h) => h.toUpperCase())}`;
+  const TITLE: Record<Page, string> = { pantau: namaApp, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3' };
 
   const NAV: [Page, string, string][] = [
     ['pantau', 'chart', 'Pantau'], ['plan', 'list', 'Plan'], ['juara', 'trophy', 'Juara'], ['rute', 'pin', 'Rute'],
@@ -225,7 +226,14 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
         <header className="sticky top-0 z-30 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur dark:bg-neutral-950/95">
           <div className={`flex items-center justify-between gap-2 pl-4 pr-1.5 pt-2 ${page === 'pantau' ? '' : 'border-b border-neutral-200 pb-2 dark:border-neutral-800'}`}>
             <div className="min-w-0">
-              <h1 className="truncate text-[22px] font-bold tracking-tight">{TITLE[page]}</h1>
+              {page === 'pantau' ? (
+                <h1 className="flex items-center gap-2.5 truncate text-[21px] font-bold tracking-tight">
+                  <img src="/icon-192.png" alt="" width={30} height={30} className="h-[30px] w-[30px] shrink-0 rounded-full bg-white" />
+                  <span className="truncate">{namaApp}</span>
+                </h1>
+              ) : (
+                <h1 className="truncate text-[22px] font-bold tracking-tight">{TITLE[page]}</h1>
+              )}
             </div>
             <div className="flex shrink-0 items-center">
               {myStreak > 1 && (
