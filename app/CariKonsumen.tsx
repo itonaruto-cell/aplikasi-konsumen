@@ -54,6 +54,14 @@ const rupiah = (v: string) => {
 const initials = (n: string) =>
   n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 const rowId = (r: Row) => pick(r, 'ORDER_NO', 'ORDER NO') || pick(r, 'NAMA KONSUMEN') + pick(r, 'NOPOL');
+// Kolom data saja (tanpa __ID / __KOREKSI yang hanya dikirim ke owner)
+const isiBaris = (r: Row) => Object.entries(r).filter(([k]) => !k.startsWith('__'));
+// Kolom yang sudah dikoreksi owner → nilai aslinya
+const koreksiDari = (r: Row): Record<string, string> => {
+  try { return r.__KOREKSI ? JSON.parse(r.__KOREKSI) : {}; } catch { return {}; }
+};
+const PHONE_COL = /^(NO\.?\s*)?(HP|WA|TELP|TELEPON|TLP|PHONE|HANDPHONE|WHATSAPP)(\s*\d+)?$/i;
+const DULUAN = ['NO HP', 'NO. HP', 'HP', 'KECAMATAN', 'KELURAHAN', 'MAPS'];
 
 /* ---------- Filter ---------- */
 type FKey = 'type' | 'produk' | 'kec' | 'kel';
@@ -116,6 +124,19 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
   const [recent, setRecent] = useState<string[]>([]);
   const [toast, setToast] = useState('');
   const [picker, setPicker] = useState<{ kind: 'tel' | 'wa'; phones: string[] } | null>(null);
+  const [ubah, setUbah] = useState<Row | null>(null);
+
+  // Sesudah koreksi tersimpan: perbarui baris di daftar dan di detail
+  const pasangKoreksi = (id: string, nilai: Record<string, string>, koreksi: Record<string, string>) => {
+    const baru = (r: Row): Row => {
+      if (r.__ID !== id) return r;
+      const x: Row = { ...r, ...nilai };
+      if (Object.keys(koreksi).length) x.__KOREKSI = JSON.stringify(koreksi); else delete x.__KOREKSI;
+      return x;
+    };
+    setRows((list) => list.map(baru));
+    setSelected((r) => (r ? baru(r) : r));
+  };
 
   const load = async () => {
     setLoading(true); setError('');
@@ -140,9 +161,9 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
     return () => clearTimeout(t);
   }, [toast]);
   useEffect(() => {
-    document.body.style.overflow = selected || openFilter || picker ? 'hidden' : '';
+    document.body.style.overflow = selected || openFilter || picker || ubah ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [selected, openFilter, picker]);
+  }, [selected, openFilter, picker, ubah]);
 
   // Cek apakah satu baris lolos semua filter (kecuali filter `except`)
   const passes = (r: Row, except?: FKey) => {
@@ -153,7 +174,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
       if (sel.length && !sel.includes(fkey(fval(r, f.key)))) return false;
     }
     const q = norm(query);
-    return !q || norm(Object.values(r).join(' ')).includes(q);
+    return !q || norm(isiBaris(r).map(([, v]) => v).join(' ')).includes(q);
   };
 
   const filtered = useMemo(() => rows.filter((r) => passes(r)),
@@ -220,7 +241,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
   };
 
   const copyData = async (r: Row) => {
-    const text = Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n');
+    const text = isiBaris(r).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n');
     try { await navigator.clipboard.writeText(text); setToast('Data tersalin'); } catch { setToast('Gagal menyalin'); }
   };
 
@@ -408,6 +429,8 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
         const mapsUrl = maps ? maps.startsWith('http') ? maps : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(maps)}` : '';
         const isSaved = saved.includes(rowId(r));
         const hidden = ['NAMA KONSUMEN', 'MAPS', 'NO WA', 'ANGSURAN', 'TENOR', 'PRODUK'];
+        const dikoreksi = koreksiDari(r);
+        const kosong = isiBaris(r).filter(([, v]) => !String(v).trim()).length;
         const action = 'flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-2xl bg-neutral-100 text-[13px] font-semibold active:scale-95 dark:bg-neutral-800';
         return (
           <BottomSheet onClose={() => setSelected(null)}>
@@ -454,16 +477,27 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
                 </div>
               )}
 
+              {isOwner && r.__ID && (
+                <button onClick={() => setUbah(r)}
+                  className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-neutral-300 text-[15px] font-semibold active:scale-[0.99] dark:border-neutral-700">
+                  <Ico n="edit" className="h-5 w-5" />
+                  Ubah / lengkapi data{kosong ? <span className="font-normal text-neutral-500"> · {kosong} kosong</span> : null}
+                </button>
+              )}
+
               <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-neutral-900 p-4 text-white dark:ring-1 dark:ring-neutral-800">
                 <div><p className="text-[13px] text-neutral-300">Angsuran</p><p className="text-lg font-bold">{rupiah(pick(r, 'ANGSURAN'))}</p></div>
                 <div><p className="text-[13px] text-neutral-300">Tenor</p><p className="text-lg font-bold">{pick(r, 'TENOR') ? `${pick(r, 'TENOR')} bulan` : '-'}</p></div>
               </div>
 
               <dl className="mt-4 divide-y divide-neutral-200 dark:divide-neutral-800">
-                {Object.entries(r).filter(([k, v]) => v && !hidden.includes(k.trim().toUpperCase())).map(([k, v]) => (
+                {isiBaris(r).filter(([k, v]) => v && !hidden.includes(k.trim().toUpperCase())).map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4 py-2.5 text-sm">
                     <dt className="shrink-0 text-neutral-500">{k}</dt>
-                    <dd className="break-all text-right font-medium">{v}</dd>
+                    <dd className="break-all text-right font-medium">
+                      {v}
+                      {k in dikoreksi && <span className="ml-1.5 whitespace-nowrap rounded-full bg-[#FFF4E0] px-1.5 py-0.5 align-middle text-[11px] font-bold text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">dikoreksi</span>}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -471,6 +505,15 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
           </BottomSheet>
         );
       })()}
+
+      {ubah && (
+        <UbahData r={ubah} onClose={() => setUbah(null)}
+          onSaved={(nilai, koreksi, n) => {
+            pasangKoreksi(String(ubah.__ID), nilai, koreksi);
+            setUbah(null);
+            setToast(n ? 'Data konsumen tersimpan' : 'Tidak ada yang berubah');
+          }} />
+      )}
 
       {picker && (
         <BottomSheet onClose={() => setPicker(null)} z="z-[60]">
@@ -497,5 +540,113 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
         </div>
       )}
     </div>
+  );
+}
+
+/* ---------- Ubah / lengkapi data satu konsumen (khusus owner) ---------- */
+// Database aslinya tidak diubah: koreksi disimpan terpisah dan bisa dikembalikan ke data asli.
+function UbahData({ r, onClose, onSaved }: {
+  r: Row; onClose: () => void; onSaved: (nilai: Record<string, string>, koreksi: Record<string, string>, n: number) => void;
+}) {
+  const asli = koreksiDari(r);
+  const kolom = useMemo(() => {
+    const k = isiBaris(r).map(([x]) => x);
+    const atas = DULUAN.map((d) => k.find((x) => x.trim().toUpperCase() === d)).filter((x): x is string => !!x);
+    return [...atas, ...k.filter((x) => !atas.includes(x))];
+  }, [r]);
+  const [isi, setIsi] = useState<Record<string, string>>(() => Object.fromEntries(isiBaris(r).map(([k, v]) => [k, String(v ?? '')])));
+  const [simpan, setSimpan] = useState(false);
+  const [err, setErr] = useState('');
+  const [lokasi, setLokasi] = useState('');
+  const nm = pick(r, 'NAMA KONSUMEN', 'NAMA') || '(tanpa nama)';
+  const rapi = (v: string) => v.replace(/\s+/g, ' ').trim();
+  const berubah = kolom.filter((k) => rapi(isi[k] ?? '') !== rapi(String(r[k] ?? '')));
+
+  const pakaiLokasi = (k: string) => {
+    if (!navigator.geolocation) { setLokasi('HP ini tidak bisa memberi lokasi.'); return; }
+    setLokasi('Mencari lokasi…');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setIsi((x) => ({ ...x, [k]: `${p.coords.latitude.toFixed(6)},${p.coords.longitude.toFixed(6)}` })); setLokasi(`Titik saat ini dipakai (akurasi ±${Math.round(p.coords.accuracy)} m).`); },
+      () => setLokasi('Lokasi tidak didapat. Izinkan akses lokasi untuk aplikasi ini lalu coba lagi.'),
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+
+  const kirim = async () => {
+    if (!berubah.length) { onSaved({}, asli, 0); return; }
+    setSimpan(true); setErr('');
+    try {
+      const res = await fetch('/api/konsumen/koreksi', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: r.__ID, ubah: Object.fromEntries(berubah.map((k) => [k, isi[k] ?? ''])) }),
+      });
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) { setErr(j?.error || 'Gagal menyimpan. Coba lagi.'); return; }
+      onSaved(j.nilai || {}, j.koreksi || {}, berubah.length);
+    } catch {
+      setErr('Koneksi bermasalah. Periksa internet lalu coba lagi.');
+    } finally {
+      setSimpan(false);
+    }
+  };
+
+  return (
+    <BottomSheet onClose={onClose} z="z-50">
+      <div className="flex shrink-0 items-center justify-between px-5">
+        <div className="min-w-0">
+          <p className="text-lg font-bold">Ubah data konsumen</p>
+          <p className="truncate text-[13px] text-neutral-500">{nm}</p>
+        </div>
+        <button onClick={onClose} className="-mr-2 min-h-11 shrink-0 px-2 text-[15px] text-neutral-500">Tutup</button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-3">
+        {kolom.map((k) => {
+          const atas = k.trim().toUpperCase();
+          const telp = PHONE_COL.test(atas);
+          const maps = atas === 'MAPS';
+          const id = `ubah-${k.replace(/\W+/g, '-')}`;
+          const sudah = k in asli;
+          const beda = rapi(isi[k] ?? '') !== rapi(String(r[k] ?? ''));
+          return (
+            <div key={k} className="border-b border-neutral-200 py-3 last:border-0 dark:border-neutral-800">
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor={id} className="text-[13px] font-semibold text-neutral-500">{k}</label>
+                {beda ? <span className="text-[11px] font-bold text-[#1FA463]">diubah</span>
+                  : sudah ? <span className="rounded-full bg-[#FFF4E0] px-1.5 py-0.5 text-[11px] font-bold text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">dikoreksi</span> : null}
+              </div>
+              <input id={id} value={isi[k] ?? ''} onChange={(e) => setIsi((x) => ({ ...x, [k]: e.target.value }))}
+                inputMode={telp ? 'tel' : 'text'} autoComplete="off" maxLength={300}
+                placeholder={telp ? 'mis. 0812xxxx / 0857xxxx' : maps ? 'Link Google Maps atau titik koordinat' : 'Kosong'}
+                className="mt-1.5 h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:focus:border-white" />
+              {telp && <p className="mt-1 text-[13px] text-neutral-500">Lebih dari satu nomor: pisahkan dengan /</p>}
+              {maps && (
+                <>
+                  <button onClick={() => pakaiLokasi(k)} className="mt-2 flex min-h-10 items-center gap-1.5 rounded-full border border-neutral-300 px-4 text-sm font-semibold dark:border-neutral-700">
+                    <Ico n="pin" className="h-4 w-4" />Pakai lokasi saya sekarang
+                  </button>
+                  {lokasi && <p className="mt-1 text-[13px] text-neutral-500">{lokasi}</p>}
+                </>
+              )}
+              {sudah && (
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[13px] text-neutral-500">
+                  <span className="break-all">Data asli: {asli[k] || '(kosong)'}</span>
+                  <button onClick={() => setIsi((x) => ({ ...x, [k]: asli[k] }))} className="min-h-9 font-semibold text-neutral-700 underline dark:text-neutral-300">Pakai data asli</button>
+                </p>
+              )}
+            </div>
+          );
+        })}
+        <p className="pt-3 text-[13px] leading-relaxed text-neutral-500">
+          Database aslinya tidak diubah. Koreksi disimpan terpisah, langsung dipakai di aplikasi, dan bisa dikembalikan ke data asli kapan saja.
+        </p>
+      </div>
+      <div className="shrink-0 border-t border-neutral-200 px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3 dark:border-neutral-800">
+        {err && <p role="alert" className="pb-2 text-sm text-red-700 dark:text-red-400">{err}</p>}
+        <button onClick={kirim} disabled={simpan || !berubah.length}
+          className="min-h-12 w-full rounded-2xl bg-neutral-900 text-[15px] font-bold text-white active:opacity-90 disabled:opacity-50 dark:bg-white dark:text-neutral-900">
+          {simpan ? 'Menyimpan…' : berubah.length ? `Simpan ${berubah.length} perubahan` : 'Belum ada perubahan'}
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
