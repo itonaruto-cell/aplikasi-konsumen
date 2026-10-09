@@ -578,8 +578,10 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
   /* Report */
   const sumber = isOwner ? timList : mine;
   const mode = modePilih ?? modeOtomatis(sumber);
-  // Bahan survey aktif ikut di report hari ini (staff: bahan miliknya / yang ia PIC; owner: semua)
-  const bahanAktif = useMemo(() => (tgl === hariIni ? bahan.list.filter((b) => b.status === 'aktif') : []), [bahan.list, tgl, hariIni]);
+  // Bahan survey aktif (keadaan sekarang) ikut di plan & report mulai kemarin: report kemarin sering baru dikirim
+  // lewat tengah malam. Hari-hari yang lebih lama tidak, karena isi bahannya sudah berubah.
+  // (staff: bahan miliknya / yang ia PIC; owner: semua)
+  const bahanAktif = useMemo(() => (tgl >= addDays(hariIni, -1) ? bahan.list.filter((b) => b.status === 'aktif') : []), [bahan.list, tgl, hariIni]);
   const denganBahan = (plan: string) => [
     plan || (bahanAktif.length ? `*BAHAN SURVEY · ${cabang.toUpperCase()}*\n${tanggalPanjang(tgl)}` : ''),
     bahanAktif.length ? teksBahan(bahanAktif) : '',
