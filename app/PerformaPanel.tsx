@@ -292,7 +292,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             )}
             {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
             {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} />}
+            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
           </>
         )}
       </div>

@@ -9,9 +9,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -70,10 +70,20 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
         </Card>
       )}
 
-      {(onBahan || onInsentif || onInject || onJuara) && (
+      {(onBahan || onInsentif || onInject || onJuara || onPengumuman) && (
         <>
           <p className="mt-8 text-[15px] font-bold">Alat kerja</p>
           <Card className="mt-2 overflow-hidden">
+            {onPengumuman && (
+              <button onClick={onPengumuman} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3H6l4-3z" /></svg>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Buat pengumuman</span>
+                  <span className="block text-[13px] text-neutral-500">Disematkan di Pantau dan dikirim ke HP tim</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
             {onJuara && (
               <button onClick={onJuara} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
                 <Ico n="trophy" className="h-5 w-5 text-neutral-500" />
