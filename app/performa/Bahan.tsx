@@ -2,13 +2,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import { keyOf } from '../../lib/performa-calc';
-import { SUMBER, type Bahan, type StatusBahan, type Sumber } from '../../lib/bahan-types';
+import { SUMBER, TAHAP_LABEL, tahapOf, type Bahan, type StatusBahan, type Sumber, type Tahap } from '../../lib/bahan-types';
 import { useOverlay } from '../overlay';
 import { rp } from './ui';
 import { Ico, Kosong, shortName } from './parts';
 import { AngkaInput, FIELD } from './form';
 
-// Bahan survey: konsumen yang rencana disurvey / habis disurvey, per staff.
+// Bahan survey: konsumen yang rencana disurvey (bahan survey) dan yang sudah disurvey (sedang diproses), per staff.
 // Tiap bahan punya PIC survey. Staff melihat bahan yang ia buat atau yang PIC-nya dia; owner melihat semua
 // dan bisa menyaring per PIC.
 
@@ -61,16 +61,17 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
   const [agg, setAgg] = useState(!!awal?.agg);
   const [step, setStep] = useState(awal?.step || '');
   const [pic, setPic] = useState(awal ? awal.pic : picAwal);
+  const [tahap, setTahap] = useState<Tahap>(awal ? tahapOf(awal) : 'survey');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  const simpan = async (status: StatusBahan, pesan: string) => {
+  const simpan = async (status: StatusBahan, pesan: string, tahapBaru: Tahap = tahap) => {
     if (!konsumen.trim()) { setErr('Nama konsumen wajib diisi.'); return; }
     setBusy(true); setErr('');
     try {
       const res = await fetch('/api/bahan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, agg: sumber === 'Agent' && agg, step, pic, status }),
+        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, agg: sumber === 'Agent' && agg, step, pic, status, tahap: tahapBaru }),
       });
       const j = await res.json();
       if (!res.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
@@ -98,6 +99,18 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
         <div className="flex items-center justify-between">
           <p className="text-lg font-bold">{awal ? 'Ubah bahan survey' : 'Tambah bahan survey'}</p>
           <button onClick={onClose} className="-mr-2 flex min-h-11 items-center px-2 text-[15px] text-neutral-500">Tutup</button>
+        </div>
+
+        <p className="mt-3 text-[13px] font-semibold text-neutral-500">Tahap</p>
+        <div className="mt-1.5 grid grid-cols-2 gap-2">
+          {([['survey', 'Belum disurvey'], ['proses', 'Sudah disurvey, diproses']] as const).map(([v, t]) => (
+            <button key={v} onClick={() => setTahap(v)} aria-pressed={tahap === v}
+              className={`min-h-11 rounded-2xl border px-3 text-sm font-semibold leading-tight ${tahap === v
+                ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
+                : 'border-neutral-300 dark:border-neutral-700'}`}>
+              {t}
+            </button>
+          ))}
         </div>
 
         <label className="mt-3 block text-[13px] font-semibold text-neutral-500">Nama konsumen
@@ -175,6 +188,10 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
           <div className="mt-2 flex flex-wrap gap-2">
             {awal.status === 'aktif' ? (
               <>
+                {tahapOf(awal) === 'survey' && (
+                  <button onClick={() => simpan('aktif', 'Pindah ke Sedang diproses', 'proses')} disabled={busy}
+                    className="min-h-11 w-full rounded-full border border-neutral-900 px-4 text-sm font-semibold disabled:opacity-60 dark:border-white">Sudah disurvey → pindah ke Sedang diproses</button>
+                )}
                 <button onClick={() => simpan('cair', 'Ditandai sudah cair')} disabled={busy}
                   className="min-h-11 flex-1 rounded-full border border-green-600 px-4 text-sm font-semibold text-green-700 disabled:opacity-60 dark:border-green-500 dark:text-green-300">Sudah cair</button>
                 <button onClick={() => simpan('batal', 'Ditandai batal')} disabled={busy}
@@ -245,6 +262,7 @@ export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsen
   }, [list]);
   const mine = list.filter((b) => !isOwner || siapa === 'semua' || picKey(b) === siapa);
   const aktif = mine.filter((b) => b.status === 'aktif');
+  const perTahap = (t: Tahap) => aktif.filter((b) => tahapOf(b) === t);
   const selesai = mine.filter((b) => b.status !== 'aktif');
   const total = aktif.reduce((s, b) => s + b.nominal, 0);
   const judul = isOwner && siapa !== 'semua' ? shortName(staff.find((s) => s.key === siapa)?.nama || '').toUpperCase() : isOwner ? 'SEMUA PIC' : 'KAMU';
@@ -259,6 +277,9 @@ export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsen
           <span className="whitespace-nowrap rounded-full bg-[#F5C451] px-2.5 py-1 text-xs font-bold text-[#3A2A00]">{loading && !list.length ? '…' : `${aktif.length} bahan`}</span>
         </div>
         <p className="text-[32px] font-bold leading-none tracking-tight">{rp(total)}</p>
+        {aktif.length > 0 && (
+          <p className="text-[13px] text-white/75">{perTahap('survey').length} belum disurvey · {perTahap('proses').length} sedang diproses</p>
+        )}
         <button onClick={onInsentif} className="flex min-h-11 items-center justify-between gap-2 border-t border-white/15 pt-2.5 text-left text-[13px]">
           <span>Kalau semua cair, lihat simulasi insentif</span>
           <Ico n="right" className="h-[18px] w-[18px]" sw={2} />
@@ -291,18 +312,31 @@ export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsen
         </div>
       ) : !err && (
         <>
-          <div className="flex items-baseline justify-between gap-3 px-4 pb-2.5 pt-6">
-            <h2 className="text-[17px] font-bold tracking-tight">Rencana dan habis survey</h2>
-            {aktif.length > 0 && <span className="text-[13px] text-neutral-500">ketuk untuk ubah</span>}
-          </div>
           {aktif.length === 0 ? (
-            <Kosong art="bendera" title="Belum ada bahan survey"
-              text="Catat konsumen yang rencana disurvey atau habis disurvey, supaya progresnya kelihatan dan ikut dihitung di simulasi insentif." />
-          ) : (
-            <div className="flex flex-col gap-2.5 px-4">
-              {aktif.map((b) => <BahanCard key={b.id} b={b} onClick={() => setForm(b)} />)}
+            <div className="pt-4">
+              <Kosong art="bendera" title="Belum ada bahan survey"
+                text="Catat konsumen yang rencana disurvey dan yang sudah disurvey, supaya progresnya kelihatan dan ikut dihitung di simulasi insentif." />
             </div>
-          )}
+          ) : (['survey', 'proses'] as const).map((t) => {
+            const isi = perTahap(t);
+            return (
+              <div key={t}>
+                <div className="flex items-baseline justify-between gap-3 px-4 pb-2.5 pt-6">
+                  <h2 className="text-[17px] font-bold tracking-tight">{TAHAP_LABEL[t]} <span className="font-semibold text-neutral-500">· {isi.length}</span></h2>
+                  <span className="text-[13px] text-neutral-500">{isi.length ? rp(isi.reduce((x, b) => x + b.nominal, 0)) : t === 'survey' ? 'belum disurvey' : 'sudah disurvey'}</span>
+                </div>
+                {isi.length === 0 ? (
+                  <p className="mx-4 rounded-2xl bg-neutral-100 px-4 py-3 text-sm text-neutral-500 dark:bg-neutral-900">
+                    {t === 'survey' ? 'Tidak ada yang menunggu survey.' : 'Belum ada yang sedang diproses. Tandai bahan yang sudah disurvey dari kartunya.'}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2.5 px-4">
+                    {isi.map((b) => <BahanCard key={b.id} b={b} onClick={() => setForm(b)} />)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           <div className="px-4 pt-3">
             <button onClick={() => setForm('baru')}

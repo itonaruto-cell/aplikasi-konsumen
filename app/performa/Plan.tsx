@@ -10,7 +10,7 @@ import {
 import { BrandChip, Ico, Kosong, PillSeg, UnderTabs, shareText, shortName, type BrandId } from './parts';
 import { FIELD, Lembar } from './form';
 import BahanSurvey, { sumberLabel, useBahan } from './Bahan';
-import type { Bahan } from '../../lib/bahan-types';
+import { tahapOf, type Bahan } from '../../lib/bahan-types';
 import { rp } from './ui';
 
 // Plan aktivitas: rencana pagi (minimal 5 aktivitas per staff), realisasi dicentang sepanjang hari,
@@ -64,28 +64,35 @@ function TombolWa({ teks, label, onInfo }: { teks: string; label: string; onInfo
 }
 
 /* ---------- Bahan survey di dalam report ---------- */
+// Dua blok: bahan yang belum disurvey dan yang sedang diproses. Tiap blok dikelompokkan per PIC survey
+// (jumlah bahan dan nominal tiap PIC), dengan total blok di baris paling atas. Yang belum punya PIC di paling bawah.
 function teksBahan(list: Bahan[]): string {
-  // Dikelompokkan per PIC survey (jumlah bahan dan nominal tiap PIC), total semua bahan di baris paling atas.
-  // Yang belum punya PIC dikumpulkan di paling bawah.
   const total = (x: Bahan[]) => `${x.length} bahan · ${rp(x.reduce((s, b) => s + b.nominal, 0))}`;
-  const grup = new Map<string, { nama: string; items: Bahan[] }>();
-  list.forEach((b) => {
-    const k = keyOf(b.pic);
-    const g = grup.get(k) || { nama: b.pic ? shortName(b.pic) : '', items: [] };
-    g.items.push(b); grup.set(k, g);
-  });
-  const urut = [...grup.values()].sort((a, b) => Number(!a.nama) - Number(!b.nama) || a.nama.localeCompare(b.nama));
-  return [
-    `*BAHAN SURVEY* · ${total(list)}`,
-    ...urut.map((g) => [
-      `*PIC ${g.nama || 'belum diisi'}* · ${total(g.items)}`,
-      ...[...g.items].sort((a, b) => a.konsumen.localeCompare(b.konsumen)).map((b, i) => [
-        `${i + 1}. ${b.konsumen} · ${b.nominal ? rp(b.nominal) : 'nominal belum diisi'}`,
-        `   Sumber: ${sumberLabel(b)}`,
-        `   Step: ${b.step || 'belum diisi'}`,
+  const blok = (judul: string, isi: Bahan[]) => {
+    const grup = new Map<string, { nama: string; items: Bahan[] }>();
+    isi.forEach((b) => {
+      const k = keyOf(b.pic);
+      const g = grup.get(k) || { nama: b.pic ? shortName(b.pic) : '', items: [] };
+      g.items.push(b); grup.set(k, g);
+    });
+    const urut = [...grup.values()].sort((a, b) => Number(!a.nama) - Number(!b.nama) || a.nama.localeCompare(b.nama));
+    return [
+      `*${judul}* · ${total(isi)}`,
+      ...urut.map((g) => [
+        `*PIC ${g.nama || 'belum diisi'}* · ${total(g.items)}`,
+        ...[...g.items].sort((a, b) => a.konsumen.localeCompare(b.konsumen)).map((b, i) => [
+          `${i + 1}. ${b.konsumen} · ${b.nominal ? rp(b.nominal) : 'nominal belum diisi'}`,
+          `   Sumber: ${sumberLabel(b)}`,
+          `   Step: ${b.step || 'belum diisi'}`,
+        ].join('\n')),
       ].join('\n')),
-    ].join('\n')),
-  ].join('\n\n');
+    ].join('\n\n');
+  };
+  const survey = list.filter((b) => tahapOf(b) === 'survey'), proses = list.filter((b) => tahapOf(b) === 'proses');
+  return [
+    survey.length ? blok('BAHAN SURVEY', survey) : '',
+    proses.length ? blok('SEDANG DIPROSES', proses) : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 /* ---------- Muat plan satu hari ---------- */
@@ -212,7 +219,9 @@ function TambahSheet({ c, me, tgl, hariIni, sudah, reloadKey, onClose, onSaved }
         .map((k) => ({ siapa: k.n, lokasi: k.k, ket: `P${k.p} · ${belumVisit(k) ? 'belum visit' : perluUlang(k) ? 'perlu visit ulang' : 'sudah bertemu'}` }));
     }
     if (jenis === 'survey' || jenis === 'map') {
-      return bahan.list.filter((b) => b.status === 'aktif').map((b) => ({ siapa: b.konsumen, lokasi: '', ket: b.step || 'Bahan survey' }));
+      // Survey: bahan yang belum disurvey; map pencairan: bahan yang sedang diproses
+      return bahan.list.filter((b) => b.status === 'aktif' && tahapOf(b) === (jenis === 'survey' ? 'survey' : 'proses'))
+        .map((b) => ({ siapa: b.konsumen, lokasi: '', ket: b.step || (jenis === 'survey' ? 'Bahan survey' : 'Sedang diproses') }));
     }
     return [];
   }, [jenis, me, c, bahan.list]);

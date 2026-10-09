@@ -380,6 +380,42 @@ export function staleInfo(data: Performa, now = new Date()): string {
   return msgs.join(' ');
 }
 
+/* ---------- Data pantauan: masih bulan lalu / kiriman berhenti ---------- */
+const NAMA_BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+export const namaBulan = (ym: string) => NAMA_BULAN[Number(String(ym).slice(5, 7)) - 1] || '';
+export type CekData = {
+  tingkat: 'aman' | 'telat' | 'gawat';
+  teks: string;
+  sebab: '' | 'bulan' | 'kiriman' | 'sheet';
+  bulanData: string | null;  // YYYY-MM menurut tanggal "UPDATE PER" di sheet
+  bedaBulan: boolean;        // data yang tampil masih bulan sebelumnya
+};
+// gawat = angka di aplikasi pasti salah untuk bulan ini (masih bulan lalu sejak tgl 3, atau kiriman berhenti >26 jam)
+// telat = angka mungkin belum terbaru
+export function cekData(data: Performa, now = new Date()): CekData {
+  const today = todayJkt(now);
+  const upd = day10(data.updated || '');
+  const bulanData = validDay(upd) ? upd.slice(0, 7) : null;
+  const bedaBulan = !!bulanData && bulanData < today.slice(0, 7);
+  const sent = new Date(data.dikirim || '').getTime();
+  const jam = isFinite(sent) ? Math.floor((now.getTime() - sent) / 3600_000) : null;
+  const lama = (j: number) => (j >= 48 ? `${Math.floor(j / 24)} hari` : `${j} jam`);
+  if (bedaBulan) {
+    const awal = Number(today.slice(8, 10)) <= 2;
+    return {
+      tingkat: awal ? 'telat' : 'gawat', sebab: 'bulan', bulanData, bedaBulan,
+      teks: awal
+        ? `Angka yang tampil masih data ${namaBulan(bulanData!)}. File pantauan ${namaBulan(today)} biasanya baru ada di awal bulan.`
+        : `Angka yang tampil masih data ${namaBulan(bulanData!)}, bukan ${namaBulan(today)}. File pantauan ${namaBulan(today)} belum tersambung ke aplikasi.`,
+    };
+  }
+  if (jam !== null && jam >= 26) {
+    return { tingkat: 'gawat', sebab: 'kiriman', bulanData, bedaBulan, teks: `Kiriman otomatis dari sheet pantauan berhenti ${lama(jam)} lalu. Angka di aplikasi tidak ikut berubah.` };
+  }
+  const t = staleInfo(data, now);
+  return { tingkat: t ? 'telat' : 'aman', sebab: t ? 'sheet' : '', bulanData, bedaBulan, teks: t };
+}
+
 /* ---------- Teks untuk dibagikan (WhatsApp) ---------- */
 const title = (s: string) => String(s || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 const short = (n: string) => title(String(n).split(/\s+/).find((w) => !/^(MUHAMMAD|MUHAMAD|MOHAMMAD|MOH\.?|MOCH\.?|M\.?)$/i.test(w)) || n);

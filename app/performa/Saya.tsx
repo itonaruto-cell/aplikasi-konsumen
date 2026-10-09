@@ -9,9 +9,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -70,16 +70,26 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
         </Card>
       )}
 
-      {(onBahan || onInsentif || onInject) && (
+      {(onBahan || onInsentif || onInject || onJuara) && (
         <>
           <p className="mt-8 text-[15px] font-bold">Alat kerja</p>
           <Card className="mt-2 overflow-hidden">
+            {onJuara && (
+              <button onClick={onJuara} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <Ico n="trophy" className="h-5 w-5 text-neutral-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Papan juara</span>
+                  <span className="block text-[13px] text-neutral-500">Peringkat amount, unit, visit, dan maintain</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
             {onBahan && (
               <button onClick={onBahan} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
                 <Ico n="pin" className="h-5 w-5 text-neutral-500" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px]">Bahan survey</span>
-                  <span className="block text-[13px] text-neutral-500">Rencana dan habis survey, nominal, step</span>
+                  <span className="block text-[13px] text-neutral-500">Belum disurvey dan sedang diproses</span>
                 </span>
                 <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
               </button>
