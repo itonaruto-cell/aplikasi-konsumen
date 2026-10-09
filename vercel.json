@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/cek-data", "schedule": "0 0 * * *" }
+  ]
+}

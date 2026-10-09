@@ -18,7 +18,7 @@ import { useBahan } from './Bahan';
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 type Simpanan = { bulan: string; isi: Record<string, Partial<Masukan>>; tetap: Partial<Masukan>; jenis: Record<string, Jenis> };
 const KEY = 'ck_insentif';
-const CABANG = '__cabang';
+export const CABANG = '__cabang';
 const URUT: Jenis[] = ['bmh', 'cmo', 'mao', 'maoBaru'];
 const TETAP: (keyof Masukan)[] = ['kategori', 'targetAmount', 'targetUnit'];   // BMH: berlaku lintas bulan
 
@@ -38,7 +38,7 @@ const buang = (o: Partial<Masukan>): Partial<Masukan> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<Masukan>;
 
 // Angka yang bisa diambil dari pantauan: sales amount & unit bulan berjalan, dan aktivitas (visit + order in)
-function dariPantauan(c: Ctx | null, key: string): Partial<Masukan> {
+export function dariPantauan(c: Ctx | null, key: string): Partial<Masukan> {
   if (!c) return {};
   if (key === CABANG) {
     const mob = c.sales.filter((o) => brandOf(o) === 'mobilku');

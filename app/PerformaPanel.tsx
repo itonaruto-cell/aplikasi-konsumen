@@ -18,8 +18,9 @@ import BahanSurvey from './performa/Bahan';
 import Insentif from './performa/Insentif';
 import InjectP3 from './performa/Inject';
 import Plan, { PlanKartu } from './performa/Plan';
+import Kejar from './performa/Kejar';
 
-// Kerangka aplikasi (gaya sosmed): Pantau (pantauan cabang / Mobilku / Motorku), Plan (plan aktivitas harian), Juara, Rute,
+// Kerangka aplikasi (gaya sosmed): Pantau (pantauan cabang / Mobilku / Motorku), Plan (plan aktivitas harian), Rute,
 // Cari (khusus owner/konsumen), Saya.
 // Bahan survey, Insentif, dan Inject P3 dibuka dari halaman Saya.
 // Data performa boleh dilihat semua akun terdaftar; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
@@ -211,7 +212,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const TITLE: Record<Page, string> = { pantau: namaApp, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3' };
 
   const NAV: [Page, string, string][] = [
-    ['pantau', 'chart', 'Pantau'], ['plan', 'list', 'Plan'], ['juara', 'trophy', 'Juara'], ['rute', 'pin', 'Rute'],
+    ['pantau', 'chart', 'Pantau'], ['plan', 'list', 'Plan'], ['rute', 'pin', 'Rute'],
     ...(cari ? [['cari', 'search', 'Cari'] as [Page, string, string]] : []),
     ['saya', 'user', 'Saya'],
   ];
@@ -287,11 +288,12 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
               <Pantau c={c} me={me} akun={akun} push={push}
                 pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
                 openWrapped={() => setWrap(true)}
-                plan={<PlanKartu akun={akun} reloadKey={reloadKey} onOpen={() => go('plan')} />} />
+                plan={<PlanKartu akun={akun} reloadKey={reloadKey} onOpen={() => go('plan')} />}
+                kejar={(cek) => <Kejar c={c} me={me} spv={spv} isOwner={akun.role === 'owner'} reloadKey={reloadKey} cek={cek} onBahan={() => go('bahan')} />} />
             )}
             {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
             {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} />}
+            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} />}
           </>
         )}
       </div>
@@ -300,7 +302,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       <nav aria-label="Menu utama" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <div className="mx-auto grid max-w-xl" style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}>
           {NAV.map(([k, icon, label]) => {
-            const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif' || page === 'inject'));
+            const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif' || page === 'inject' || page === 'juara'));
             return (
               <button key={k} onClick={() => (k === page ? window.scrollTo({ top: 0, behavior: 'smooth' }) : go(k))}
                 aria-current={on ? 'page' : undefined}

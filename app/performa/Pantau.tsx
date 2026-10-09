@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import type { Blok, KonsumenFull, Orang, Pengumuman, Performa, Sales } from '../../lib/performa-types';
-import { brandOf, hariKerjaSisa, isNum, pace, staleInfo, type Ctx } from '../../lib/performa-calc';
+import { brandOf, cekData, hariKerjaSisa, isNum, namaBulan, pace, type CekData, type Ctx } from '../../lib/performa-calc';
 import { angka, nama, rp, type Push } from './ui';
 import {
   Avatar, BRAND, BrandArt, BrandChip, BrandIcon, CountPct, Ico, Kosong, Line, shortName, type BrandId,
@@ -60,15 +60,20 @@ function Legend({ items }: { items: [string, string][] }) {
 const C_GO = 'bg-[#1FA463]', C_PEN = 'bg-[#F2A33A]', C_REJ = 'bg-[#E5484D]', C_CAN = 'bg-neutral-400', C_BAN = 'bg-[#6C8CD5]';
 
 /* ---------- Kartu utama ---------- */
-function Hero({ title, amount, unit, today, b }: { title: string; amount: Sales | null; unit: Sales | null; today: string; b?: BrandId }) {
-  const pa = pace(amount?.ini, amount?.target, today), pu = pace(unit?.ini, unit?.target, today);
+function Hero({ title, amount, unit, today, b, lama }: { title: string; amount: Sales | null; unit: Sales | null; today: string; b?: BrandId; lama?: string }) {
+  // lama = nama bulan data kalau yang tampil masih data bulan lalu: sisa hari & kejar per hari tidak berlaku
+  const pa = lama ? null : pace(amount?.ini, amount?.target, today), pu = lama ? null : pace(unit?.ini, unit?.target, today);
   const hari = hariKerjaSisa(today);
   return (
     <section className={`relative mx-4 mt-3 overflow-hidden rounded-[22px] p-[18px] text-white ${b ? BRAND[b].grad : 'bg-neutral-900 dark:ring-1 dark:ring-neutral-800'}`}>
       {b && <span className="pointer-events-none absolute -right-8 top-2 text-white/15"><BrandArt b={b} className="h-24 w-48" /></span>}
       <div className="relative flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-[13px] font-bold tracking-wide text-white/80">{b && <BrandIcon b={b} />}{title}</span>
-        <span className="whitespace-nowrap rounded-full bg-[#F5C451] px-2.5 py-1 text-xs font-bold text-[#3A2A00]">{hari > 1 ? `Sisa ${hari} hari kerja` : hari === 1 ? 'Hari kerja terakhir' : 'Bulan selesai'}</span>
+        {lama ? (
+          <span className="whitespace-nowrap rounded-full bg-[#FF8A8A] px-2.5 py-1 text-xs font-bold text-[#3A0000]">Data {lama}</span>
+        ) : (
+          <span className="whitespace-nowrap rounded-full bg-[#F5C451] px-2.5 py-1 text-xs font-bold text-[#3A2A00]">{hari > 1 ? `Sisa ${hari} hari kerja` : hari === 1 ? 'Hari kerja terakhir' : 'Bulan selesai'}</span>
+        )}
       </div>
       <div className="relative mt-3 grid grid-cols-2 gap-4">
         {([['Amount', amount, true], ['Unit', unit, false]] as const).map(([l, s, money]) => (
@@ -257,7 +262,7 @@ function Cabang({ c, push, goBrand }: { c: Ctx; push: Push; goBrand: (b: BrandId
 }
 
 /* ---------- Tab Mobilku / Motorku ---------- */
-function BrandTab({ c, b, push }: { c: Ctx; b: BrandId; push: Push }) {
+function BrandTab({ c, b, push, bulan, lama }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string }) {
   const data = c.data, a = data.aktivitas, B = BRAND[b];
   const tot = brandTotals(c)(b);
   const mt = a?.maintain?.[b], rk = a?.rekrut?.[b];
@@ -295,8 +300,8 @@ function BrandTab({ c, b, push }: { c: Ctx; b: BrandId; push: Push }) {
 
   return (
     <>
-      <Hero title={`${B.label.toUpperCase()} · ${new Date(c.today + 'T00:00:00Z').toLocaleDateString('id-ID', { month: 'long', timeZone: 'UTC' }).toUpperCase()}`}
-        amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} />
+      <Hero title={`${B.label.toUpperCase()} · ${bulan.toUpperCase()}`}
+        amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} lama={lama} />
 
       <div className="mt-3 grid grid-cols-3 gap-2 px-4">
         <button disabled={!maAll.length} onClick={() => push({ t: 'maList', title: `MA ${B.label}`, sub: `${mt?.ma || 0} MA`, items: maAll })}
@@ -407,9 +412,10 @@ function BrandTab({ c, b, push }: { c: Ctx; b: BrandId; push: Push }) {
 type Tab = 'cabang' | BrandId;
 const TABS: Tab[] = ['cabang', 'mobilku', 'motorku'];
 
-export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped, plan }: {
+export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped, plan, kejar }: {
   c: Ctx; me: Orang | null; akun: { name?: string }; push: Push;
-  pengumuman: Pengumuman[]; isOwner: boolean; onPengumuman: () => void; buatPengumuman: () => void; openWrapped: () => void; plan?: ReactNode;
+  pengumuman: Pengumuman[]; isOwner: boolean; onPengumuman: () => void; buatPengumuman: () => void; openWrapped: () => void;
+  plan?: ReactNode; kejar?: (cek: CekData) => ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>('cabang');
   const [dir, setDir] = useState<'kanan' | 'kiri'>('kanan');
@@ -426,7 +432,11 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
   };
 
   const data = c.data;
-  const stale = staleInfo(data);
+  const cek = cekData(data);
+  const [caraBuka, setCaraBuka] = useState(false);
+  // Judul bulan mengikuti data yang tampil; kalau masih data bulan lalu, ditandai di kartu utama
+  const bulan = cek.bedaBulan && cek.bulanData ? namaBulan(cek.bulanData) : namaBulan(c.today);
+  const lama = cek.bedaBulan && cek.bulanData ? namaBulan(cek.bulanData) : undefined;
   const jam = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', hour12: false }).format(new Date()));
   const salam = jam < 11 ? 'Pagi' : jam < 15 ? 'Siang' : jam < 18 ? 'Sore' : 'Malam';
   const panggil = me ? shortName(me.nama) : (akun.name || '').split(' ')[0];
@@ -459,9 +469,39 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
         })}
       </div>
 
-      {stale && (
+      {cek.tingkat === 'telat' && (
         <div role="status" className="flex items-start gap-2 bg-[#FFF4E0] px-4 py-2.5 text-[13px] leading-snug text-[#5C2F00] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">
-          <Ico n="refresh" className="mt-px h-4 w-4 shrink-0" sw={2} />{stale}
+          <Ico n="refresh" className="mt-px h-4 w-4 shrink-0" sw={2} />{cek.teks}
+        </div>
+      )}
+      {cek.tingkat === 'gawat' && (
+        <div role="alert" className="bg-[#FDECEC] px-4 py-3 text-[#7A1010] dark:bg-[#3A1212] dark:text-[#FFB4B4]">
+          <p className="flex items-start gap-2 text-sm font-semibold leading-snug">
+            <svg viewBox="0 0 24 24" className="mt-px h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z" /><path d="M12 10v4m0 3v.01" /></svg>
+            <span>{cek.teks}</span>
+          </p>
+          {isOwner ? (
+            <>
+              <button onClick={() => setCaraBuka((v) => !v)} aria-expanded={caraBuka}
+                className="mt-1 min-h-10 pl-[26px] text-[13px] font-bold underline">{caraBuka ? 'Tutup cara memperbaiki' : 'Cara memperbaiki'}</button>
+              {caraBuka && (
+                <ol className="list-decimal space-y-1 pb-1 pl-[44px] pr-1 text-[13px] leading-snug">
+                  {cek.sebab === 'bulan' ? (<>
+                    <li>Pastikan file <b>PANTAUAN CABANG KENDAL {namaBulan(c.today).toUpperCase()} {c.today.slice(0, 4)} (APP)</b> sudah ada dan bisa dibuka akun Google yang menjalankan Apps Script.</li>
+                    <li>Buka Apps Script pantauan, jalankan <b>cekFileBulanIni</b>, lalu lihat Log: nama file yang dipakai harus file bulan ini.</li>
+                    <li>Kalau fungsi cekFileBulanIni tidak ada, Code.gs masih versi lama yang tidak mencari file sendiri. Ganti dengan versi terbaru, atau ganti SPREADSHEET_ID ke ID file bulan ini.</li>
+                    <li>Jalankan <b>kirimPerforma</b> sekali, lalu muat ulang aplikasi.</li>
+                  </>) : (<>
+                    <li>Buka Apps Script pantauan, menu <b>Pemicu</b> (ikon jam): pemicu <b>kirimPerforma</b> harus ada dan tidak error.</li>
+                    <li>Kalau tidak ada, jalankan <b>pasangJadwalPerforma</b> sekali.</li>
+                    <li>Jalankan <b>kirimPerforma</b> untuk mengirim sekarang, lalu muat ulang aplikasi.</li>
+                  </>)}
+                </ol>
+              )}
+            </>
+          ) : (
+            <p className="mt-1 pl-[26px] text-[13px] leading-snug">Owner sudah diberi tahu. Sementara itu, pakai angka ini dengan hati-hati.</p>
+          )}
         </div>
       )}
 
@@ -472,9 +512,10 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F5C451] text-[#6B4A00]">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
               </span>
-              <span className="text-sm leading-snug"><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {sapa}</span>
+              <span className="text-sm leading-snug"><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {cek.bedaBulan ? `Angka ${namaBulan(c.today)} belum masuk ke aplikasi.` : sapa}</span>
             </div>
             {plan}
+            {kejar?.(cek)}
             <PengumumanList list={pengumuman} brand="semua" isOwner={isOwner} onChanged={onPengumuman} onCreate={buatPengumuman} />
             <NotifPrompt nama={me?.nama || ''} />
             {showWrapped && (
@@ -484,12 +525,12 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
                 <Ico n="right" className="h-5 w-5" sw={2} />
               </button>
             )}
-            <Hero title={`${nama(data.cabang).toUpperCase()} · ${new Date(c.today + 'T00:00:00Z').toLocaleDateString('id-ID', { month: 'long', timeZone: 'UTC' }).toUpperCase()}`}
-              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} />
+            <Hero title={`${nama(data.cabang).toUpperCase()} · ${bulan.toUpperCase()}`}
+              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} />
             <Cabang c={c} push={push} goBrand={go} />
           </>
         ) : (
-          <BrandTab c={c} b={tab} push={push} />
+          <BrandTab c={c} b={tab} push={push} bulan={bulan} lama={lama} />
         )}
       </div>
       <p className="px-4 pt-5 text-[13px] text-neutral-500">Geser kiri–kanan untuk pindah Cabang · Mobilku · Motorku. Tarik ke bawah untuk memuat ulang.</p>
