@@ -17,7 +17,7 @@ import Sorotan from './performa/Sorotan';
 import BahanSurvey from './performa/Bahan';
 import Insentif from './performa/Insentif';
 import InjectP3 from './performa/Inject';
-import Plan, { PlanKartu } from './performa/Plan';
+import Plan from './performa/Plan';
 import Kejar from './performa/Kejar';
 
 // Kerangka aplikasi (gaya sosmed): Pantau (pantauan cabang / Mobilku / Motorku), Plan (plan aktivitas harian), Rute,
@@ -288,7 +288,6 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
               <Pantau c={c} me={me} akun={akun} push={push}
                 pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
                 openWrapped={() => setWrap(true)}
-                plan={<PlanKartu akun={akun} reloadKey={reloadKey} onOpen={() => go('plan')} />}
                 kejar={(cek) => <Kejar c={c} me={me} spv={spv} isOwner={akun.role === 'owner'} reloadKey={reloadKey} cek={cek} onBahan={() => go('bahan')} />} />
             )}
             {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
