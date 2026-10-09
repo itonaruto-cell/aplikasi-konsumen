@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import type { Blok, KonsumenFull, Orang, Pengumuman, Performa, Sales } from '../../lib/performa-types';
 import { brandOf, cekData, hariKerjaSisa, isNum, namaBulan, pace, type CekData, type Ctx } from '../../lib/performa-calc';
 import { angka, nama, rp, type Push } from './ui';
@@ -412,6 +412,37 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
   );
 }
 
+/* ---------- Sapaan pembuka: tampil sekali tiap aplikasi dibuka, hilang sendiri ---------- */
+let sapaSudah = false;
+function Sapa({ teks }: { teks: ReactNode }) {
+  const [tahap, setTahap] = useState<'tampil' | 'pergi' | 'hilang'>(() => (sapaSudah ? 'hilang' : 'tampil'));
+  useEffect(() => {
+    if (tahap !== 'tampil') return;
+    sapaSudah = true;
+    const t1 = setTimeout(() => setTahap('pergi'), 4500);
+    return () => clearTimeout(t1);
+  }, [tahap]);
+  useEffect(() => {
+    if (tahap !== 'pergi') return;
+    const t2 = setTimeout(() => setTahap('hilang'), 450);
+    return () => clearTimeout(t2);
+  }, [tahap]);
+  if (tahap === 'hilang') return null;
+  return (
+    <div className={`grid transition-all duration-[450ms] ease-out motion-reduce:transition-none ${tahap === 'pergi' ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}>
+      <div className="overflow-hidden">
+        <button onClick={() => setTahap('pergi')} aria-label="Tutup sapaan"
+          className="mx-4 mt-3 flex w-[calc(100%-32px)] items-center gap-3 rounded-2xl bg-[#FFF8E8] px-3.5 py-3 text-left text-[#4A3A12] dark:bg-[#1E1A10] dark:text-[#F7DFA6]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F5C451] text-[#6B4A00]">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+          </span>
+          <span className="text-sm leading-snug">{teks}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Halaman Pantau ---------- */
 type Tab = 'cabang' | BrandId;
 const TABS: Tab[] = ['cabang', 'mobilku', 'motorku'];
@@ -512,17 +543,13 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
       <div key={tab} className={dir === 'kanan' ? 'ck-in-right' : 'ck-in-left'}>
         {tab === 'cabang' ? (
           <>
+            {/* Sapaan hanya sebentar saat aplikasi baru dibuka, lalu menghilang */}
+            <Sapa teks={<><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {cek.bedaBulan ? `Angka ${namaBulan(c.today)} belum masuk ke aplikasi.` : sapa}</>} />
             {/* Achievement dulu: cabang, lalu Mobilku & Motorku */}
             <Hero title={`${nama(data.cabang).toUpperCase()} · ${bulan.toUpperCase()}`}
               amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} />
             <BrandCards c={c} goBrand={go} />
-            <div className="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-[#FFF8E8] px-3.5 py-3 text-[#4A3A12] dark:bg-[#1E1A10] dark:text-[#F7DFA6]">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F5C451] text-[#6B4A00]">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
-              </span>
-              <span className="text-sm leading-snug"><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {cek.bedaBulan ? `Angka ${namaBulan(c.today)} belum masuk ke aplikasi.` : sapa}</span>
-            </div>
-            <PengumumanList list={pengumuman} brand="semua" isOwner={isOwner} onChanged={onPengumuman} onCreate={buatPengumuman} />
+            <PengumumanList list={pengumuman} brand="semua" isOwner={isOwner} onChanged={onPengumuman} />
             <NotifPrompt nama={me?.nama || ''} />
             {showWrapped && (
               <button onClick={openWrapped} className="relative mx-4 mt-3 flex w-[calc(100%-32px)] items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-[#1B2F5B] to-[#1D6A4B] px-4 py-3.5 text-left text-white active:opacity-90">

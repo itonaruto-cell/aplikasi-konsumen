@@ -19,7 +19,7 @@ const akhirBulan = () => {
 
 /* ---------- Kartu pengumuman disematkan ---------- */
 export function PengumumanList({ list, brand, isOwner, onChanged, onCreate }: {
-  list: Pengumuman[]; brand: BrandKey; isOwner: boolean; onChanged: () => void; onCreate: () => void;
+  list: Pengumuman[]; brand: BrandKey; isOwner: boolean; onChanged: () => void; onCreate?: () => void;
 }) {
   const [busy, setBusy] = useState('');
   const shown = list.filter((p) => brand === 'semua' || p.untuk === 'semua' || p.untuk === brand);
@@ -30,7 +30,7 @@ export function PengumumanList({ list, brand, isOwner, onChanged, onCreate }: {
     setBusy('');
     onChanged();
   };
-  if (!shown.length && !isOwner) return null;
+  if (!shown.length && !(isOwner && onCreate)) return null;
   return (
     <div className="flex flex-col gap-2.5 px-4 pt-4">
       {shown.map((p) => (
@@ -55,7 +55,7 @@ export function PengumumanList({ list, brand, isOwner, onChanged, onCreate }: {
           </div>
         </article>
       ))}
-      {isOwner && (
+      {isOwner && onCreate && (
         <button onClick={onCreate}
           className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 text-[15px] font-semibold text-neutral-600 active:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:active:bg-neutral-900">
           <span className="text-lg leading-none">+</span> Buat pengumuman
