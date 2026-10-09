@@ -164,9 +164,29 @@ function brandTotals(c: Ctx) {
   return (b: BrandId) => ({ unit: get(b, 'unit'), amount: get(b, 'amount') });
 }
 
-function Cabang({ c, push, goBrand }: { c: Ctx; push: Push; goBrand: (b: BrandId) => void }) {
-  const [f, setF] = useState<'semua' | BrandId>('semua');
+// Achievement Mobilku & Motorku, tepat di bawah kartu cabang (ketuk untuk pindah ke tab brand)
+function BrandCards({ c, goBrand }: { c: Ctx; goBrand: (b: BrandId) => void }) {
   const tot = brandTotals(c);
+  return (
+    <div className="mt-2.5 grid grid-cols-2 gap-2.5 px-4">
+      {(['mobilku', 'motorku'] as const).map((b) => {
+        const t = tot(b);
+        return (
+          <button key={b} onClick={() => goBrand(b)} className={`relative min-h-[150px] overflow-hidden rounded-[20px] p-3.5 text-left text-white ${BRAND[b].bg} active:opacity-90`}>
+            <span className="relative flex items-center gap-1.5 text-xs font-bold text-white/80"><BrandIcon b={b} className="h-4 w-4" />{BRAND[b].label.toUpperCase()}</span>
+            <span className="relative mt-1 block text-[28px] font-bold leading-tight">{pct(t.amount?.ach)}</span>
+            <span className="relative block text-xs text-white/75">{t.amount ? `${rp(t.amount.ini)} / ${rp(t.amount.target).replace('Rp ', '')}` : '–'}</span>
+            <span className="relative mt-1 block text-xs">Unit <b>{t.unit ? `${angka(t.unit.ini)}/${angka(t.unit.target)}` : '–'}</b> · {pct(t.unit?.ach)}</span>
+            <span className="pointer-events-none absolute -bottom-2 -right-5 text-white/20"><BrandArt b={b} className="h-14 w-28" /></span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Cabang({ c, push }: { c: Ctx; push: Push }) {
+  const [f, setF] = useState<'semua' | BrandId>('semua');
   const oi = c.sales.filter((o) => o.oi && isNum(o.oi.total) && (o.oi.total as number) > 0)
     .sort((a, b) => (b.oi!.successRate ?? 0) - (a.oi!.successRate ?? 0));
   const ap = c.sales.filter((o) => o.approval && (o.approval.total || 0) > 0);
@@ -187,23 +207,6 @@ function Cabang({ c, push, goBrand }: { c: Ctx; push: Push; goBrand: (b: BrandId
           </div>
         </div>
         <PicList c={c} push={push} filter={f} />
-      </Sec>
-
-      <Sec title="Sales per brand" right="ketuk untuk detail">
-        <div className="grid grid-cols-2 gap-2.5 px-4">
-          {(['mobilku', 'motorku'] as const).map((b) => {
-            const t = tot(b);
-            return (
-              <button key={b} onClick={() => goBrand(b)} className={`relative min-h-[150px] overflow-hidden rounded-[20px] p-3.5 text-left text-white ${BRAND[b].bg} active:opacity-90`}>
-                <span className="relative flex items-center gap-1.5 text-xs font-bold text-white/80"><BrandIcon b={b} className="h-4 w-4" />{BRAND[b].label.toUpperCase()}</span>
-                <span className="relative mt-1 block text-[28px] font-bold leading-tight">{pct(t.amount?.ach)}</span>
-                <span className="relative block text-xs text-white/75">{t.amount ? `${rp(t.amount.ini)} / ${rp(t.amount.target).replace('Rp ', '')}` : '–'}</span>
-                <span className="relative mt-1 block text-xs">Unit <b>{t.unit ? `${angka(t.unit.ini)}/${angka(t.unit.target)}` : '–'}</b> · {pct(t.unit?.ach)}</span>
-                <span className="pointer-events-none absolute -bottom-2 -right-5 text-white/20"><BrandArt b={b} className="h-14 w-28" /></span>
-              </button>
-            );
-          })}
-        </div>
       </Sec>
 
       {oi.length > 0 && (
@@ -262,7 +265,7 @@ function Cabang({ c, push, goBrand }: { c: Ctx; push: Push; goBrand: (b: BrandId
 }
 
 /* ---------- Tab Mobilku / Motorku ---------- */
-function BrandTab({ c, b, push, bulan, lama }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string }) {
+function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string; extra?: ReactNode }) {
   const data = c.data, a = data.aktivitas, B = BRAND[b];
   const tot = brandTotals(c)(b);
   const mt = a?.maintain?.[b], rk = a?.rekrut?.[b];
@@ -302,6 +305,7 @@ function BrandTab({ c, b, push, bulan, lama }: { c: Ctx; b: BrandId; push: Push;
     <>
       <Hero title={`${B.label.toUpperCase()} · ${bulan.toUpperCase()}`}
         amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} lama={lama} />
+      {extra}
 
       <div className="mt-3 grid grid-cols-3 gap-2 px-4">
         <button disabled={!maAll.length} onClick={() => push({ t: 'maList', title: `MA ${B.label}`, sub: `${mt?.ma || 0} MA`, items: maAll })}
@@ -508,14 +512,16 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
       <div key={tab} className={dir === 'kanan' ? 'ck-in-right' : 'ck-in-left'}>
         {tab === 'cabang' ? (
           <>
+            {/* Achievement dulu: cabang, lalu Mobilku & Motorku */}
+            <Hero title={`${nama(data.cabang).toUpperCase()} · ${bulan.toUpperCase()}`}
+              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} />
+            <BrandCards c={c} goBrand={go} />
             <div className="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-[#FFF8E8] px-3.5 py-3 text-[#4A3A12] dark:bg-[#1E1A10] dark:text-[#F7DFA6]">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F5C451] text-[#6B4A00]">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
               </span>
               <span className="text-sm leading-snug"><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {cek.bedaBulan ? `Angka ${namaBulan(c.today)} belum masuk ke aplikasi.` : sapa}</span>
             </div>
-            {plan}
-            {kejar?.(cek)}
             <PengumumanList list={pengumuman} brand="semua" isOwner={isOwner} onChanged={onPengumuman} onCreate={buatPengumuman} />
             <NotifPrompt nama={me?.nama || ''} />
             {showWrapped && (
@@ -525,12 +531,10 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
                 <Ico n="right" className="h-5 w-5" sw={2} />
               </button>
             )}
-            <Hero title={`${nama(data.cabang).toUpperCase()} · ${bulan.toUpperCase()}`}
-              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} />
-            <Cabang c={c} push={push} goBrand={go} />
+            <Cabang c={c} push={push} />
           </>
         ) : (
-          <BrandTab c={c} b={tab} push={push} bulan={bulan} lama={lama} />
+          <BrandTab c={c} b={tab} push={push} bulan={bulan} lama={lama} extra={tab === 'mobilku' ? kejar?.(cek) : undefined} />
         )}
       </div>
       <p className="px-4 pt-5 text-[13px] text-neutral-500">Geser kiri–kanan untuk pindah Cabang · Mobilku · Motorku. Tarik ke bawah untuk memuat ulang.</p>
