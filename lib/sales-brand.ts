@@ -81,6 +81,47 @@ const barisTotal = (b: Blok | undefined): Sales | null => {
   return { lalu: n(r[2]), ini: r[3] as number, target: n(r[4]), ach: n(r[5]), diffLalu: n(r[6]), diffTarget: n(r[7]) };
 };
 
+/* ---------- Kolom "bulan lalu" di tabel per brand ---------- */
+// Mulai Oktober kolom bulan lalu di tabel per brand bernilai 0. Diisi dari salesLalu (file pantauan bulan lalu,
+// dikirim Apps Script); kalau tidak ada, Mobilku/Motorku dari jumlah bulan lalu orang di tabel per PIC.
+export function isiBulanLalu(data: Performa): Performa {
+  if (!data.blok?.length) return data;
+  const dariOrang = (b: 'mobilku' | 'motorku', w: 'unit' | 'amount') => {
+    const n = (data.orang || []).filter((o) => String(o.brand ?? '').toLowerCase().includes(b === 'mobilku' ? 'mobil' : 'motor'))
+      .reduce((s, o) => s + (isNum(o[w]?.lalu) ? (o[w]!.lalu as number) : 0), 0);
+    return n > 0 ? n : null;
+  };
+  const sumber = (k: 'mobilku' | 'motorku' | 'total', w: 'unit' | 'amount'): number | null => {
+    const v = data.salesLalu?.[k]?.[w];
+    if (isNum(v) && v > 0) return v;
+    if (k !== 'total') return dariOrang(k, w);
+    const a = sumber('mobilku', w), b = sumber('motorku', w);
+    return a !== null && b !== null ? a + b : null;
+  };
+  let ubah = false;
+  const blok = data.blok.map((bl) => {
+    const t = String(bl.t).toLowerCase();
+    const w = bl.s === 'cabang' && t === 'sales account per brand' ? 'unit' : bl.s === 'cabang' && t === 'sales amount per brand' ? 'amount' : null;
+    if (!w) return bl;
+    return { ...bl, r: bl.r.map((r) => {
+      const k = brandBaris(r[0]) || (/^(grand\s*)?total$/i.test(String(r[0] ?? '').trim()) ? 'total' : '');
+      if (!k || (isNum(r[2]) && r[2] !== 0)) return r;
+      const v = sumber(k, w);
+      if (v === null) {
+        // Angka 0 untuk satu brand penuh hampir pasti kolom yang belum terisi: tampilkan kosong, bukan 0
+        if (r[2] === 0 && isNum(r[3]) && (r[3] as number) > 0) { ubah = true; const x = [...r]; x[2] = null; x[6] = null; return x; }
+        return r;
+      }
+      ubah = true;
+      const x = [...r];
+      x[2] = v;
+      if (isNum(r[3])) x[6] = (r[3] as number) - v;
+      return x;
+    }) };
+  });
+  return ubah ? { ...data, blok } : data;
+}
+
 export function totalCabangPerBrand(data: Performa): Performa {
   const unit = barisTotal(blokCabang(data, 'sales account per brand'));
   const amount = barisTotal(blokCabang(data, 'sales amount per brand'));
@@ -90,7 +131,7 @@ export function totalCabangPerBrand(data: Performa): Performa {
 }
 
 // Dipakai saat menyimpan dan membaca data pantauan (aman dipanggil berulang)
-export const rapikanPerforma = (data: Performa): Performa => pisahSukarela(totalCabangPerBrand(data));
+export const rapikanPerforma = (data: Performa): Performa => pisahSukarela(totalCabangPerBrand(isiBulanLalu(data)));
 
 /* ---------- Rincian pencairan Motorku per nama (untuk tab Motorku & laporan) ---------- */
 export type RincianMotor = { nama: string; unit: number; amount: number; sukarela: boolean };

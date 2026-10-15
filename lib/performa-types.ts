@@ -33,6 +33,7 @@ export type Orang = {
 // Rekap tarikan sales bulan berjalan per nama CMO, dipisah per jenis kendaraan (dikirim Apps Script).
 export type JualBrand = { unit: number; amount: number };
 export type SalesBrandOrang = { nama: string; mobilku: JualBrand; motorku: JualBrand };
+export type SalesLalu = { bulan?: string; sumber?: string; mobilku?: JualBrand; motorku?: JualBrand; total?: JualBrand };
 export type SalesBrand = {
   sumber?: string;          // nama tab tarikan sales yang dibaca
   orang: SalesBrandOrang[];
@@ -81,6 +82,7 @@ export type Performa = {
   orang: Orang[];
   blok?: Blok[];            // tabel pantauan dari sheet (s = cabang/mobilku/motorku, t = judul, h = kolom, r = baris)
   salesBrand?: SalesBrand;  // rekap tarikan sales per nama & jenis kendaraan
+  salesLalu?: SalesLalu;    // sales per brand bulan lalu (dibaca Apps Script dari file pantauan bulan lalu)
   riwayat?: Riwayat;       // ditambahkan server: urutan peringkat hari sebelumnya (untuk panah naik/turun)
 };
 
