@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import type { Blok, KonsumenFull, Orang, Pengumuman, Performa, Sales } from '../../lib/performa-types';
 import { brandOf, cekData, hariKerjaSisa, isNum, namaBulan, pace, type CekData, type Ctx } from '../../lib/performa-calc';
+import { brandBaris, rincianMotor } from '../../lib/sales-brand';
 import { angka, nama, rp, type Push } from './ui';
 import {
   Avatar, BRAND, BrandArt, BrandChip, BrandIcon, CountPct, Ico, Kosong, Line, shortName, type BrandId,
@@ -123,6 +124,9 @@ function PicList({ c, push, filter }: { c: Ctx; push: Push; filter: 'semua' | Br
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-2">
                 <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-bold">{shortName(o.nama)}</span><BrandChip b={b} /></span>
+                {o.sukarela && (o.sukarela.unit > 0 || o.sukarela.amount > 0) && (
+                  <span className="-mt-1 text-xs text-neutral-500">+{angka(o.sukarela.unit)} motor sukarela · {rp(o.sukarela.amount)} <span className="text-neutral-400">(di luar achievement)</span></span>
+                )}
                 <span className="grid grid-cols-2 gap-3">
                   {([['unit', o.unit], ['amount', o.amount]] as const).map(([k, s]) => (
                     <span key={k} className="flex min-w-0 flex-col gap-1">
@@ -151,7 +155,7 @@ function brandTotals(c: Ctx) {
   // Dari tabel "Sales … per brand" kalau ada; kalau tidak, dijumlah dari anggota
   const acc = findBlok(c.data, 'cabang', 'Sales account per brand'), amt = findBlok(c.data, 'cabang', 'Sales amount per brand');
   const fromBlok = (bl: Blok | undefined, key: string) => {
-    const r = bl?.r.find((x) => label(x[0]).toLowerCase() === key);
+    const r = bl?.r.find((x) => brandBaris(x[0]) === key);
     return r ? { ini: num(r[3]), target: num(r[4]), ach: num(r[5]), diffLalu: num(r[6]) } : null;
   };
   const sum = (b: BrandId, w: 'unit' | 'amount') => {
@@ -264,6 +268,36 @@ function Cabang({ c, push }: { c: Ctx; push: Push }) {
   );
 }
 
+/* ---------- Rincian pencairan Motorku per nama (dari tab tarikan sales) ---------- */
+function RincianMotor({ c }: { c: Ctx }) {
+  const list = rincianMotor(c.data);
+  if (!list.length) return null;
+  const suk = list.filter((x) => x.sukarela);
+  return (
+    <Sec title="Pencairan Motorku" right="per nama">
+      <ul className="mx-4 overflow-hidden rounded-[20px] border border-neutral-200 dark:border-neutral-800">
+        {list.map((x) => (
+          <li key={x.nama} className="flex min-h-14 items-center gap-3 border-b border-neutral-200 px-4 py-2.5 last:border-0 dark:border-neutral-800">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-bold">{shortName(x.nama)}</span>
+              {x.sukarela && <span className="block text-xs text-neutral-500">Sukarela tim Mobilku · tidak masuk achievement-nya</span>}
+            </span>
+            <span className="text-right">
+              <b className="block text-[15px]">{rp(x.amount)}</b>
+              <span className="text-xs text-neutral-500">{angka(x.unit)} unit</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {suk.length > 0 && (
+        <p className="mx-4 mt-2 text-xs leading-snug text-neutral-500">
+          {suk.map((x) => shortName(x.nama)).join(' & ')} ikut mencairkan motor. Pencairan ini dihitung untuk Motorku, tapi tidak dihitung ke achievement Mobilku mereka.
+        </p>
+      )}
+    </Sec>
+  );
+}
+
 /* ---------- Tab Mobilku / Motorku ---------- */
 function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string; extra?: ReactNode }) {
   const data = c.data, a = data.aktivitas, B = BRAND[b];
@@ -306,6 +340,7 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
       <Hero title={`${B.label.toUpperCase()} · ${bulan.toUpperCase()}`}
         amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} lama={lama} />
       {extra}
+      {b === 'motorku' && <RincianMotor c={c} />}
 
       <div className="mt-3 grid grid-cols-3 gap-2 px-4">
         <button disabled={!maAll.length} onClick={() => push({ t: 'maList', title: `MA ${B.label}`, sub: `${mt?.ma || 0} MA`, items: maAll })}

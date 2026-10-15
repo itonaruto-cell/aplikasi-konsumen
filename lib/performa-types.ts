@@ -26,6 +26,18 @@ export type Orang = {
   };
   maintain?: { ma: number; sudah: number; belum: number; x2: number; x3: number; x4: number; list?: MaItem[] };
   rekrut?: RekrutRegist;   // hanya untuk MAO (pemegang MA), angka brand-nya
+  // Pencairan motor sukarela oleh orang Mobilku (dari tab tarikan sales). Sudah DIKELUARKAN dari unit/amount di atas.
+  sukarela?: { unit: number; amount: number };
+};
+
+// Rekap tarikan sales bulan berjalan per nama CMO, dipisah per jenis kendaraan (dikirim Apps Script).
+export type JualBrand = { unit: number; amount: number };
+export type SalesBrandOrang = { nama: string; mobilku: JualBrand; motorku: JualBrand };
+export type SalesBrand = {
+  sumber?: string;          // nama tab tarikan sales yang dibaca
+  orang: SalesBrandOrang[];
+  dipakai?: boolean;        // ditambahkan server: true kalau sudah dipakai memisahkan sukarela
+  alasan?: string;          // ditambahkan server: kenapa tidak dipakai
 };
 
 export type Target = { jumlah: number; target: number | null };
@@ -68,6 +80,7 @@ export type Performa = {
   aktivitas?: Aktivitas;   // ringkasan cabang (motorku & mobilku)
   orang: Orang[];
   blok?: Blok[];            // tabel pantauan dari sheet (s = cabang/mobilku/motorku, t = judul, h = kolom, r = baris)
+  salesBrand?: SalesBrand;  // rekap tarikan sales per nama & jenis kendaraan
   riwayat?: Riwayat;       // ditambahkan server: urutan peringkat hari sebelumnya (untuk panah naik/turun)
 };
 

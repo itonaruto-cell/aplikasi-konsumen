@@ -426,6 +426,12 @@ export function OrangDetail({ o, rank, total, data, push, hideHeader = false }: 
           <p className="text-sm font-semibold text-neutral-500">Sales</p>
           <SalesRows label="Amount" s={o.amount} money bulan={data.bulan} />
           <SalesRows label="Unit" s={o.unit} bulan={data.bulan} />
+          {o.sukarela && (o.sukarela.unit > 0 || o.sukarela.amount > 0) && (
+            <p className="rounded-2xl bg-neutral-100 px-4 py-3 text-sm leading-snug dark:bg-neutral-900">
+              Motor sukarela: <b>{angka(o.sukarela.unit)} unit · {rp(o.sukarela.amount)}</b>
+              <span className="block text-xs text-neutral-500">Masuk ke Motorku, tidak dihitung ke achievement di atas.</span>
+            </p>
+          )}
         </section>
       )}
 

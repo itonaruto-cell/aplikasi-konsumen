@@ -2,6 +2,7 @@
 // Digambar langsung ke <canvas> (lebar 1080 px, cocok untuk WhatsApp), tanpa pustaka tambahan.
 import type { Orang, Sales } from '../../lib/performa-types';
 import { brandOf, cekData, hariKerjaSisa, namaBulan, type Ctx } from '../../lib/performa-calc';
+import { brandBaris, rincianMotor } from '../../lib/sales-brand';
 
 type G = CanvasRenderingContext2D;
 type BrandId = 'mobilku' | 'motorku';
@@ -105,7 +106,7 @@ function info(c: Ctx): Info {
 type Total = { amount: Sales | null; unit: Sales | null };
 function totalBrand(c: Ctx, b: BrandId): Total {
   const blok = (t: string) => (c.data.blok || []).find((x) => x.s === 'cabang' && x.t.toLowerCase() === t)?.r
-    .find((r) => String(r[0] ?? '').trim().toLowerCase() === b);
+    .find((r) => brandBaris(r[0]) === b);
   const dari = (r: unknown[] | undefined): Sales | null => {
     if (!r) return null;
     const n = (v: unknown) => (isNum(v) ? v : null);
@@ -125,9 +126,11 @@ const orangBrand = (c: Ctx, b: BrandId, spv: Orang | null) =>
   c.sales.filter((o) => brandOf(o) === b && o !== spv && (o.amount || o.unit))
     .sort((a, x) => (x.amount?.ach ?? -1) - (a.amount?.ach ?? -1));
 
+const RINCI_JUDUL = 70, RINCI = 84;
+const tinggiRinci = (c: Ctx) => { const n = rincianMotor(c.data).length; return n ? RINCI_JUDUL + n * RINCI + 16 : 0; };
 export function tinggiAchievement(c: Ctx, spv: Orang | null) {
   const n = (b: BrandId) => orangBrand(c, b, spv).length;
-  return 250 + 300 + 40 + (['mobilku', 'motorku'] as const).reduce((s, b) => s + 330 + n(b) * 104 + 40, 0) + KAKI;
+  return 250 + 300 + 40 + (['mobilku', 'motorku'] as const).reduce((s, b) => s + 330 + n(b) * 104 + (b === 'motorku' ? tinggiRinci(c) : 0) + 40, 0) + KAKI;
 }
 
 function duaAngka(g: G, x: number, y: number, w: number, t: Total, terang: boolean) {
@@ -160,7 +163,8 @@ export function gambarAchievement(g: G, c: Ctx, spv: Orang | null, logo: HTMLIma
   // Mobilku & Motorku
   for (const b of ['mobilku', 'motorku'] as const) {
     const list = orangBrand(c, b, spv);
-    const h = 330 + list.length * 104;
+    const rinci = b === 'motorku' ? rincianMotor(c.data) : [];
+    const h = 330 + list.length * 104 + (b === 'motorku' ? tinggiRinci(c) : 0);
     kotak(g, P, y, W - P * 2, h, 32, C.brand[b], true);
     tulis(g, LABEL[b], P + 40, y + 56, { size: 24, weight: 700, color: 'rgba(255,255,255,0.8)', spasi: 3 });
     duaAngka(g, P + 40, y + 60, W - P * 2 - 80, totalBrand(c, b), true);
@@ -168,12 +172,30 @@ export function gambarAchievement(g: G, c: Ctx, spv: Orang | null, logo: HTMLIma
     list.forEach((o) => {
       g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(P + 24, yy - 6, W - P * 2 - 48, 1);
       tulis(g, pendek(o.nama), P + 40, yy + 40, { size: 30, weight: 700, color: '#fff', maks: 300 });
+      if (o.sukarela && (o.sukarela.unit > 0 || o.sukarela.amount > 0)) {
+        font(g, 30, 700);
+        const xNama = P + 40 + Math.min(300, g.measureText(pendek(o.nama)).width) + 14;
+        chip(g, `+${angka(o.sukarela.unit)} motor sukarela`, xNama, yy + 12, { bg: 'rgba(245,196,81,0.22)', color: C.gold, size: 17 });
+      }
       tulis(g, `Unit ${angka(o.unit?.ini)}/${angka(o.unit?.target)} · ${pct(o.unit?.ach)}`, P + 40, yy + 78, { size: 22, color: 'rgba(255,255,255,0.7)' });
       tulis(g, rp(o.amount?.ini), W - P - 170, yy + 40, { size: 26, weight: 600, color: '#fff', align: 'right' });
       tulis(g, pct(o.amount?.ach), W - P - 40, yy + 42, { size: 36, weight: 700, color: C.gold, align: 'right' });
       batang(g, P + 380, yy + 64, W - P * 2 - 420, 10, o.amount?.ach, C.gold, 'rgba(255,255,255,0.18)');
       yy += 104;
     });
+    if (rinci.length) {
+      g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(P + 24, yy - 6, W - P * 2 - 48, 1);
+      tulis(g, 'PENCAIRAN PER NAMA', P + 40, yy + 44, { size: 20, weight: 700, color: 'rgba(255,255,255,0.65)', spasi: 2 });
+      yy += RINCI_JUDUL;
+      rinci.forEach((x) => {
+        kotak(g, P + 24, yy - 4, W - P * 2 - 48, RINCI - 12, 18, 'rgba(255,255,255,0.08)');
+        tulis(g, pendek(x.nama), P + 48, yy + 46, { size: 28, weight: 700, color: '#fff', maks: 260 });
+        if (x.sukarela) chip(g, 'Sukarela · Mobilku', P + 320, yy + 14, { bg: 'rgba(245,196,81,0.22)', color: C.gold, size: 19 });
+        tulis(g, `${angka(x.unit)} unit`, W - P - 230, yy + 46, { size: 24, color: 'rgba(255,255,255,0.75)', align: 'right' });
+        tulis(g, rp(x.amount), W - P - 48, yy + 46, { size: 28, weight: 700, color: '#fff', align: 'right' });
+        yy += RINCI;
+      });
+    }
     y += h + 40;
   }
   kaki(g, y - 40, inf.dibuat);
