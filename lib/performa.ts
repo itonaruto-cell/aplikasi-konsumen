@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import type { Performa, Peringkat } from './performa-types';
 import { rankSnapshot, todayJkt } from './performa-calc';
+import { rapikanPerforma } from './sales-brand';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
 // (dibuat otomatis). Isinya JSON dari Apps Script, dipotong per sel karena
@@ -49,7 +50,7 @@ const kemarinOf = (s: Snaps, today: string) =>
   s.cur && s.cur.tgl < today ? s.cur : s.prev && s.prev.tgl < today ? s.prev : undefined;
 
 export async function savePerforma(data: Performa) {
-  data = { ...data, riwayat: undefined };
+  data = rapikanPerforma({ ...data, riwayat: undefined });
   await ensureTab();
   const api = sheets();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
@@ -95,7 +96,7 @@ export async function loadPerforma(): Promise<Performa | null> {
   const json = rows.slice(1).map((r) => String(r[0] || '')).join('');
   let data: Performa | null = null;
   if (json) {
-    try { data = JSON.parse(json) as Performa; } catch { data = null; }
+    try { data = rapikanPerforma(JSON.parse(json) as Performa); } catch { data = null; }
   }
   if (data) {
     const kemarin = kemarinOf(parseSnaps(rows[0]?.[1]), todayJkt());

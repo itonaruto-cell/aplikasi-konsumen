@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import { brandOf, keyOf, todayJkt, type Ctx } from '../../lib/performa-calc';
+import { brandBaris } from '../../lib/sales-brand';
 import {
   JENIS_LABEL, KOSONG, butuhUntuk, denganNbq, hitung, kurangAktivitas, langkahNaik, plafon, tambah, targetBawaan,
   type Jenis, type Masukan, type Skema,
@@ -44,7 +45,7 @@ export function dariPantauan(c: Ctx | null, key: string): Partial<Masukan> {
     const mob = c.sales.filter((o) => brandOf(o) === 'mobilku');
     const sum = (w: 'amount' | 'unit') => mob.reduce((s, o) => s + (o[w]?.ini || 0), 0);
     const baris = (t: string) => (c.data.blok || []).find((b) => b.s === 'cabang' && b.t.toLowerCase() === t)
-      ?.r.find((r) => String(r[0] ?? '').trim().toLowerCase() === 'mobilku');
+      ?.r.find((r) => brandBaris(r[0]) === 'mobilku');
     const a = baris('sales amount per brand'), u = baris('sales account per brand');
     return buang({
       amount: num(a?.[3]) ?? sum('amount'), unit: num(u?.[3]) ?? sum('unit'),
