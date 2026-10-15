@@ -9,9 +9,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -70,10 +70,30 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
         </Card>
       )}
 
-      {(onBahan || onInsentif || onInject || onJuara || onPengumuman) && (
+      {(onBahan || onInsentif || onInject || onJuara || onPengumuman || onLaporan || onProspek) && (
         <>
           <p className="mt-8 text-[15px] font-bold">Alat kerja</p>
           <Card className="mt-2 overflow-hidden">
+            {onProspek && (
+              <button onClick={onProspek} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <Ico n="users" className="h-5 w-5 text-neutral-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Database prospek</span>
+                  <span className="block text-[13px] text-neutral-500">{akun.role === 'owner' ? 'Input nama, no HP, profesi · impor Google Maps' : 'Prospek untuk di-follow up'}</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
+            {onLaporan && (
+              <button onClick={onLaporan} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <Ico n="chart" className="h-5 w-5 text-neutral-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Laporan bergambar</span>
+                  <span className="block text-[13px] text-neutral-500">Achievement & aktivitas, siap unduh atau screenshot</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
             {onPengumuman && (
               <button onClick={onPengumuman} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
                 <svg viewBox="0 0 24 24" className="h-5 w-5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3H6l4-3z" /></svg>
