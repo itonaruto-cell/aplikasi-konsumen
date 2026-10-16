@@ -9,9 +9,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -70,7 +70,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
         </Card>
       )}
 
-      {(onBahan || onInsentif || onInject || onJuara || onPengumuman || onLaporan || onProspek) && (
+      {(onBahan || onInsentif || onInject || onJuara || onPengumuman || onLaporan || onProspek || onSinkron) && (
         <>
           <p className="mt-8 text-[15px] font-bold">Alat kerja</p>
           <Card className="mt-2 overflow-hidden">
@@ -80,6 +80,16 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px]">Database prospek</span>
                   <span className="block text-[13px] text-neutral-500">{akun.role === 'owner' ? 'Input nama, no HP, profesi · impor Google Maps' : 'Prospek untuk di-follow up'}</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
+            {onSinkron && (
+              <button onClick={onSinkron} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <Ico n="edit" className="h-5 w-5 text-neutral-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Perbarui database konsumen</span>
+                  <span className="block text-[13px] text-neutral-500">Dari tab KA, SALES & MAPS ke Sheet1</span>
                 </span>
                 <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
               </button>
