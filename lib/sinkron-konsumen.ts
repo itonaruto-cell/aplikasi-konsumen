@@ -193,10 +193,25 @@ export function rencanakan(sheet1: Grid, tabs: { nama: string; grid: Grid }[], o
     rows.forEach((r, i) => { const k = kunciNama(sel(r, C.nama)); if (k) lamaPerNama.set(k, [...(lamaPerNama.get(k) || []), i]); });
     const baruPerNama = new Map<string, number[]>();
     baru.forEach((b, i) => { const k = kunciNama(b.nama); baruPerNama.set(k, [...(baruPerNama.get(k) || []), i]); });
-    const custOf = (k: string) => new Set([
-      ...(lamaPerNama.get(k) || []).map((i) => H(sel(rows[i], C.cust)) || `#${i}`),
-      ...(baruPerNama.get(k) || []).map((i) => H(sel(baru[i].nilai, C.cust)) || `b${i}`),
-    ]);
+    type Calon = { lama: boolean; i: number; cust: string; kel: string };
+    const calonOf = (k: string): Calon[] => [
+      ...(lamaPerNama.get(k) || []).map((i) => ({ lama: true, i, cust: H(sel(rows[i], C.cust)), kel: H(sel(rows[i], C.kel)) })),
+      ...(baruPerNama.get(k) || []).map((i) => ({ lama: false, i, cust: H(sel(baru[i].nilai, C.cust)), kel: H(sel(baru[i].nilai, C.kel)) })),
+    ];
+    const adaKata = (teksAlamat: string, kata: string) => !!kata && new RegExp(`(^|[^A-Z])${kata.replace(/[^A-Z0-9 ]/g, '')}([^A-Z]|$)`).test(teksAlamat);
+    // Siapa pemilik lokasi ini: satu orang (satu cust no) → semua barisnya. Nama dipakai beberapa orang →
+    // untuk alamat, dipilih orang yang kelurahannya disebut di alamat; selain itu dilewati.
+    const tujuan = (calon: Calon[], lok: { jenis: string; nilai: string }): Calon[] | null => {
+      const custs = new Set(calon.map((c) => c.cust).filter(Boolean));
+      if (custs.size <= 1) return calon;
+      if (lok.jenis !== 'alamat') return null;
+      const A = H(lok.nilai);
+      const pilih = new Set(calon.filter((c) => c.cust && adaKata(A, c.kel)).map((c) => c.cust));
+      if (pilih.size !== 1) return null;
+      const cust = [...pilih][0];
+      const kelDia = new Set(calon.filter((c) => c.cust === cust && c.kel).map((c) => c.kel));
+      return calon.filter((c) => c.cust === cust || (!c.cust && kelDia.has(c.kel)));
+    };
     const sudah = new Set<string>();
     for (const row of mapsGrid) {
       const m = barisMaps(row as unknown[]);
@@ -206,21 +221,19 @@ export function rencanakan(sheet1: Grid, tabs: { nama: string; grid: Grid }[], o
       if (!lok || !kn) continue;
       const kol = lok.jenis === 'maps' ? C.maps : C.alamat;
       if (kol < 0) continue;
-      const custs = custOf(kn);
-      if (!custs.size) { maps.tidakKetemu.push(m.nama); continue; }
-      if (custs.size > 1) { maps.ragu.push(m.nama); continue; }   // nama sama, orang berbeda: tidak diisi
+      const calon = calonOf(kn);
+      if (!calon.length) { maps.tidakKetemu.push(m.nama); continue; }
+      const target = tujuan(calon, lok);
+      if (!target) { maps.ragu.push(m.nama); continue; }   // nama sama, orang berbeda: tidak diisi
       let terisi = false, ada = false;
-      for (const i of lamaPerNama.get(kn) || []) {
-        const key = `L${i}|${kol}`;
+      for (const c of target) {
+        const key = `${c.lama ? 'L' : 'B'}${c.i}|${kol}`;
         if (sudah.has(key)) continue;
-        if (!kosong(rows[i][kol])) { ada = true; continue; }
+        const cur = c.lama ? rows[c.i][kol] : baru[c.i].nilai[kol];
+        if (!kosong(cur)) { ada = true; continue; }
         sudah.add(key);
-        isi.push({ baris: i + 2, kolom: kol, nilai: lok.nilai, nama: m.nama, jenisIsi: lok.jenis });
-        terisi = true;
-      }
-      for (const i of baruPerNama.get(kn) || []) {
-        if (baru[i].nilai[kol]) { ada = true; continue; }
-        baru[i].nilai[kol] = lok.nilai;
+        if (c.lama) isi.push({ baris: c.i + 2, kolom: kol, nilai: lok.nilai, nama: m.nama, jenisIsi: lok.jenis });
+        else baru[c.i].nilai[kol] = lok.nilai;
         terisi = true;
       }
       if (terisi) maps.cocok++; else if (ada) maps.sudahAda++;
