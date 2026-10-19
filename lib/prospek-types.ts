@@ -23,6 +23,7 @@ export type Prospek = {
   dibuat: string;
   diubah: string;
   oleh: string;        // email yang menambahkan
+  foto: string;        // ID foto bukti follow up terakhir (tab FOTO), kosong = belum ada
 };
 
 // Nomor HP Indonesia: hanya angka, +62/62 diubah ke 0. Kosong kalau terlalu pendek.

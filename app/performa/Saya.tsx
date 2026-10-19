@@ -79,7 +79,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
                 <Ico n="users" className="h-5 w-5 text-neutral-500" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px]">Database prospek</span>
-                  <span className="block text-[13px] text-neutral-500">{akun.role === 'owner' ? 'Input nama, no HP, profesi · impor Google Maps' : 'Prospek untuk di-follow up'}</span>
+                  <span className="block text-[13px] text-neutral-500">Input, impor Google Maps, follow up dengan foto bukti</span>
                 </span>
                 <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
               </button>

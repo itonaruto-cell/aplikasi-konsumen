@@ -4,9 +4,10 @@ import { keyOf } from '../../lib/performa-calc';
 import { STATUS_LABEL, STATUS_PROSPEK, bacaImpor, keWa, rapikanHp, type Prospek, type StatusProspek } from '../../lib/prospek-types';
 import { FIELD, Lembar } from './form';
 import { Ico, Kosong, shortName } from './parts';
+import { useOverlay } from '../overlay';
 
-// Database prospek: owner menambah (manual / impor CSV hasil scrape Google Maps) dan mengatur PIC;
-// CMO menelepon / WhatsApp lalu mencatat hasil follow up.
+// Database prospek: semua akun bisa menambah (manual / impor CSV hasil scrape Google Maps), mengubah, mengatur PIC,
+// menelepon / WhatsApp, lalu mencatat hasil follow up dengan foto bukti.
 
 type Akun = { email: string; role: 'owner' | 'konsumen' | 'tim' };
 const WARNA: Record<StatusProspek, string> = {
@@ -41,7 +42,7 @@ function useProspek(reloadKey: number) {
 }
 
 /* ---------- Tambah / ubah satu prospek (owner) ---------- */
-function FormProspek({ awal, tim, onClose, onSaved }: { awal: Prospek | null; tim: string[]; onClose: () => void; onSaved: (pesan: string) => void }) {
+function FormProspek({ awal, tim, bolehHapus, onClose, onSaved }: { awal: Prospek | null; tim: string[]; bolehHapus: boolean; onClose: () => void; onSaved: (pesan: string) => void }) {
   const [nama, setNama] = useState(awal?.nama || '');
   const [hp, setHp] = useState(awal?.hp || '');
   const [profesi, setProfesi] = useState(awal?.profesi || '');
@@ -66,8 +67,9 @@ function FormProspek({ awal, tim, onClose, onSaved }: { awal: Prospek | null; ti
   const hapus = async () => {
     if (!awal || !confirm('Hapus prospek ini?')) return;
     setBusy(true);
-    await fetch(`/api/prospek?id=${encodeURIComponent(awal.id)}`, { method: 'DELETE' }).catch(() => {});
+    const r = await fetch(`/api/prospek?id=${encodeURIComponent(awal.id)}`, { method: 'DELETE' }).catch(() => null);
     setBusy(false);
+    if (!r?.ok) { const j = await r?.json().catch(() => null); setErr(j?.error || 'Gagal menghapus.'); return; }
     onSaved('Prospek dihapus');
   };
   const label = 'mt-3 block text-[13px] font-semibold text-neutral-500';
@@ -86,7 +88,7 @@ function FormProspek({ awal, tim, onClose, onSaved }: { awal: Prospek | null; ti
         </div>
         {err && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">{err}</p>}
         <button onClick={simpan} disabled={busy} className="mt-4 min-h-12 w-full rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900">{busy ? 'Menyimpan…' : 'Simpan'}</button>
-        {awal && <button onClick={hapus} disabled={busy} className="mt-2 min-h-11 w-full text-sm font-semibold text-red-700 dark:text-red-400">Hapus prospek</button>}
+        {awal && bolehHapus && <button onClick={hapus} disabled={busy} className="mt-2 min-h-11 w-full text-sm font-semibold text-red-700 dark:text-red-400">Hapus prospek</button>}
       </div>
     </Lembar>
   );
@@ -155,16 +157,77 @@ function Impor({ tim, onClose, onSaved }: { tim: string[]; onClose: () => void; 
   );
 }
 
+/* ---------- Foto bukti ---------- */
+// Foto diperkecil di HP (sisi terpanjang maks. 1000 px, JPEG) supaya muat disimpan di tab FOTO (maks. ±130 KB).
+const MAKS_B64 = 175_000;
+async function kecilkanFoto(file: File): Promise<{ mime: string; data: string; url: string }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
+    for (const [sisi, q] of [[1000, 0.72], [900, 0.6], [760, 0.55], [640, 0.5], [520, 0.45]] as const) {
+      const k = Math.min(1, sisi / Math.max(img.naturalWidth, img.naturalHeight));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+      const g = cv.getContext('2d');
+      if (!g) break;
+      g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+      g.drawImage(img, 0, 0, cv.width, cv.height);
+      const dataUrl = cv.toDataURL('image/jpeg', q);
+      const data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+      if (data.length <= MAKS_B64) return { mime: 'image/jpeg', data, url: dataUrl };
+    }
+    throw new Error('besar');
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function FotoBukti({ id, nama }: { id: string; nama: string }) {
+  const [besar, setBesar] = useState(false);
+  const [gagal, setGagal] = useState(false);
+  useOverlay(besar, () => setBesar(false));
+  if (!id || gagal) return null;
+  const src = `/api/foto/${encodeURIComponent(id)}`;
+  return (
+    <>
+      <button onClick={() => setBesar(true)} aria-label={`Lihat foto bukti follow up ${nama}`}
+        className="flex items-center gap-1.5 rounded-full bg-green-50 py-0.5 pl-0.5 pr-2.5 text-xs font-semibold text-green-800 dark:bg-green-400/15 dark:text-green-300">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" loading="lazy" onError={() => setGagal(true)} className="h-6 w-6 rounded-full object-cover" />
+        Bukti FU
+      </button>
+      {besar && (
+        <div role="dialog" aria-label={`Foto bukti ${nama}`} className="fixed inset-0 z-[70] flex flex-col bg-black/95" onClick={() => setBesar(false)}>
+          <div className="flex justify-end p-2 pt-[calc(env(safe-area-inset-top)+8px)]">
+            <button onClick={() => setBesar(false)} aria-label="Tutup foto" className="flex h-12 w-12 items-center justify-center text-white"><Ico n="x" className="h-6 w-6" sw={2} /></button>
+          </div>
+          <div className="flex flex-1 items-center justify-center p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={`Foto bukti ${nama}`} className="max-h-full max-w-full rounded-lg object-contain" />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ---------- Catat hasil follow up ---------- */
-function FollowUp({ p, onClose, onSaved }: { p: Prospek; onClose: () => void; onSaved: (x: Prospek) => void }) {
+function FollowUp({ p, wajibFoto, onClose, onSaved }: { p: Prospek; wajibFoto: boolean; onClose: () => void; onSaved: (x: Prospek) => void }) {
   const [status, setStatus] = useState<StatusProspek>(p.status === 'baru' ? 'dihubungi' : p.status);
   const [hasil, setHasil] = useState(p.hasil);
+  const [foto, setFoto] = useState<{ mime: string; data: string; url: string } | null>(null);
+  const [olah, setOlah] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const pilihFoto = async (f: File | undefined) => {
+    if (!f) return;
+    setOlah(true); setErr('');
+    try { setFoto(await kecilkanFoto(f)); } catch { setErr('Foto tidak bisa dibaca. Coba foto lain.'); } finally { setOlah(false); }
+  };
   const simpan = async () => {
+    if (wajibFoto && !foto) { setErr('Lampirkan foto bukti dulu: foto saat bertemu atau screenshot chat / riwayat telepon.'); return; }
     setBusy(true); setErr('');
     try {
-      const r = await fetch('/api/prospek', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, status, hasil }) });
+      const r = await fetch('/api/prospek', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, status, hasil, foto: foto ? { mime: foto.mime, data: foto.data } : undefined }) });
       const j = await r.json().catch(() => null);
       if (!r.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
       onSaved(j.prospek);
@@ -181,9 +244,23 @@ function FollowUp({ p, onClose, onSaved }: { p: Prospek; onClose: () => void; on
           <textarea value={hasil} onChange={(e) => setHasil(e.target.value)} rows={3} maxLength={300}
             placeholder="mis. Minat mobil bekas, minta dihubungi lagi Senin" className={`${FIELD} mt-1.5 resize-none py-2.5`} />
         </label>
+        <p className="mt-3 text-[13px] font-semibold text-neutral-500">Foto bukti follow up{wajibFoto ? ' (wajib)' : ''}</p>
+        {foto ? (
+          <div className="relative mt-1.5 overflow-hidden rounded-2xl bg-neutral-100 dark:bg-neutral-900">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={foto.url} alt="Pratinjau foto bukti" className="max-h-56 w-full object-contain" />
+            <button onClick={() => setFoto(null)} className="absolute right-2 top-2 min-h-9 rounded-full bg-black/70 px-3 text-xs font-semibold text-white">Ganti</button>
+          </div>
+        ) : (
+          <label className="mt-1.5 flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-4 text-center text-[15px] font-semibold dark:border-neutral-700">
+            <input type="file" accept="image/*" className="sr-only" aria-label="Pilih foto bukti" onChange={(e) => pilihFoto(e.target.files?.[0])} />
+            {olah ? 'Memproses foto…' : 'Ambil foto / pilih screenshot'}
+          </label>
+        )}
+        <p className="mt-1.5 text-xs text-neutral-500">Foto saat bertemu, atau screenshot chat WhatsApp / riwayat panggilan.</p>
         {!p.pic && <p className="mt-2 text-[13px] text-neutral-500">Prospek ini belum ada PIC-nya. Setelah disimpan, prospek ini jadi pegangan kamu.</p>}
         {err && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">{err}</p>}
-        <button onClick={simpan} disabled={busy} className="mt-4 min-h-12 w-full rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900">{busy ? 'Menyimpan…' : 'Simpan hasil'}</button>
+        <button onClick={simpan} disabled={busy || olah} className="mt-4 min-h-12 w-full rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900">{busy ? 'Menyimpan…' : 'Simpan hasil'}</button>
       </div>
     </Lembar>
   );
@@ -213,7 +290,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
   return (
     <div className="pb-8">
       <section className="mx-4 mt-3 flex flex-col gap-2 rounded-[22px] bg-neutral-900 p-[18px] text-white dark:ring-1 dark:ring-neutral-800">
-        <span className="text-[13px] font-bold tracking-wide text-white/80">DATABASE PROSPEK{isOwner ? '' : ' · UNTUK KAMU'}</span>
+        <span className="text-[13px] font-bold tracking-wide text-white/80">DATABASE PROSPEK</span>
         <p className="text-[34px] font-bold leading-none tracking-tight">{loading && !list.length ? '…' : list.length}<span className="ml-2 text-base font-semibold text-white/70">prospek</span></p>
         <div className="grid grid-cols-3 gap-2 pt-1 text-center">
           {([['baru', 'belum dihubungi'], ['tertarik', 'tertarik'], ['order', 'jadi order']] as const).map(([s, l]) => (
@@ -222,7 +299,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
         </div>
       </section>
 
-      {isOwner && (
+      {(
         <div className="mt-3 grid grid-cols-2 gap-2 px-4">
           <button onClick={() => setForm('baru')} className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white dark:bg-white dark:text-neutral-900">+ Tambah</button>
           <button onClick={() => setImpor(true)} className="min-h-12 rounded-2xl border border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">Impor CSV / Maps</button>
@@ -238,7 +315,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
         <button onClick={() => setStatus('semua')} aria-pressed={status === 'semua'} className={pilih(status === 'semua')}>Semua · {list.length}</button>
         {STATUS_PROSPEK.map((s) => <button key={s} onClick={() => setStatus(s)} aria-pressed={status === s} className={pilih(status === s)}>{STATUS_LABEL[s]} · {hitung(s)}</button>)}
       </div>
-      {isOwner && (pics.length > 0 || list.some((p) => !p.pic)) && (
+      {(pics.length > 0 || list.some((p) => !p.pic)) && (
         <div className="mt-2 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
           <button onClick={() => setPic('semua')} aria-pressed={pic === 'semua'} className={pilih(pic === 'semua')}>Semua PIC</button>
           <button onClick={() => setPic('')} aria-pressed={pic === ''} className={pilih(pic === '')}>Belum ada PIC</button>
@@ -254,13 +331,13 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
         <div className="space-y-3 px-4 pt-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-[20px] bg-neutral-200/70 dark:bg-neutral-800/70" />)}</div>
       ) : tampil.length === 0 ? (
         <Kosong art="bendera" title={list.length ? 'Tidak ada yang cocok' : 'Belum ada prospek'}
-          text={list.length ? 'Coba status atau kata kunci lain.' : isOwner ? 'Tambahkan satu per satu atau impor hasil scrape Google Maps.' : 'Owner belum membagikan prospek untuk di-follow up.'} />
+          text={list.length ? 'Coba status atau kata kunci lain.' : 'Tambahkan satu per satu atau impor hasil scrape Google Maps.'} />
       ) : (
         <div className="flex flex-col gap-2.5 px-4 pt-3">
           {tampil.slice(0, 150).map((p) => (
             <div key={p.id} className="rounded-[20px] border border-neutral-200 px-4 py-3.5 dark:border-neutral-800">
               <div className="flex items-start justify-between gap-3">
-                <button onClick={() => (isOwner ? setForm(p) : setFu(p))} className="min-w-0 flex-1 text-left">
+                <button onClick={() => setForm(p)} className="min-w-0 flex-1 text-left">
                   <span className="block truncate text-[15px] font-bold">{p.nama}</span>
                   <span className="block truncate text-[13px] text-neutral-500">{[p.profesi, p.alamat].filter(Boolean).join(' · ') || tampilHp(p.hp)}</span>
                 </button>
@@ -271,6 +348,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
                 <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{p.pic ? `PIC ${shortName(p.pic)}` : 'Belum ada PIC'}</span>
                 {p.sumber && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{p.sumber}</span>}
                 <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{tampilHp(p.hp)}</span>
+                {p.foto && <FotoBukti id={p.foto} nama={p.nama} />}
               </div>
               <div className="mt-2.5 grid grid-cols-3 gap-2">
                 <a href={`tel:${p.hp}`} className="flex min-h-11 items-center justify-center rounded-xl bg-neutral-100 text-sm font-semibold dark:bg-neutral-800">Telepon</a>
@@ -283,9 +361,9 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
         </div>
       )}
 
-      {form && <FormProspek awal={form === 'baru' ? null : form} tim={tim} onClose={() => setForm(null)} onSaved={selesai} />}
+      {form && <FormProspek awal={form === 'baru' ? null : form} tim={tim} bolehHapus={form !== 'baru' && (isOwner || form.oleh === akun.email.toLowerCase())} onClose={() => setForm(null)} onSaved={selesai} />}
       {impor && <Impor tim={tim} onClose={() => setImpor(false)} onSaved={selesai} />}
-      {fu && <FollowUp p={fu} onClose={() => setFu(null)} onSaved={(x) => { setFu(null); setList((l) => l.map((p) => (p.id === x.id ? x : p))); setToast('Hasil follow up tersimpan'); }} />}
+      {fu && <FollowUp p={fu} wajibFoto={!isOwner} onClose={() => setFu(null)} onSaved={(x) => { setFu(null); setList((l) => l.map((p) => (p.id === x.id ? x : p))); setToast('Hasil follow up tersimpan'); }} />}
       {toast && (
         <div className="fixed inset-x-0 bottom-[calc(96px+env(safe-area-inset-bottom))] z-50 flex justify-center px-5">
           <div className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-neutral-900">{toast}</div>
