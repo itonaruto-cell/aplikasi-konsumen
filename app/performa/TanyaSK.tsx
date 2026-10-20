@@ -117,7 +117,9 @@ function Perbarui({ onSelesai }: { onSelesai: () => void }) {
     if (!f) return;
     setJalan(true); setMsg('Membaca file…');
     try {
-      const p = JSON.parse(await f.text()) as { dokumen?: Record<string, unknown>[] };
+      if (!/\.json$/i.test(f.name) && f.type !== 'application/json') throw new Error('Pilih file Paket-SK-Marketing-Kendal.json (bukan PDF).');
+      let p: { dokumen?: Record<string, unknown>[] };
+      try { p = JSON.parse(await f.text()); } catch { throw new Error('File ini bukan paket dokumen SK.'); }
       const daftar = Array.isArray(p?.dokumen) ? p.dokumen : [];
       if (!daftar.length) throw new Error('File ini bukan paket dokumen SK.');
       for (const [i, d] of daftar.entries()) {
@@ -135,10 +137,10 @@ function Perbarui({ onSelesai }: { onSelesai: () => void }) {
   return (
     <div className="mt-3 rounded-2xl border border-dashed border-neutral-300 p-4 dark:border-neutral-700">
       <p className="text-[13px] font-semibold">Perbarui dokumen SK (owner)</p>
-      <p className="mt-0.5 text-[13px] text-neutral-500">Pilih file paket dokumen SK (.json) yang dikirim Claude. Dokumen dengan nama sama akan diganti.</p>
+      <p className="mt-0.5 text-[13px] text-neutral-500">Pilih file Paket-SK-Marketing-Kendal.json yang dikirim Claude (cari di folder Download). Dokumen dengan nama sama akan diganti.</p>
       <label className={`mt-2 inline-flex min-h-11 cursor-pointer items-center rounded-xl bg-neutral-900 px-4 text-sm font-bold text-white dark:bg-white dark:text-neutral-900 ${jalan ? 'pointer-events-none opacity-50' : ''}`}>
         Pilih file paket
-        <input type="file" accept=".json,application/json" className="sr-only" aria-label="File paket dokumen SK" disabled={jalan} onChange={(e) => { pilih(e.target.files?.[0]); e.target.value = ''; }} />
+        <input type="file" className="sr-only" aria-label="File paket dokumen SK" disabled={jalan} onChange={(e) => { pilih(e.target.files?.[0]); e.target.value = ''; }} />
       </label>
       {msg && <p role="status" className="mt-2 text-[13px]">{msg}</p>}
     </div>
