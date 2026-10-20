@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { keyOf } from '../../lib/performa-calc';
-import { STATUS_LABEL, STATUS_PROSPEK, bacaImpor, keWa, rapikanHp, type Prospek, type StatusProspek } from '../../lib/prospek-types';
+import { STATUS_LABEL, STATUS_PROSPEK, bacaImpor, keWa, rapikanHp, rapikanMaps, type Prospek, type StatusProspek } from '../../lib/prospek-types';
 import { FIELD, Lembar } from './form';
 import { Ico, Kosong, shortName } from './parts';
 import { useOverlay } from '../overlay';
@@ -48,15 +48,17 @@ function FormProspek({ awal, tim, bolehHapus, onClose, onSaved }: { awal: Prospe
   const [profesi, setProfesi] = useState(awal?.profesi || '');
   const [alamat, setAlamat] = useState(awal?.alamat || '');
   const [catatan, setCatatan] = useState(awal?.catatan || '');
+  const [maps, setMaps] = useState(awal?.maps || '');
   const [pic, setPic] = useState(awal?.pic || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const simpan = async () => {
     if (!nama.trim()) { setErr('Nama wajib diisi.'); return; }
     if (!rapikanHp(hp)) { setErr('Nomor HP tidak valid. Contoh: 0812 3456 7890.'); return; }
+    if (maps.trim() && !rapikanMaps(maps)) { setErr('Link Google Maps harus diawali https://'); return; }
     setBusy(true); setErr('');
     try {
-      const body = awal ? { id: awal.id, nama, hp, profesi, alamat, catatan, pic } : { items: [{ nama, hp, profesi, alamat, catatan }], pic, sumber: 'Manual' };
+      const body = awal ? { id: awal.id, nama, hp, profesi, alamat, catatan, maps, pic } : { items: [{ nama, hp, profesi, alamat, catatan, maps }], pic, sumber: 'Manual' };
       const r = await fetch('/api/prospek', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => null);
       if (!r.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
@@ -80,6 +82,7 @@ function FormProspek({ awal, tim, bolehHapus, onClose, onSaved }: { awal: Prospe
         <label className={label}>No HP<input value={hp} onChange={(e) => setHp(e.target.value)} inputMode="tel" maxLength={20} placeholder="0812 3456 7890" className={`${FIELD} mt-1.5 h-12`} /></label>
         <label className={label}>Profesi<input value={profesi} onChange={(e) => setProfesi(e.target.value)} maxLength={80} placeholder="mis. Pedagang, guru, bengkel" className={`${FIELD} mt-1.5 h-12`} /></label>
         <label className={label}>Alamat / kecamatan<input value={alamat} onChange={(e) => setAlamat(e.target.value)} maxLength={160} placeholder="Opsional" className={`${FIELD} mt-1.5 h-12`} /></label>
+        <label className={label}>Link Google Maps<input value={maps} onChange={(e) => setMaps(e.target.value)} inputMode="url" maxLength={300} placeholder="Opsional, https://maps.app.goo.gl/…" className={`${FIELD} mt-1.5 h-12`} /></label>
         <label className={label}>Catatan<input value={catatan} onChange={(e) => setCatatan(e.target.value)} maxLength={200} placeholder="Opsional, mis. punya 2 mobil" className={`${FIELD} mt-1.5 h-12`} /></label>
         <p className={label}>PIC follow up</p>
         <div className="mt-1.5 flex flex-wrap gap-2">
@@ -123,8 +126,8 @@ function Impor({ tim, onClose, onSaved }: { tim: string[]; onClose: () => void; 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+20px)]">
         <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
           Pilih file CSV hasil scrape Google Maps, atau salin kolom dari Google Sheets / Excel lalu tempel di bawah.
-          Kolom yang dikenali: <b>nama</b> (name/title), <b>no HP</b> (phone), <b>profesi</b> (category), dan <b>alamat</b> (address).
-          Tanpa judul kolom, urutannya dianggap nama, no HP, profesi, alamat.
+          Kolom yang dikenali: <b>nama</b> (name/title), <b>no HP</b> (phone), <b>profesi</b> (category), <b>alamat</b> (address), dan <b>link maps</b> (url).
+          Tanpa judul kolom, urutannya dianggap nama, no HP, profesi, alamat, link maps.
         </p>
         <label className="mt-3 flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">
           <input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="sr-only" onChange={(e) => bacaFile(e.target.files?.[0])} />
@@ -136,7 +139,7 @@ function Impor({ tim, onClose, onSaved }: { tim: string[]; onClose: () => void; 
         <div className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3 text-sm dark:bg-neutral-900">
           <b>{hasil.baris.length}</b> prospek siap masuk{hasil.tanpaHp ? <> · <span className="text-[#8A4700] dark:text-[#F7C98A]">{hasil.tanpaHp} dilewati karena tanpa no HP</span></> : null}
           {hasil.baris.slice(0, 3).map((b) => (
-            <p key={b.hp} className="mt-1 truncate text-[13px] text-neutral-500">{b.nama} · {tampilHp(b.hp)}{b.profesi ? ` · ${b.profesi}` : ''}</p>
+            <p key={b.hp} className="mt-1 truncate text-[13px] text-neutral-500">{b.nama} · {tampilHp(b.hp)}{b.profesi ? ` · ${b.profesi}` : ''}{b.maps ? ' · ada link maps' : ''}</p>
           ))}
           <p className="mt-1 text-[13px] text-neutral-500">Nomor yang sudah ada di database tidak dimasukkan dua kali.</p>
         </div>
@@ -348,6 +351,9 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
                 <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{p.pic ? `PIC ${shortName(p.pic)}` : 'Belum ada PIC'}</span>
                 {p.sumber && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{p.sumber}</span>}
                 <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{tampilHp(p.hp)}</span>
+                {p.maps && (
+                  <a href={p.maps} target="_blank" rel="noreferrer" className="rounded-full bg-[#E9EEF8] px-2 py-0.5 text-[#1B2F5B] dark:bg-[#1B2A4A] dark:text-[#9DB5E8]">Buka Maps</a>
+                )}
                 {p.foto && <FotoBukti id={p.foto} nama={p.nama} />}
               </div>
               <div className="mt-2.5 grid grid-cols-3 gap-2">
