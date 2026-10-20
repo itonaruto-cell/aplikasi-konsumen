@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { keyOf } from '../../lib/performa-calc';
+import { keyOf, todayJkt } from '../../lib/performa-calc';
+import { buatXlsx, TIPE_XLSX } from '../../lib/xlsx-mini';
 import { STATUS_LABEL, STATUS_PROSPEK, bacaImpor, keWa, rapikanHp, rapikanMaps, type Prospek, type StatusProspek } from '../../lib/prospek-types';
 import { FIELD, Lembar } from './form';
 import { Ico, Kosong, shortName } from './parts';
@@ -532,8 +533,147 @@ function BagiPic({ ids, judul, tim, list, onClose, onSaved }: { ids: string[]; j
   );
 }
 
+/* ---------- Unduh data follow up (Excel / PDF) ---------- */
+type BarisFU = { waktu: string; tgl: string; nama: string; hp: string; profesi: string; alamat: string; sumber: string; oleh: string; pic: string; hasil: string; status: string; catatan: string; foto: string; maps: string };
+const geser = (tgl: string, hari: number) => { const d = new Date(tgl + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + hari); return d.toISOString().slice(0, 10); };
+const tglId = (tgl: string) => new Date(tgl + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const jamJkt = (iso: string) => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+const KOLOM_FU = ['Tanggal', 'Jam', 'Nama prospek', 'No HP', 'Profesi / usaha', 'Alamat', 'Sumber', 'Di-follow up oleh', 'Hasil', 'Catatan', 'Foto bukti', 'Link Maps'];
+const barisFU = (b: BarisFU) => [tglId(b.tgl), jamJkt(b.waktu), b.nama, b.hp, b.profesi, b.alamat, b.sumber, shortName(b.oleh), b.hasil, b.catatan, b.foto, b.maps];
+
+function UnduhFU({ cabang, onClose }: { cabang: string; onClose: () => void }) {
+  const hariIni = todayJkt();
+  const PERIODE = [
+    ['hari', 'Hari ini', hariIni, hariIni], ['kemarin', 'Kemarin', geser(hariIni, -1), geser(hariIni, -1)],
+    ['7', '7 hari', geser(hariIni, -6), hariIni], ['bulan', 'Bulan ini', hariIni.slice(0, 8) + '01', hariIni],
+    ['lalu', 'Bulan lalu', geser(hariIni.slice(0, 8) + '01', -1).slice(0, 8) + '01', geser(hariIni.slice(0, 8) + '01', -1)], ['semua', 'Semua', '', ''],
+  ] as const;
+  const [per, setPer] = useState<(typeof PERIODE)[number][0]>('hari');
+  const [orang, setOrang] = useState('semua');
+  const [data, setData] = useState<BarisFU[] | null>(null);
+  const [err, setErr] = useState('');
+  const [cetak, setCetak] = useState(false);
+  const p = PERIODE.find((x) => x[0] === per)!;
+  useEffect(() => {
+    let hidup = true;
+    setData(null); setErr('');
+    fetch(`/api/prospek/riwayat?dari=${p[2]}&sampai=${p[3]}`, { cache: 'no-store' }).then(async (r) => {
+      const j = await r.json().catch(() => null);
+      if (!hidup) return;
+      if (r.ok && Array.isArray(j?.baris)) setData(j.baris); else setErr(j?.error || 'Data gagal dimuat.');
+    }).catch(() => { if (hidup) setErr('Koneksi bermasalah.'); });
+    return () => { hidup = false; };
+  }, [p]);
+  const daftarOrang = [...new Set((data || []).map((b) => b.oleh))].sort();
+  const rows = (data || []).filter((b) => orang === 'semua' || b.oleh === orang);
+  const judulPeriode = p[2] ? (p[2] === p[3] ? tglId(p[2]) : `${tglId(p[2])} – ${tglId(p[3])}`) : 'Semua waktu';
+  const namaFile = `Follow-up-prospek-${cabang}-${p[2] || 'semua'}${p[3] && p[3] !== p[2] ? `-sd-${p[3]}` : ''}${orang !== 'semua' ? `-${shortName(orang)}` : ''}`.replace(/[^\w.-]+/g, '-');
+  const hit = (f: (b: BarisFU) => boolean) => rows.filter(f).length;
+  const ringkas = `${rows.length} follow up · ${hit((b) => b.status === 'minat' || b.status === 'order')} minat (${hit((b) => b.status === 'order')} order) · ${hit((b) => b.status === 'tidak')} tidak minat · ${hit((b) => b.status === 'norespon')} tidak ada respon`;
+  const fileExcel = () => {
+    const bytes = buatXlsx([[`FOLLOW UP PROSPEK · ${cabang.toUpperCase()} · ${judulPeriode}${orang !== 'semua' ? ` · ${shortName(orang)}` : ''}`], [ringkas], [], KOLOM_FU, ...rows.map(barisFU)],
+      'FOLLOW UP', [13, 7, 28, 15, 22, 34, 20, 16, 16, 40, 30, 30]);
+    return new File([bytes.buffer as ArrayBuffer], `${namaFile}.xlsx`, { type: TIPE_XLSX });
+  };
+  const unduh = () => {
+    const url = URL.createObjectURL(fileExcel());
+    const a = document.createElement('a');
+    a.href = url; a.download = `${namaFile}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+  const bagikan = async () => {
+    try {
+      const file = fileExcel();
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: namaFile });
+      else unduh();
+    } catch (e) { if ((e as Error)?.name !== 'AbortError') unduh(); }
+  };
+  return (
+    <>
+      <Lembar judul="Data follow up" onClose={onClose}>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+20px)]">
+          <p className="text-[13px] font-semibold text-neutral-500">Periode</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {PERIODE.map(([k, l]) => <button key={k} onClick={() => { setPer(k); setOrang('semua'); }} aria-pressed={per === k} className={pilihK(per === k)}>{l}</button>)}
+          </div>
+          {daftarOrang.length > 1 && (
+            <>
+              <p className="mt-3 text-[13px] font-semibold text-neutral-500">Orang</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <button onClick={() => setOrang('semua')} aria-pressed={orang === 'semua'} className={pilihK(orang === 'semua')}>Semua</button>
+                {daftarOrang.map((o) => <button key={o} onClick={() => setOrang(o)} aria-pressed={orang === o} className={pilihK(orang === o)}>{shortName(o)}</button>)}
+              </div>
+            </>
+          )}
+          <div className="mt-4 rounded-2xl bg-neutral-100 px-4 py-3 text-sm dark:bg-neutral-900">
+            {err ? <span className="text-red-700 dark:text-red-300">{err}</span> : !data ? 'Memuat…' : (
+              <>
+                <b>{judulPeriode}</b>
+                <span className="mt-0.5 block text-neutral-600 dark:text-neutral-400">{ringkas}</span>
+              </>
+            )}
+          </div>
+          {data && rows.length > 0 && (
+            <ul className="mt-2 text-[13px] text-neutral-500">
+              {rows.slice(-3).reverse().map((b) => <li key={b.waktu + b.nama} className="truncate">{jamJkt(b.waktu)} · {b.nama} · {b.hasil} · {shortName(b.oleh)}</li>)}
+            </ul>
+          )}
+          <div className="mt-4 grid gap-2">
+            <button onClick={unduh} disabled={!rows.length} className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900">Unduh Excel</button>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={bagikan} disabled={!rows.length} className="min-h-12 rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white disabled:opacity-40">Bagikan Excel</button>
+              <button onClick={() => setCetak(true)} disabled={!rows.length} className="min-h-12 rounded-2xl border border-neutral-300 text-[15px] font-semibold disabled:opacity-40 dark:border-neutral-700">Lihat / PDF</button>
+            </div>
+          </div>
+        </div>
+      </Lembar>
+      {cetak && <CetakFU judul={`Follow up prospek · ${cabang} · ${judulPeriode}${orang !== 'semua' ? ` · ${shortName(orang)}` : ''}`} ringkas={ringkas} rows={rows} onClose={() => setCetak(false)} />}
+    </>
+  );
+}
+
+// Tampilan tabel untuk dilihat atau dicetak ke PDF (Cetak → Simpan sebagai PDF di HP)
+function CetakFU({ judul, ringkas, rows, onClose }: { judul: string; ringkas: string; rows: BarisFU[]; onClose: () => void }) {
+  useOverlay(true, onClose);
+  return (
+    <div id="cetak-fu" role="dialog" aria-label="Data follow up" className="fixed inset-0 z-[80] overflow-auto bg-white text-neutral-900">
+      <div className="sticky top-0 flex items-center gap-2 border-b border-neutral-200 bg-white px-4 py-2 pt-[calc(env(safe-area-inset-top)+8px)] print:hidden">
+        <button onClick={onClose} className="min-h-11 rounded-xl px-3 text-sm font-semibold">Tutup</button>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold">Data follow up</span>
+        <button onClick={() => window.print()} className="min-h-11 rounded-xl bg-neutral-900 px-4 text-sm font-bold text-white">Cetak / Simpan PDF</button>
+      </div>
+      <div className="p-4">
+        <h1 className="text-lg font-bold">{judul}</h1>
+        <p className="mt-0.5 text-xs text-neutral-600">{ringkas}</p>
+        <table className="mt-3 w-full border-collapse text-[11px] leading-snug">
+          <thead>
+            <tr className="bg-neutral-100 text-left">
+              {['Tgl / jam', 'Prospek', 'No HP', 'Oleh', 'Hasil', 'Catatan', 'Bukti'].map((h) => <th key={h} className="border border-neutral-300 px-1.5 py-1 font-bold">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((b, i) => (
+              <tr key={i} className="align-top">
+                <td className="whitespace-nowrap border border-neutral-300 px-1.5 py-1">{tglId(b.tgl)}<br />{jamJkt(b.waktu)}</td>
+                <td className="border border-neutral-300 px-1.5 py-1"><b>{b.nama}</b>{(b.profesi || b.alamat) && <><br /><span className="text-neutral-600">{[b.profesi, b.alamat].filter(Boolean).join(' · ')}</span></>}</td>
+                <td className="whitespace-nowrap border border-neutral-300 px-1.5 py-1">{b.hp}</td>
+                <td className="border border-neutral-300 px-1.5 py-1">{shortName(b.oleh)}</td>
+                <td className="border border-neutral-300 px-1.5 py-1 font-semibold">{b.hasil}</td>
+                <td className="border border-neutral-300 px-1.5 py-1">{b.catatan}</td>
+                <td className="border border-neutral-300 px-1.5 py-1">{b.foto ? <a href={b.foto} target="_blank" rel="noreferrer" className="text-blue-700 underline">foto</a> : '–'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-3 text-[10px] text-neutral-500">Marketing Kendal · dicetak {new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</p>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Halaman ---------- */
-export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: Akun; tim?: string[]; reloadKey?: number }) {
+export default function ProspekPage({ akun, tim = [], reloadKey = 0, cabang = 'Kendal' }: { akun: Akun; tim?: string[]; reloadKey?: number; cabang?: string }) {
   const isOwner = akun.role === 'owner';
   const { list, setList, loading, err, reload } = useProspek(reloadKey);
   const [status, setStatus] = useState<StatusProspek | 'semua'>('semua');
@@ -547,6 +687,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
   const [dipilih, setDipilih] = useState<Set<string>>(new Set());
   const [bagi, setBagi] = useState<{ ids: string[]; judul: string } | null>(null);
   const [menuBagi, setMenuBagi] = useState(false);
+  const [unduhFu, setUnduhFu] = useState(false);
   const [toast, setToast] = useState('');
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2400); return () => clearTimeout(t); }, [toast]);
 
@@ -601,6 +742,9 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
               Ambil dari Google Maps
             </button>
           )}
+          <button onClick={() => setUnduhFu(true)} className="col-span-2 min-h-12 rounded-2xl border border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">
+            Unduh data follow up (Excel / PDF)
+          </button>
           {isOwner && (
             <button onClick={() => setMenuBagi(true)} className="col-span-2 min-h-12 rounded-2xl border border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">
               Bagikan ke PIC sekaligus{tanpaPic.length ? ` · ${tanpaPic.length} belum ada PIC` : ''}
@@ -702,6 +846,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
           </div>
         </Lembar>
       )}
+      {unduhFu && <UnduhFU cabang={cabang} onClose={() => setUnduhFu(false)} />}
       {bagi && isOwner && <BagiPic ids={bagi.ids} judul={bagi.judul} tim={tim} list={list} onClose={() => setBagi(null)} onSaved={selesai} />}
       {fu && <FollowUp p={fu} wajibFoto={!isOwner} onClose={() => setFu(null)} onSaved={(x) => { setFu(null); setList((l) => l.map((p) => (p.id === x.id ? x : p))); setToast('Hasil follow up tersimpan'); }} />}
       {toast && (
