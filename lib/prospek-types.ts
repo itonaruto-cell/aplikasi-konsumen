@@ -24,7 +24,11 @@ export type Prospek = {
   diubah: string;
   oleh: string;        // email yang menambahkan
   foto: string;        // ID foto bukti follow up terakhir (tab FOTO), kosong = belum ada
+  maps: string;        // link Google Maps tempat usaha (dari impor scrape atau diisi manual)
 };
+
+// Link maps yang diterima: http(s) saja
+export const rapikanMaps = (v: unknown) => { const t = String(v ?? '').trim(); return /^https?:\/\/\S+$/i.test(t) ? t.slice(0, 300) : ''; };
 
 // Nomor HP Indonesia: hanya angka, +62/62 diubah ke 0. Kosong kalau terlalu pendek.
 export function rapikanHp(v: string): string {
@@ -57,23 +61,31 @@ function pisahBaris(teks: string): string[][] {
   return rows.map((r) => r.map((x) => x.trim())).filter((r) => r.some(Boolean));
 }
 
-const KOLOM: [keyof Pick<Prospek, 'nama' | 'hp' | 'profesi' | 'alamat'>, RegExp][] = [
-  ['hp', /^(no\.?\s*)?(hp|wa|whatsapp|telp|telepon|telephone|phone|phone ?number|nomor|no\.? ?telp|kontak|contact)/i],
-  ['nama', /^(nama|name|title|judul|business|nama usaha|nama tempat|place ?name)/i],
-  ['profesi', /^(profesi|pekerjaan|kategori|category|categoryname|categories|jenis|type|bidang)/i],
-  ['alamat', /^(alamat|address|full ?address|street|lokasi|location|kecamatan|kota|city)/i],
+// Judul kolom yang dikenali, urut dari yang paling tepat (mis. "address" didahulukan dari "street"/"city").
+// Cocok untuk hasil Apify Google Maps Scraper (title, phone, categoryName, address, url) dan tabel buatan sendiri.
+type Kol = 'nama' | 'hp' | 'profesi' | 'alamat' | 'maps';
+const KOLOM: [Kol, RegExp[]][] = [
+  ['nama', [/^(nama|nama usaha|nama tempat|nama toko|name|title|judul|place ?name|business( name)?)$/i, /^(nama|name|title)/i]],
+  ['hp', [/^(no\.?\s*)?(hp|wa|whatsapp|telp|telepon|telephone|phone|phone ?number|nomor( hp| telepon)?|no\.? ?telp)$/i, /^(phone|telp|telepon|kontak|contact|nomor|no\.? ?hp)/i]],
+  ['profesi', [/^(profesi|pekerjaan|kategori|category|category ?name|jenis usaha|bidang usaha|bidang)$/i, /^(categor|kategori|jenis|type|bidang)/i]],
+  ['alamat', [/^(alamat|alamat lengkap|address|full ?address)$/i, /^(alamat|address)/i, /^(street|lokasi|location|kecamatan|kota|city)/i]],
+  ['maps', [/^(url|maps|maps ?url|link|link maps|google ?maps( ?url| ?link)?|gmaps|lokasi maps)$/i]],
 ];
-export type HasilImpor = { baris: Pick<Prospek, 'nama' | 'hp' | 'profesi' | 'alamat'>[]; tanpaHp: number; kepala: boolean };
+export type HasilImpor = { baris: Pick<Prospek, 'nama' | 'hp' | 'profesi' | 'alamat' | 'maps'>[]; tanpaHp: number; kepala: boolean };
 export function bacaImpor(teks: string): HasilImpor {
   const rows = pisahBaris(teks);
   if (!rows.length) return { baris: [], tanpaHp: 0, kepala: false };
   // Baris pertama dianggap judul kolom kalau ada nama kolom yang dikenali
-  const idx: Partial<Record<'nama' | 'hp' | 'profesi' | 'alamat', number>> = {};
-  rows[0].forEach((h, i) => {
-    for (const [k, re] of KOLOM) if (idx[k] === undefined && re.test(h)) { idx[k] = i; break; }
-  });
+  const idx: Partial<Record<Kol, number>> = {};
+  const dipakai = new Set<number>();
+  for (const [k, pola] of KOLOM) {
+    for (const re of pola) {
+      const i = rows[0].findIndex((h, j) => !dipakai.has(j) && re.test(h.trim()));
+      if (i >= 0) { idx[k] = i; dipakai.add(i); break; }
+    }
+  }
   const kepala = idx.nama !== undefined || idx.hp !== undefined;
-  const pos = kepala ? idx : { nama: 0, hp: 1, profesi: 2, alamat: 3 };
+  const pos: typeof idx = kepala ? idx : { nama: 0, hp: 1, profesi: 2, alamat: 3, maps: 4 };
   const ambil = (r: string[], i?: number) => (i === undefined ? '' : String(r[i] ?? '').trim());
   let tanpaHp = 0;
   const baris: HasilImpor['baris'] = [];
@@ -82,7 +94,7 @@ export function bacaImpor(teks: string): HasilImpor {
     const hp = rapikanHp(ambil(r, pos.hp));
     if (!nama && !hp) continue;
     if (!hp) { tanpaHp++; continue; }
-    baris.push({ nama: nama || '(tanpa nama)', hp, profesi: ambil(r, pos.profesi).slice(0, 80), alamat: ambil(r, pos.alamat).slice(0, 160) });
+    baris.push({ nama: nama || '(tanpa nama)', hp, profesi: ambil(r, pos.profesi).slice(0, 80), alamat: ambil(r, pos.alamat).slice(0, 160), maps: rapikanMaps(ambil(r, pos.maps)) });
   }
   return { baris, tanpaHp, kepala };
 }

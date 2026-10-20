@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getPerfName, getRole } from '../../../lib/access';
 import { appendRows, readRows, updateRowById } from '../../../lib/sheet-store';
-import { STATUS_PROSPEK, rapikanHp, type Prospek, type StatusProspek } from '../../../lib/prospek-types';
+import { STATUS_PROSPEK, rapikanHp, rapikanMaps, type Prospek, type StatusProspek } from '../../../lib/prospek-types';
 import { MAX_B64, saveFotos } from '../../../lib/foto-store';
 
 export const dynamic = 'force-dynamic';
@@ -14,17 +14,17 @@ export const dynamic = 'force-dynamic';
 // Menghapus: owner, atau orang yang menambahkan prospek itu.
 // Prospek tanpa PIC yang di-follow up staff otomatis menjadi miliknya.
 const TAB = 'PROSPEK';
-const HEAD = ['ID', 'NAMA', 'NO_HP', 'PROFESI', 'ALAMAT', 'SUMBER', 'CATATAN', 'PIC', 'STATUS', 'HASIL', 'FU_TERAKHIR', 'DIBUAT', 'DIUBAH', 'OLEH', 'FOTO'];
+const HEAD = ['ID', 'NAMA', 'NO_HP', 'PROFESI', 'ALAMAT', 'SUMBER', 'CATATAN', 'PIC', 'STATUS', 'HASIL', 'FU_TERAKHIR', 'DIBUAT', 'DIUBAH', 'OLEH', 'FOTO', 'MAPS'];
 const MAKS_IMPOR = 3000;
 
 type Baris = Prospek & { hapus: boolean };
 const toObj = (r: string[]): Baris => ({
   id: r[0], nama: r[1], hp: r[2], profesi: r[3], alamat: r[4], sumber: r[5], catatan: r[6], pic: r[7],
   status: (STATUS_PROSPEK as readonly string[]).includes(r[8]) ? (r[8] as StatusProspek) : 'baru', hapus: r[8] === 'hapus',
-  hasil: r[9], fu: r[10], dibuat: r[11], diubah: r[12] || r[11], oleh: r[13], foto: r[14] || '',
+  hasil: r[9], fu: r[10], dibuat: r[11], diubah: r[12] || r[11], oleh: r[13], foto: r[14] || '', maps: r[15] || '',
 });
 const toRow = (b: Prospek, status: string = b.status): string[] =>
-  [b.id, b.nama, b.hp, b.profesi, b.alamat, b.sumber, b.catatan, b.pic, status, b.hasil, b.fu, b.dibuat, b.diubah, b.oleh, b.foto || ''];
+  [b.id, b.nama, b.hp, b.profesi, b.alamat, b.sumber, b.catatan, b.pic, status, b.hasil, b.fu, b.dibuat, b.diubah, b.oleh, b.foto || '', b.maps || ''];
 const keluar = ({ hapus: _h, ...p }: Baris): Prospek => p;
 const teks = (v: unknown, maks: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, maks);
 
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         baru.push({
           id: randomUUID().slice(0, 8), nama: teks(raw?.nama, 100) || '(tanpa nama)', hp,
           profesi: teks(raw?.profesi, 80), alamat: teks(raw?.alamat, 160), sumber, catatan: teks(raw?.catatan, 200),
-          pic: teks(raw?.pic, 80) || pic, status: 'baru', hasil: '', fu: '', dibuat: now, diubah: now, oleh: x.s.email.toLowerCase(), foto: '',
+          pic: teks(raw?.pic, 80) || pic, status: 'baru', hasil: '', fu: '', dibuat: now, diubah: now, oleh: x.s.email.toLowerCase(), foto: '', maps: rapikanMaps(raw?.maps),
         });
       }
       await appendRows(TAB, HEAD, baru.map((p) => toRow(p)));
@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
       if (b?.profesi !== undefined) ubah.profesi = teks(b.profesi, 80);
       if (b?.alamat !== undefined) ubah.alamat = teks(b.alamat, 160);
       if (b?.catatan !== undefined) ubah.catatan = teks(b.catatan, 200);
+      if (b?.maps !== undefined) ubah.maps = rapikanMaps(b.maps);
       if (b?.pic !== undefined) ubah.pic = teks(b.pic, 80);
     }
     if (!lama.pic && fu && x.role !== 'owner' && b?.pic === undefined) ubah.pic = x.aku;   // diambil staff yang mem-follow up
