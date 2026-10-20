@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { sesiProspek } from '../../../lib/prospek-store';
+import { adaAI } from '../../../lib/sk-jawab';
 import { daftarDokumen, hapusDokumen, simpanDokumen, validDok, type ImporSK } from '../../../lib/sk-store';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!x) return NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 });
   try {
     const dok = await daftarDokumen(req.nextUrl.searchParams.has('segar'));
-    return NextResponse.json({ dok, ai: !!process.env.ANTHROPIC_API_KEY, owner: x.role === 'owner' }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ dok, ai: adaAI(), owner: x.role === 'owner' }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('Gagal membaca dokumen SK:', err);
     return NextResponse.json({ error: 'Dokumen SK belum bisa dibaca. Coba lagi sebentar.' }, { status: 500 });
