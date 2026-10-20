@@ -1,4 +1,6 @@
-// Menyusun jawaban dari potongan SK lewat Claude API (hanya aktif kalau ANTHROPIC_API_KEY dipasang di Vercel).
+// Menyusun jawaban dari potongan SK lewat AI. Dipakai kalau kunci dipasang di Vercel:
+//  GEMINI_API_KEY (Google AI Studio, ada jatah gratis) diutamakan, lalu ANTHROPIC_API_KEY (Claude).
+// Tanpa kunci, aplikasi hanya menampilkan kutipan SK.
 import type { Sumber } from './sk-cari';
 
 const SISTEM = `Kamu asisten kebijakan untuk tim marketing cabang perusahaan pembiayaan (WOM Finance).
@@ -9,23 +11,55 @@ Jawab pertanyaan HANYA berdasarkan kutipan ringkasan SK yang diberikan. Aturan:
 - Kalau kutipan menyebut ada pertentangan antar-SK, perubahan oleh SK lain (misalnya SK 094), atau hal yang perlu dikonfirmasi, sampaikan.
 - Pakai **tebal** hanya untuk angka/keputusan kunci. Jangan memakai judul (#) atau tabel.`;
 
-export async function jawabAI(q: string, sumber: Sumber[], riwayat: { q: string; a: string }[]): Promise<string> {
-  const kutipan = sumber.map((s) => `[${s.n}] ${s.judul} · ${s.bagian} · hal. ${s.hal}\n${s.isi.replace(/[ \t]{3,}/g, '  ')}`).join('\n\n---\n\n');
-  const messages: { role: 'user' | 'assistant'; content: string }[] = [];
-  for (const r of riwayat) { messages.push({ role: 'user', content: r.q }); messages.push({ role: 'assistant', content: r.a }); }
-  messages.push({ role: 'user', content: `Kutipan ringkasan SK:\n\n${kutipan}\n\n===\nTanggal hari ini: ${new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' })}\nPertanyaan: ${q}` });
+export const adaAI = () => !!(process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY);
+
+type Pesan = { role: 'user' | 'assistant'; content: string };
+
+async function kirimJson(url: string, headers: Record<string, string>, body: unknown) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 45_000);
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal: ctl.signal,
-      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY || '', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.SK_MODEL || 'claude-sonnet-5-5', max_tokens: 1200, system: SISTEM, messages }),
-    });
-    const j = await r.json().catch(() => null) as { content?: { type: string; text?: string }[]; error?: { message?: string } } | null;
-    if (!r.ok) throw new Error(`Claude API ${r.status}: ${j?.error?.message || ''}`);
-    const teks = (j?.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
-    if (!teks) throw new Error('Jawaban kosong');
-    return teks;
+    const r = await fetch(url, { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+    return { r, j: await r.json().catch(() => null) };
   } finally { clearTimeout(t); }
+}
+
+// Gemini: model utama, lalu model cadangan kalau model utama tidak tersedia / jatah habis
+async function gemini(messages: Pesan[]): Promise<string> {
+  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const daftar = [...new Set([model, 'gemini-3.5-flash-lite'])];
+  let terakhir = '';
+  for (const m of daftar) {
+    const { r, j } = await kirimJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,
+      { 'x-goog-api-key': process.env.GEMINI_API_KEY || '' }, {
+        systemInstruction: { parts: [{ text: SISTEM }] },
+        contents: messages.map((x) => ({ role: x.role === 'assistant' ? 'model' : 'user', parts: [{ text: x.content }] })),
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+      });
+    if (r.ok) {
+      const teks = ((j?.candidates?.[0]?.content?.parts || []) as { text?: string; thought?: boolean }[]).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
+      if (teks) return teks;
+      terakhir = `Gemini ${m}: jawaban kosong (${j?.candidates?.[0]?.finishReason || j?.promptFeedback?.blockReason || '-'})`;
+    } else terakhir = `Gemini ${m} ${r.status}: ${j?.error?.message || ''}`;
+    if (r.ok || ![404, 429, 500, 503].includes(r.status)) break;
+  }
+  throw new Error(terakhir);
+}
+
+async function claude(messages: Pesan[]): Promise<string> {
+  const { r, j } = await kirimJson('https://api.anthropic.com/v1/messages',
+    { 'x-api-key': process.env.ANTHROPIC_API_KEY || '', 'anthropic-version': '2023-06-01' },
+    { model: process.env.SK_MODEL || 'claude-sonnet-5-5', max_tokens: 1200, system: SISTEM, messages });
+  if (!r.ok) throw new Error(`Claude API ${r.status}: ${j?.error?.message || ''}`);
+  const teks = ((j?.content || []) as { type: string; text?: string }[]).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
+  if (!teks) throw new Error('Jawaban kosong');
+  return teks;
+}
+
+export async function jawabAI(q: string, sumber: Sumber[], riwayat: { q: string; a: string }[]): Promise<string> {
+  const kutipan = sumber.map((s) => `[${s.n}] ${s.judul} · ${s.bagian} · hal. ${s.hal}\n${s.isi.replace(/[ \t]{3,}/g, '  ')}`).join('\n\n---\n\n');
+  const messages: Pesan[] = [];
+  for (const r of riwayat) { messages.push({ role: 'user', content: r.q }); messages.push({ role: 'assistant', content: r.a }); }
+  messages.push({ role: 'user', content: `Kutipan ringkasan SK:\n\n${kutipan}\n\n===\nTanggal hari ini: ${new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' })}\nPertanyaan: ${q}` });
+  return process.env.GEMINI_API_KEY ? gemini(messages) : claude(messages);
 }
