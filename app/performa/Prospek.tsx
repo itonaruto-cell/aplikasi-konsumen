@@ -317,11 +317,20 @@ const MAKS_B64 = 175_000;
 async function kecilkanFoto(file: File): Promise<{ mime: string; data: string; url: string }> {
   const url = URL.createObjectURL(file);
   try {
-    const img = await new Promise<HTMLImageElement>((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
+    // createImageBitmap lebih hemat memori untuk foto kamera besar; <img> sebagai cadangan
+    let img: CanvasImageSource, w = 0, h = 0;
+    try {
+      const bm = await createImageBitmap(file);
+      img = bm; w = bm.width; h = bm.height;
+    } catch {
+      const i = await new Promise<HTMLImageElement>((ok, no) => { const x = new Image(); x.onload = () => ok(x); x.onerror = no; x.src = url; });
+      img = i; w = i.naturalWidth; h = i.naturalHeight;
+    }
+    if (!w || !h) throw new Error('rusak');
     for (const [sisi, q] of [[1000, 0.72], [900, 0.6], [760, 0.55], [640, 0.5], [520, 0.45]] as const) {
-      const k = Math.min(1, sisi / Math.max(img.naturalWidth, img.naturalHeight));
+      const k = Math.min(1, sisi / Math.max(w, h));
       const cv = document.createElement('canvas');
-      cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+      cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
       const g = cv.getContext('2d');
       if (!g) break;
       g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
@@ -374,7 +383,7 @@ function FollowUp({ p, wajibFoto, onClose, onSaved }: { p: Prospek; wajibFoto: b
   const pilihFoto = async (f: File | undefined) => {
     if (!f) return;
     setOlah(true); setErr('');
-    try { setFoto(await kecilkanFoto(f)); } catch { setErr('Foto tidak bisa dibaca. Coba foto lain.'); } finally { setOlah(false); }
+    try { setFoto(await kecilkanFoto(f)); } catch { setErr('Foto ini tidak bisa dibaca HP (mis. format HEIC). Coba screenshot, atau pilih foto lain dari galeri.'); } finally { setOlah(false); }
   };
   const simpan = async () => {
     if (wajibFoto && !foto) { setErr('Lampirkan foto bukti dulu: foto saat bertemu atau screenshot chat / riwayat telepon.'); return; }
@@ -406,10 +415,20 @@ function FollowUp({ p, wajibFoto, onClose, onSaved }: { p: Prospek; wajibFoto: b
             <button onClick={() => setFoto(null)} className="absolute right-2 top-2 min-h-9 rounded-full bg-black/70 px-3 text-xs font-semibold text-white">Ganti</button>
           </div>
         ) : (
-          <label className="mt-1.5 flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-4 text-center text-[15px] font-semibold dark:border-neutral-700">
-            <input type="file" accept="image/*" className="sr-only" aria-label="Pilih foto bukti" onChange={(e) => pilihFoto(e.target.files?.[0])} />
-            {olah ? 'Memproses foto…' : 'Ambil foto / pilih screenshot'}
-          </label>
+          olah ? (
+            <p className="mt-1.5 flex min-h-14 items-center justify-center rounded-2xl border border-dashed border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">Memproses foto…</p>
+          ) : (
+            <div className="mt-1.5 grid grid-cols-2 gap-2">
+              <label className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-3 text-center text-[15px] font-semibold dark:border-neutral-700">
+                <input type="file" accept="image/*" className="sr-only" aria-label="Pilih foto bukti" onChange={(e) => { pilihFoto(e.target.files?.[0]); e.target.value = ''; }} />
+                Galeri / screenshot
+              </label>
+              <label className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-3 text-center text-[15px] font-semibold dark:border-neutral-700">
+                <input type="file" accept="image/*" capture="environment" className="sr-only" aria-label="Ambil foto dengan kamera" onChange={(e) => { pilihFoto(e.target.files?.[0]); e.target.value = ''; }} />
+                Kamera
+              </label>
+            </div>
+          )
         )}
         <p className="mt-1.5 text-xs text-neutral-500">Foto saat bertemu, atau screenshot chat WhatsApp / riwayat panggilan.</p>
         {!p.pic && <p className="mt-2 text-[13px] text-neutral-500">Prospek ini belum ada PIC-nya. Setelah disimpan, prospek ini jadi pegangan kamu.</p>}

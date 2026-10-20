@@ -108,6 +108,25 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Versi baru di-deploy saat aplikasi masih terbuka → tawarkan muat ulang (supaya fitur baru, mis. upload foto, muncul)
+  const [versiBaru, setVersiBaru] = useState(false);
+  useEffect(() => {
+    let awal = '';
+    const cek = async () => {
+      try {
+        const j = await (await fetch('/api/versi', { cache: 'no-store' })).json();
+        const v = String(j?.v || '');
+        if (!v) return;
+        if (!awal) awal = v; else if (v !== awal) setVersiBaru(true);
+      } catch { /* abaikan */ }
+    };
+    cek();
+    const t = setInterval(cek, 10 * 60_000);
+    const onVis = () => { if (document.visibilityState === 'visible') cek(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+
   // Balik ke aplikasi setelah >5 menit → muat ulang diam-diam
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === 'visible' && Date.now() - loadedAt.current > 300_000) reload(); };
@@ -304,6 +323,14 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       </div>
 
       {/* Navigasi bawah gaya Android */}
+      {versiBaru && (
+        <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 flex justify-center px-4">
+          <div className="flex w-full max-w-xl items-center gap-3 rounded-2xl bg-neutral-900 py-2 pl-4 pr-2 text-sm text-white shadow-lg dark:bg-white dark:text-neutral-900">
+            <span className="min-w-0 flex-1 font-semibold">Versi baru aplikasi tersedia</span>
+            <button onClick={() => window.location.reload()} className="min-h-10 rounded-xl bg-white px-4 font-bold text-neutral-900 dark:bg-neutral-900 dark:text-white">Muat ulang</button>
+          </div>
+        </div>
+      )}
       <nav aria-label="Menu utama" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <div className="mx-auto grid max-w-xl" style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}>
           {NAV.map(([k, icon, label]) => {
