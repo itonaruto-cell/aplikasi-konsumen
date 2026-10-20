@@ -88,3 +88,20 @@ export async function updateRowById(tab: string, header: string[], id: string, r
   });
   return true;
 }
+
+// Ubah banyak baris sekaligus berdasarkan ID di kolom A (satu kali baca + satu kali tulis).
+// Baris yang ID-nya tidak ditemukan dilewati. Mengembalikan jumlah baris yang diubah.
+export async function updateRowsById(tab: string, header: string[], rows: string[][]): Promise<number> {
+  if (!rows.length) return 0;
+  await ensureTab(tab, header);
+  const api = sheets();
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  const res = await api.spreadsheets.values.get({ spreadsheetId, range: `${tab}!A2:A` });
+  const pos = new Map<string, number>();
+  ((res.data.values || []) as unknown[][]).forEach((r, i) => { const id = String(r[0] ?? ''); if (id && !pos.has(id)) pos.set(id, i + 2); });
+  const data = rows.filter((r) => pos.has(r[0])).map((r) => ({ range: `${tab}!A${pos.get(r[0])}`, values: [r] }));
+  for (let i = 0; i < data.length; i += 500) {
+    await api.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data: data.slice(i, i + 500) } });
+  }
+  return data.length;
+}

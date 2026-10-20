@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import { appendRows, updateRowById } from '../../../lib/sheet-store';
+import { appendRows, updateRowById, updateRowsById } from '../../../lib/sheet-store';
 import { STATUS_PROSPEK, rapikanHp, rapikanMaps, type Prospek, type StatusProspek } from '../../../lib/prospek-types';
 import { catatFU } from '../../../lib/prospek-log';
 import { HEAD_PROSPEK, TAB_PROSPEK, bolehLihat, keBaris, semuaProspek, sesiProspek, type BarisProspek } from '../../../lib/prospek-store';
@@ -45,6 +45,16 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => null);
   const now = new Date().toISOString();
   try {
+    // Owner: atur PIC banyak prospek sekaligus. { aksi: 'pic', daftar: [{ id, pic }] } (pic kosong = lepas PIC)
+    if (b?.aksi === 'pic' && Array.isArray(b?.daftar)) {
+      if (x.role !== 'owner') return NextResponse.json({ error: 'Hanya owner yang bisa membagikan prospek sekaligus.' }, { status: 403 });
+      if (b.daftar.length > MAKS_IMPOR) return NextResponse.json({ error: `Maksimal ${MAKS_IMPOR} prospek sekali bagi.` }, { status: 400 });
+      const peta = new Map<string, string>();
+      for (const d of b.daftar as Record<string, unknown>[]) { const id = String(d?.id || ''); if (id) peta.set(id, teks(d?.pic, 80)); }
+      const ubah = (await semuaProspek()).filter((p) => peta.has(p.id)).map((p) => toRow({ ...p, pic: peta.get(p.id)!, diubah: now }));
+      const n = await updateRowsById(TAB, HEAD, ubah);
+      return NextResponse.json({ ok: true, diubah: n });
+    }
     if (Array.isArray(b?.items)) {
       if (b.items.length > MAKS_IMPOR) return NextResponse.json({ error: `Maksimal ${MAKS_IMPOR} prospek sekali simpan.` }, { status: 400 });
       const sumber = teks(b.sumber, 40) || 'Manual';
