@@ -13,8 +13,8 @@ import { KATA_INTI, KATA_KUNCI, WILAYAH, pencarian } from '../../lib/ambil-maps'
 type Akun = { email: string; role: 'owner' | 'konsumen' | 'tim' };
 const WARNA: Record<StatusProspek, string> = {
   baru: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
-  dihubungi: 'bg-[#E9EEF8] text-[#1B2F5B] dark:bg-[#1B2A4A] dark:text-[#9DB5E8]',
-  tertarik: 'bg-[#FFF4E0] text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]',
+  minat: 'bg-[#FFF4E0] text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]',
+  norespon: 'bg-[#E9EEF8] text-[#1B2F5B] dark:bg-[#1B2A4A] dark:text-[#9DB5E8]',
   tidak: 'bg-red-50 text-red-700 dark:bg-red-400/15 dark:text-red-300',
   order: 'bg-green-50 text-green-800 dark:bg-green-400/15 dark:text-green-300',
 };
@@ -374,7 +374,9 @@ function FotoBukti({ id, nama }: { id: string; nama: string }) {
 
 /* ---------- Catat hasil follow up ---------- */
 function FollowUp({ p, wajibFoto, onClose, onSaved }: { p: Prospek; wajibFoto: boolean; onClose: () => void; onSaved: (x: Prospek) => void }) {
-  const [status, setStatus] = useState<StatusProspek>(p.status === 'baru' ? 'dihubungi' : p.status);
+  const [hasilFu, setHasilFu] = useState<'minat' | 'tidak' | 'norespon' | ''>(p.status === 'order' || p.status === 'minat' ? 'minat' : p.status === 'tidak' || p.status === 'norespon' ? p.status : '');
+  const [order, setOrder] = useState(p.status === 'order');
+  const status: StatusProspek | '' = hasilFu === 'minat' && order ? 'order' : hasilFu;
   const [hasil, setHasil] = useState(p.hasil);
   const [foto, setFoto] = useState<{ mime: string; data: string; url: string } | null>(null);
   const [olah, setOlah] = useState(false);
@@ -386,6 +388,7 @@ function FollowUp({ p, wajibFoto, onClose, onSaved }: { p: Prospek; wajibFoto: b
     try { setFoto(await kecilkanFoto(f)); } catch { setErr('Foto ini tidak bisa dibaca HP (mis. format HEIC). Coba screenshot, atau pilih foto lain dari galeri.'); } finally { setOlah(false); }
   };
   const simpan = async () => {
+    if (!status) { setErr('Pilih hasil follow up: minat, tidak minat, atau tidak ada respon.'); return; }
     if (wajibFoto && !foto) { setErr('Lampirkan foto bukti dulu: foto saat bertemu atau screenshot chat / riwayat telepon.'); return; }
     setBusy(true); setErr('');
     try {
@@ -401,8 +404,16 @@ function FollowUp({ p, wajibFoto, onClose, onSaved }: { p: Prospek; wajibFoto: b
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+20px)]">
         <p className="text-[13px] font-semibold text-neutral-500">Hasil</p>
         <div className="mt-1.5 flex flex-wrap gap-2">
-          {STATUS_PROSPEK.filter((s) => s !== 'baru').map((s) => <button key={s} onClick={() => setStatus(s)} aria-pressed={status === s} className={pilih(status === s)}>{STATUS_LABEL[s]}</button>)}
+          {([['minat', 'Minat'], ['tidak', 'Tidak minat'], ['norespon', 'Tidak ada respon']] as const).map(([s, l]) => (
+            <button key={s} onClick={() => setHasilFu(s)} aria-pressed={hasilFu === s} className={pilih(hasilFu === s)}>{l}</button>
+          ))}
         </div>
+        {hasilFu === 'minat' && (
+          <label className="mt-2 flex min-h-12 items-center gap-3 rounded-2xl bg-green-50 px-4 text-[15px] font-semibold text-green-900 dark:bg-green-400/15 dark:text-green-200">
+            <input type="checkbox" checked={order} onChange={(e) => setOrder(e.target.checked)} className="h-5 w-5 accent-green-700" />
+            Jadi order
+          </label>
+        )}
         <label className="mt-3 block text-[13px] font-semibold text-neutral-500">Catatan
           <textarea value={hasil} onChange={(e) => setHasil(e.target.value)} rows={3} maxLength={300}
             placeholder="mis. Minat mobil bekas, minta dihubungi lagi Senin" className={`${FIELD} mt-1.5 resize-none py-2.5`} />
@@ -467,8 +478,8 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
         <span className="text-[13px] font-bold tracking-wide text-white/80">DATABASE PROSPEK</span>
         <p className="text-[34px] font-bold leading-none tracking-tight">{loading && !list.length ? '…' : list.length}<span className="ml-2 text-base font-semibold text-white/70">prospek</span></p>
         <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-          {([['baru', 'belum dihubungi'], ['tertarik', 'tertarik'], ['order', 'jadi order']] as const).map(([s, l]) => (
-            <span key={s} className="rounded-2xl bg-white/10 px-2 py-2"><b className="block text-xl">{hitung(s)}</b><span className="block text-[12px] leading-tight text-white/70">{l}</span></span>
+          {([['baru', 'belum dihubungi'], ['minat', 'minat'], ['order', 'jadi order']] as const).map(([s, l]) => (
+            <span key={s} className="rounded-2xl bg-white/10 px-2 py-2"><b className="block text-xl">{s === 'minat' ? hitung('minat') + hitung('order') : hitung(s)}</b><span className="block text-[12px] leading-tight text-white/70">{l}</span></span>
           ))}
         </div>
       </section>

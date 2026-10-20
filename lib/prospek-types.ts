@@ -2,10 +2,27 @@
 // yang di-follow up CMO. Terpisah dari database konsumen (Cari): nomor HP prospek memang untuk dihubungi tim.
 // Dipakai bersama oleh server (app/api/prospek) dan halaman (app/performa/Prospek.tsx).
 
-export const STATUS_PROSPEK = ['baru', 'dihubungi', 'tertarik', 'tidak', 'order'] as const;
+// Hasil follow up: minat (termasuk yang jadi order), tidak minat, atau tidak ada respon.
+// "Sudah dihubungi" = minat + order + tidak minat + tidak ada respon.
+export const STATUS_PROSPEK = ['baru', 'minat', 'order', 'tidak', 'norespon'] as const;
 export type StatusProspek = (typeof STATUS_PROSPEK)[number];
 export const STATUS_LABEL: Record<StatusProspek, string> = {
-  baru: 'Belum dihubungi', dihubungi: 'Sudah dihubungi', tertarik: 'Tertarik', tidak: 'Tidak minat', order: 'Jadi order',
+  baru: 'Belum dihubungi', minat: 'Minat', order: 'Jadi order', tidak: 'Tidak minat', norespon: 'Tidak ada respon',
+};
+// Nilai lama di sheet (sebelum Oktober 2026) dibaca dengan arti barunya
+export const bacaStatus = (v: string): StatusProspek =>
+  v === 'tertarik' ? 'minat' : v === 'dihubungi' ? 'norespon' : (STATUS_PROSPEK as readonly string[]).includes(v) ? (v as StatusProspek) : 'baru';
+export const FU_TARGET_HARIAN = 20;
+
+/* ---------- Laporan follow up harian ---------- */
+export type HitungFU = { dihubungi: number; minat: number; order: number; tidak: number; norespon: number; foto: number };
+export type LaporanFU = {
+  tgl: string;
+  target: number;
+  total: HitungFU;
+  orang: (HitungFU & { nama: string })[];
+  minat: { nama: string; tempat: string; oleh: string; hasil: string; order: boolean }[];
+  db: { baruHariIni: number; belumDihubungi: number; orderBulanIni: number };
 };
 
 export type Prospek = {
