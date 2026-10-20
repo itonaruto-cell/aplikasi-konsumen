@@ -25,6 +25,7 @@ export type Prospek = {
   oleh: string;        // email yang menambahkan
   foto: string;        // ID foto bukti follow up terakhir (tab FOTO), kosong = belum ada
   maps: string;        // link Google Maps tempat usaha (dari impor scrape atau diisi manual)
+  privat: boolean;     // true = hanya owner (dan PIC-nya, kalau sudah diberi PIC) yang melihat
 };
 
 // Link maps yang diterima: http(s) saja

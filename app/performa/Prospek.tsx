@@ -5,6 +5,7 @@ import { STATUS_LABEL, STATUS_PROSPEK, bacaImpor, keWa, rapikanHp, rapikanMaps, 
 import { FIELD, Lembar } from './form';
 import { Ico, Kosong, shortName } from './parts';
 import { useOverlay } from '../overlay';
+import { KATA_INTI, KATA_KUNCI, WILAYAH, pencarian } from '../../lib/ambil-maps';
 
 // Database prospek: semua akun bisa menambah (manual / impor CSV hasil scrape Google Maps), mengubah, mengatur PIC,
 // menelepon / WhatsApp, lalu mencatat hasil follow up dengan foto bukti.
@@ -18,6 +19,9 @@ const WARNA: Record<StatusProspek, string> = {
   order: 'bg-green-50 text-green-800 dark:bg-green-400/15 dark:text-green-300',
 };
 const pilih = (on: boolean) => `min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${on
+  ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
+  : 'border-neutral-300 dark:border-neutral-700'}`;
+const pilihK = (on: boolean) => `min-h-9 shrink-0 whitespace-nowrap rounded-full border px-3 text-[13px] font-semibold ${on
   ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
   : 'border-neutral-300 dark:border-neutral-700'}`;
 const tampilHp = (hp: string) => hp.replace(/^(\d{4})(\d{4})(\d+)$/, '$1 $2 $3');
@@ -42,13 +46,14 @@ function useProspek(reloadKey: number) {
 }
 
 /* ---------- Tambah / ubah satu prospek (owner) ---------- */
-function FormProspek({ awal, tim, bolehHapus, onClose, onSaved }: { awal: Prospek | null; tim: string[]; bolehHapus: boolean; onClose: () => void; onSaved: (pesan: string) => void }) {
+function FormProspek({ awal, tim, bolehHapus, owner, onClose, onSaved }: { awal: Prospek | null; tim: string[]; bolehHapus: boolean; owner: boolean; onClose: () => void; onSaved: (pesan: string) => void }) {
   const [nama, setNama] = useState(awal?.nama || '');
   const [hp, setHp] = useState(awal?.hp || '');
   const [profesi, setProfesi] = useState(awal?.profesi || '');
   const [alamat, setAlamat] = useState(awal?.alamat || '');
   const [catatan, setCatatan] = useState(awal?.catatan || '');
   const [maps, setMaps] = useState(awal?.maps || '');
+  const [privat, setPrivat] = useState(!!awal?.privat);
   const [pic, setPic] = useState(awal?.pic || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -58,7 +63,7 @@ function FormProspek({ awal, tim, bolehHapus, onClose, onSaved }: { awal: Prospe
     if (maps.trim() && !rapikanMaps(maps)) { setErr('Link Google Maps harus diawali https://'); return; }
     setBusy(true); setErr('');
     try {
-      const body = awal ? { id: awal.id, nama, hp, profesi, alamat, catatan, maps, pic } : { items: [{ nama, hp, profesi, alamat, catatan, maps }], pic, sumber: 'Manual' };
+      const body = awal ? { id: awal.id, nama, hp, profesi, alamat, catatan, maps, pic, ...(owner ? { privat } : {}) } : { items: [{ nama, hp, profesi, alamat, catatan, maps }], pic, sumber: 'Manual' };
       const r = await fetch('/api/prospek', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => null);
       if (!r.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
@@ -89,6 +94,12 @@ function FormProspek({ awal, tim, bolehHapus, onClose, onSaved }: { awal: Prospe
           <button onClick={() => setPic('')} aria-pressed={!pic} className={pilih(!pic)}>Belum ada</button>
           {tim.map((t) => <button key={t} onClick={() => setPic(t)} aria-pressed={keyOf(pic) === keyOf(t)} className={pilih(keyOf(pic) === keyOf(t))}>{shortName(t)}</button>)}
         </div>
+        {owner && awal && (
+          <label className="mt-3 flex min-h-12 items-center gap-3 rounded-2xl border border-neutral-200 px-4 dark:border-neutral-800">
+            <span className="min-w-0 flex-1 text-[15px]">Hanya owner & PIC yang melihat<span className="block text-xs text-neutral-500">Matikan untuk membagikan ke semua tim</span></span>
+            <input type="checkbox" checked={privat} onChange={(e) => setPrivat(e.target.checked)} className="h-6 w-6 accent-neutral-900" />
+          </label>
+        )}
         {err && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">{err}</p>}
         <button onClick={simpan} disabled={busy} className="mt-4 min-h-12 w-full rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900">{busy ? 'Menyimpan…' : 'Simpan'}</button>
         {awal && bolehHapus && <button onClick={hapus} disabled={busy} className="mt-2 min-h-11 w-full text-sm font-semibold text-red-700 dark:text-red-400">Hapus prospek</button>}
@@ -97,7 +108,147 @@ function FormProspek({ awal, tim, bolehHapus, onClose, onSaved }: { awal: Prospe
   );
 }
 
-/* ---------- Impor CSV / tempel dari Google Sheets (owner) ---------- */
+/* ---------- Ambil langsung dari Google Maps lewat Apify (owner) ---------- */
+const SIMPAN_TOKEN = 'mk.apifyToken', SIMPAN_RUN = 'mk.apifyRun';
+const baca = (k: string) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+const tulis = (k: string, v: string) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* abaikan */ } };
+const AWAL_KEC = ['Batang|Gringsing', 'Batang|Banyuputih', 'Batang|Limpung', 'Batang|Subah', 'Kendal|Weleri', 'Kendal|Kaliwungu'];
+type RunSimpan = { runId: string; datasetId: string; privat: boolean; mulai: string };
+
+function AmbilMaps({ onClose, onSaved }: { onClose: () => void; onSaved: (pesan: string) => void }) {
+  const [token, setToken] = useState(() => baca(SIMPAN_TOKEN));
+  const [kec, setKec] = useState<string[]>(AWAL_KEC);
+  const [kata, setKata] = useState<string[]>(KATA_INTI);
+  const [maks, setMaks] = useState(10);
+  const [privat, setPrivat] = useState(true);
+  const [run, setRun] = useState<RunSimpan | null>(() => { try { return JSON.parse(baca(SIMPAN_RUN) || 'null') as RunSimpan | null; } catch { return null; } });
+  const [info, setInfo] = useState<{ status: string; jumlah: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const pilihan = WILAYAH.flatMap((w) => w.kec.filter((k) => kec.includes(`${w.kab}|${k}`)).map((k) => ({ kab: w.kab, kec: k })));
+  const cari = pencarian(kata, pilihan);
+  const tog = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  const api = useCallback(async (body: object) => {
+    const r = await fetch('/api/prospek/maps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token.trim(), ...body }) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error || 'Gagal menghubungi Apify.');
+    return j;
+  }, [token]);
+  const ambil = useCallback(async (x: RunSimpan) => {
+    setBusy(true); setErr('');
+    try {
+      const h = await api({ aksi: 'ambil', datasetId: x.datasetId });
+      if (!h.items.length) { setErr(`Selesai, tapi tidak ada tempat dengan nomor HP (${h.total} tempat ditemukan).`); tulis(SIMPAN_RUN, ''); return; }
+      const r = await fetch('/api/prospek', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: h.items, sumber: 'Google Maps', privat: x.privat }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) { setErr(j?.error || 'Gagal menyimpan prospek.'); return; }
+      tulis(SIMPAN_RUN, ''); setRun(null);
+      onSaved(`${j.ditambah} prospek dari Google Maps masuk${j.dobel ? ` · ${j.dobel} sudah ada` : ''}`);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }, [api, onSaved]);
+  // Pantau pencarian yang sedang berjalan (juga setelah lembar ini ditutup lalu dibuka lagi)
+  useEffect(() => {
+    if (!run || !token) return;
+    let hidup = true;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const cek = async () => {
+      try {
+        const j = await api({ aksi: 'cek', runId: run.runId });
+        if (!hidup) return;
+        setInfo({ status: j.status, jumlah: j.jumlah });
+        if (j.status === 'SUCCEEDED') { ambil({ ...run, datasetId: j.datasetId || run.datasetId }); return; }
+        if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(j.status)) return;
+      } catch (e) { if (hidup) setErr((e as Error).message); }
+      if (hidup) t = setTimeout(cek, 8000);
+    };
+    cek();
+    return () => { hidup = false; if (t) clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.runId]);
+  const mulai = async () => {
+    if (!token.trim()) { setErr('Isi token Apify dulu.'); return; }
+    if (!cari.length) { setErr('Pilih minimal satu kecamatan dan satu kata kunci.'); return; }
+    setBusy(true); setErr('');
+    try {
+      tulis(SIMPAN_TOKEN, token.trim());
+      const j = await api({ aksi: 'mulai', cari, maks });
+      const x = { runId: j.runId, datasetId: j.datasetId, privat, mulai: new Date().toISOString() };
+      tulis(SIMPAN_RUN, JSON.stringify(x)); setInfo(null); setRun(x);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  const berhenti = !!info && ['FAILED', 'ABORTED', 'TIMED-OUT'].includes(info.status);
+  const label = 'mt-4 block text-[13px] font-semibold text-neutral-500';
+  const kotakErr = err && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">{err}</p>;
+  return (
+    <Lembar judul="Ambil dari Google Maps" onClose={onClose}>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+20px)]">
+        {run ? (
+          <div className="py-2">
+            <div className="rounded-2xl bg-neutral-100 p-4 dark:bg-neutral-900">
+              <p className="text-[15px] font-bold">{busy ? 'Menyimpan ke database…' : berhenti ? 'Pencarian berhenti' : 'Sedang mencari di Google Maps…'}</p>
+              <p className="mt-1 text-sm text-neutral-500">
+                {info ? `${info.jumlah.toLocaleString('id-ID')} tempat terkumpul · ${info.status.toLowerCase()}` : 'Menghubungi Apify…'}
+              </p>
+              {!berhenti && !busy && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800"><div className="h-full w-1/3 animate-pulse rounded-full bg-neutral-900 dark:bg-white" /></div>}
+              <p className="mt-3 text-xs text-neutral-500">Biasanya beberapa menit. Lembar ini boleh ditutup; buka lagi nanti, hasilnya otomatis dimasukkan.</p>
+            </div>
+            {kotakErr}
+            {berhenti && (
+              <button onClick={() => ambil(run)} disabled={busy} className="mt-3 min-h-12 w-full rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">Simpan yang sudah terkumpul</button>
+            )}
+            <button onClick={() => { tulis(SIMPAN_RUN, ''); setRun(null); setInfo(null); setErr(''); }} className="mt-2 min-h-11 w-full text-sm font-semibold text-neutral-500">Lupakan pencarian ini</button>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+              Mencari tempat usaha di Google Maps memakai akun Apify Anda, lalu memasukkan yang punya nomor HP ke database prospek, lengkap dengan profesi, alamat, dan link maps.
+            </p>
+            <label className={label}>Token Apify
+              <input value={token} onChange={(e) => setToken(e.target.value)} type="password" autoComplete="off" placeholder="apify_api_…" className={`${FIELD} mt-1.5 h-12 font-mono`} />
+            </label>
+            <p className="mt-1 text-xs text-neutral-500">Ambil di console.apify.com → Settings → API &amp; Integrations → salin Personal API token. Disimpan hanya di HP ini.</p>
+
+            <p className={label}>Wilayah</p>
+            {WILAYAH.map((w) => (
+              <div key={w.kab} className="mt-2">
+                <p className="text-xs font-bold text-neutral-500">{w.kab.toUpperCase()}</p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {w.kec.map((k) => {
+                    const id = `${w.kab}|${k}`, on = kec.includes(id);
+                    return <button key={id} onClick={() => setKec(tog(kec, id))} aria-pressed={on} className={pilihK(on)}>{k}</button>;
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className={label}>Kata kunci</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {KATA_KUNCI.map((k) => <button key={k} onClick={() => setKata(tog(kata, k))} aria-pressed={kata.includes(k)} className={`${pilihK(kata.includes(k))}`}>{k}</button>)}
+            </div>
+            <p className={label}>Maksimal tempat per pencarian</p>
+            <div className="mt-1.5 flex gap-1.5">
+              {[5, 10, 15, 20].map((n) => <button key={n} onClick={() => setMaks(n)} aria-pressed={maks === n} className={`${pilihK(maks === n)}`}>{n}</button>)}
+            </div>
+            <label className="mt-4 flex min-h-12 items-center gap-3 rounded-2xl border border-neutral-200 px-4 dark:border-neutral-800">
+              <span className="min-w-0 flex-1 text-[15px]">Hanya owner yang melihat<span className="block text-xs text-neutral-500">Tim baru melihat setelah Anda beri PIC atau bagikan</span></span>
+              <input type="checkbox" checked={privat} onChange={(e) => setPrivat(e.target.checked)} className="h-6 w-6 accent-neutral-900" />
+            </label>
+            <div className="mt-4 rounded-2xl bg-neutral-100 px-4 py-3 text-sm dark:bg-neutral-900">
+              <b>{cari.length}</b> pencarian × {maks} = maks. <b>±{(cari.length * maks).toLocaleString('id-ID')}</b> tempat
+              <p className="mt-1 text-xs text-neutral-500">Kredit gratis Apify ±$5/bulan. Mulai dari sedikit dulu, lalu cek sisa kredit di Apify.</p>
+            </div>
+            {kotakErr}
+            <button onClick={mulai} disabled={busy || !cari.length} className="mt-4 min-h-12 w-full rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
+              {busy ? 'Memulai…' : 'Mulai cari'}
+            </button>
+          </>
+        )}
+      </div>
+    </Lembar>
+  );
+}
+
+/* ---------- Impor CSV / tempel dari Google Sheets ---------- */
 function Impor({ tim, onClose, onSaved }: { tim: string[]; onClose: () => void; onSaved: (pesan: string) => void }) {
   const [isi, setIsi] = useState('');
   const [sumber, setSumber] = useState('Google Maps');
@@ -278,6 +429,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
   const [q, setQ] = useState('');
   const [form, setForm] = useState<Prospek | 'baru' | null>(null);
   const [impor, setImpor] = useState(false);
+  const [ambilMaps, setAmbilMaps] = useState(false);
   const [fu, setFu] = useState<Prospek | null>(null);
   const [toast, setToast] = useState('');
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2400); return () => clearTimeout(t); }, [toast]);
@@ -288,7 +440,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
   const tampil = list.filter((p) => (status === 'semua' || p.status === status)
     && (pic === 'semua' || (pic === '' ? !p.pic : keyOf(p.pic) === keyOf(pic)))
     && kata.every((k) => `${p.nama} ${p.profesi} ${p.alamat} ${p.hp}`.toLowerCase().includes(k)));
-  const selesai = (pesan: string) => { setForm(null); setImpor(false); setToast(pesan); reload(); };
+  const selesai = useCallback((pesan: string) => { setForm(null); setImpor(false); setAmbilMaps(false); setToast(pesan); reload(); }, [reload]);
 
   return (
     <div className="pb-8">
@@ -306,6 +458,12 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
         <div className="mt-3 grid grid-cols-2 gap-2 px-4">
           <button onClick={() => setForm('baru')} className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white dark:bg-white dark:text-neutral-900">+ Tambah</button>
           <button onClick={() => setImpor(true)} className="min-h-12 rounded-2xl border border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">Impor CSV / Maps</button>
+          {isOwner && (
+            <button onClick={() => setAmbilMaps(true)} className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#1B2F5B] text-[15px] font-bold text-white">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z" /><circle cx="12" cy="10" r="2.2" /></svg>
+              Ambil dari Google Maps
+            </button>
+          )}
         </div>
       )}
 
@@ -349,6 +507,7 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
               {p.hasil && <p className="mt-1.5 text-sm leading-snug"><span className="text-neutral-500">Hasil: </span>{p.hasil}</p>}
               <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs font-semibold">
                 <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{p.pic ? `PIC ${shortName(p.pic)}` : 'Belum ada PIC'}</span>
+                {isOwner && p.privat && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200">Hanya owner</span>}
                 {p.sumber && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{p.sumber}</span>}
                 <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{tampilHp(p.hp)}</span>
                 {p.maps && (
@@ -367,8 +526,9 @@ export default function ProspekPage({ akun, tim = [], reloadKey = 0 }: { akun: A
         </div>
       )}
 
-      {form && <FormProspek awal={form === 'baru' ? null : form} tim={tim} bolehHapus={form !== 'baru' && (isOwner || form.oleh === akun.email.toLowerCase())} onClose={() => setForm(null)} onSaved={selesai} />}
+      {form && <FormProspek awal={form === 'baru' ? null : form} tim={tim} bolehHapus={form !== 'baru' && (isOwner || form.oleh === akun.email.toLowerCase())} owner={isOwner} onClose={() => setForm(null)} onSaved={selesai} />}
       {impor && <Impor tim={tim} onClose={() => setImpor(false)} onSaved={selesai} />}
+      {ambilMaps && isOwner && <AmbilMaps onClose={() => setAmbilMaps(false)} onSaved={selesai} />}
       {fu && <FollowUp p={fu} wajibFoto={!isOwner} onClose={() => setFu(null)} onSaved={(x) => { setFu(null); setList((l) => l.map((p) => (p.id === x.id ? x : p))); setToast('Hasil follow up tersimpan'); }} />}
       {toast && (
         <div className="fixed inset-x-0 bottom-[calc(96px+env(safe-area-inset-bottom))] z-50 flex justify-center px-5">
