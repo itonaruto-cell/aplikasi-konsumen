@@ -54,3 +54,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ck-confetti, .ck-in-right, .ck-in-left, .ck-drop, .ck-pop { animation: none !important; }
 }
+
+/* Cetak data follow up: hanya tabelnya yang ikut dicetak / disimpan sebagai PDF */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body * { visibility: hidden; }
+  #cetak-fu, #cetak-fu * { visibility: visible; }
+  #cetak-fu { position: absolute; inset: 0; overflow: visible; }
+}
