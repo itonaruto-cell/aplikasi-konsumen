@@ -42,7 +42,7 @@ async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string):
   cv.height = fu ? tinggiFollowUp(fu) : jenis === 'achievement' ? tinggiAchievement(c, spv) : tinggiAktivitas(c, spv);
   const g = cv.getContext('2d');
   if (!g) return null;
-  if (fu) gambarFollowUp(g, fu, String(c.data.cabang || 'Kendal'), logo);
+  if (fu) gambarFollowUp(g, fu, String(c.data.cabang || 'Kendal'), logo, (c.data.orang || []).filter((o) => o !== spv && (o.visit || o.maintain)).length);
   else if (jenis === 'achievement') gambarAchievement(g, c, spv, logo);
   else gambarAktivitas(g, c, spv, logo);
   return new Promise((ok) => cv.toBlob((b) => ok(b), 'image/png'));

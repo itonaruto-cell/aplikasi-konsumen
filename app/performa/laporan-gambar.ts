@@ -328,7 +328,9 @@ export function tinggiFollowUp(l: LaporanFU) {
   return 250 + FU_TINGGI.ringkas + 40 + FU_TINGGI.orangKepala + o + 40 + FU_TINGGI.minatKepala + m + 40 + FU_TINGGI.db + 40 + KAKI;
 }
 
-export function gambarFollowUp(g: G, l: LaporanFU, cabang: string, logo: HTMLImageElement | null) {
+// Target cabang = target per orang × jumlah orang tim (yang tercatat di pantauan atau sudah follow up)
+export function gambarFollowUp(g: G, l: LaporanFU, cabang: string, logo: HTMLImageElement | null, jumlahTim = 0) {
+  const targetTotal = l.target * Math.max(jumlahTim, l.orang.length, 1);
   const H = tinggiFollowUp(l);
   const lebar = W - P * 2, dalam = lebar - 80;
   const dibuat = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -344,8 +346,8 @@ export function gambarFollowUp(g: G, l: LaporanFU, cabang: string, logo: HTMLIma
   tulis(g, 'SUDAH DIHUBUNGI', x, y + 56, { size: 22, weight: 700, color: C.muted, spasi: 3 });
   tulis(g, angka(t.dihubungi), x, y + 160, { size: 96, weight: 700 });
   font(g, 96, 700);
-  tulis(g, `prospek · target ${l.target}`, x + g.measureText(angka(t.dihubungi)).width + 18, y + 156, { size: 30, weight: 600, color: C.muted });
-  batang(g, x, y + 186, dalam, 16, l.target ? t.dihubungi / l.target : null, tone(l.target ? t.dihubungi / l.target : null), C.track);
+  tulis(g, `prospek · target ${targetTotal} (${l.target}/orang)`, x + g.measureText(angka(t.dihubungi)).width + 18, y + 156, { size: 30, weight: 600, color: C.muted });
+  batang(g, x, y + 186, dalam, 16, t.dihubungi / targetTotal, tone(t.dihubungi / targetTotal), C.track);
   const kol = (dalam - 32) / 3;
   ([['minat', t.minat, 'minat'], ['tidak', t.tidak, 'tidak minat'], ['norespon', t.norespon, 'tidak ada respon']] as const).forEach(([k, v, lb], i) => {
     const bx = x + i * (kol + 16), by = y + 232;
@@ -381,8 +383,11 @@ export function gambarFollowUp(g: G, l: LaporanFU, cabang: string, logo: HTMLIma
     let cx = nx;
     ([['minat', o.minat ? `${o.minat} minat${o.order ? ` (${o.order} order)` : ''}` : ''], ['tidak', o.tidak ? `${o.tidak} tidak minat` : ''], ['norespon', o.norespon ? `${o.norespon} tidak respon` : '']] as const)
       .forEach(([k, s]) => { if (!s) return; cx += chip(g, s, cx, yy + 80, { bg: FU_SOFT[k][0], color: FU_SOFT[k][1], size: 19 }) + 10; });
-    tulis(g, angka(o.dihubungi), x + dalam, yy + 50, { size: 52, weight: 700, align: 'right' });
-    tulis(g, 'dihubungi', x + dalam, yy + 80, { size: 20, color: C.muted, align: 'right' });
+    font(g, 30, 600);
+    const lebarT = g.measureText(`/${l.target}`).width;
+    tulis(g, `${angka(o.dihubungi)}`, x + dalam - lebarT - 4, yy + 50, { size: 52, weight: 700, align: 'right', color: tone(o.dihubungi / l.target) === C.good ? C.good : C.ink });
+    tulis(g, `/${l.target}`, x + dalam, yy + 50, { size: 30, weight: 600, color: C.muted, align: 'right' });
+    tulis(g, o.dihubungi >= l.target ? 'target tercapai' : `kurang ${l.target - o.dihubungi}`, x + dalam, yy + 80, { size: 20, color: o.dihubungi >= l.target ? C.good : C.muted, align: 'right' });
     tumpuk(g, nx, yy + 140, dalam - 96, 14, [[o.minat, FU.minat], [o.tidak, FU.tidak], [o.norespon, FU.norespon]]);
     yy += FU_TINGGI.orang;
   });

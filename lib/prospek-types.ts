@@ -12,13 +12,13 @@ export const STATUS_LABEL: Record<StatusProspek, string> = {
 // Nilai lama di sheet (sebelum Oktober 2026) dibaca dengan arti barunya
 export const bacaStatus = (v: string): StatusProspek =>
   v === 'tertarik' ? 'minat' : v === 'dihubungi' ? 'norespon' : (STATUS_PROSPEK as readonly string[]).includes(v) ? (v as StatusProspek) : 'baru';
-export const FU_TARGET_HARIAN = 20;
+export const FU_TARGET_HARIAN = 10;   // prospek dihubungi per orang per hari
 
 /* ---------- Laporan follow up harian ---------- */
 export type HitungFU = { dihubungi: number; minat: number; order: number; tidak: number; norespon: number; foto: number };
 export type LaporanFU = {
   tgl: string;
-  target: number;
+  target: number;        // per orang per hari
   total: HitungFU;
   orang: (HitungFU & { nama: string })[];
   minat: { nama: string; tempat: string; oleh: string; hasil: string; order: boolean }[];
