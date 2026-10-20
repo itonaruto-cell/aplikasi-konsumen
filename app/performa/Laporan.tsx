@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { Ctx } from '../../lib/performa-calc';
-import { gambarAchievement, gambarAktivitas, pakaiFont, tinggiAchievement, tinggiAktivitas } from './laporan-gambar';
+import { gambarAchievement, gambarAktivitas, gambarFollowUp, pakaiFont, tinggiAchievement, tinggiAktivitas, tinggiFollowUp } from './laporan-gambar';
+import type { LaporanFU } from '../../lib/prospek-types';
+import { todayJkt } from '../../lib/performa-calc';
 import { useOverlay } from '../overlay';
 import { PillSeg } from './parts';
 
@@ -10,8 +12,9 @@ import { PillSeg } from './parts';
 // Gambar dibuat di HP dari data pantauan terakhir, bisa diunduh (PNG), dibagikan, atau dibuka layar penuh
 // supaya gampang di-screenshot.
 
-type Jenis = 'achievement' | 'aktivitas';
-const JUDUL: Record<Jenis, string> = { achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO' };
+type Jenis = 'achievement' | 'aktivitas' | 'fu';
+const JUDUL: Record<Jenis, string> = { achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO', fu: 'Follow Up Prospek' };
+const kemarin = (tgl: string) => { const d = new Date(tgl + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
 
 const muatGambar = (src: string) => new Promise<HTMLImageElement | null>((ok) => {
   const img = new Image();
@@ -20,19 +23,27 @@ const muatGambar = (src: string) => new Promise<HTMLImageElement | null>((ok) =>
   img.src = src;
 });
 
-async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null): Promise<Blob | null> {
+async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string): Promise<Blob | null> {
   const fam = getComputedStyle(document.documentElement).getPropertyValue('--font-instrument').trim();
   if (fam) {
     pakaiFont(`${fam}, system-ui, sans-serif`);
     try { await Promise.all([400, 600, 700].map((w) => document.fonts.load(`${w} 40px ${fam}`))); } catch { /* pakai font cadangan */ }
   }
   const logo = await muatGambar('/icon-192.png');
+  let fu: LaporanFU | null = null;
+  if (jenis === 'fu') {
+    const r = await fetch(`/api/prospek/laporan?tgl=${tgl}`, { cache: 'no-store' });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j?.total) throw new Error(j?.error || 'Laporan follow up gagal dimuat.');
+    fu = j as LaporanFU;
+  }
   const cv = document.createElement('canvas');
   cv.width = 1080;
-  cv.height = jenis === 'achievement' ? tinggiAchievement(c, spv) : tinggiAktivitas(c, spv);
+  cv.height = fu ? tinggiFollowUp(fu) : jenis === 'achievement' ? tinggiAchievement(c, spv) : tinggiAktivitas(c, spv);
   const g = cv.getContext('2d');
   if (!g) return null;
-  if (jenis === 'achievement') gambarAchievement(g, c, spv, logo);
+  if (fu) gambarFollowUp(g, fu, String(c.data.cabang || 'Kendal'), logo);
+  else if (jenis === 'achievement') gambarAchievement(g, c, spv, logo);
   else gambarAktivitas(g, c, spv, logo);
   return new Promise((ok) => cv.toBlob((b) => ok(b), 'image/png'));
 }
@@ -55,9 +66,10 @@ function LayarPenuh({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
-export default function Laporan({ c, spv }: { c: Ctx; spv: Orang | null }) {
-  const [jenis, setJenis] = useState<Jenis>('achievement');
-  const [gambar, setGambar] = useState<{ jenis: Jenis; url: string; blob: Blob } | null>(null);
+export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv: Orang | null; awal?: Jenis }) {
+  const [jenis, setJenis] = useState<Jenis>(awal);
+  const [tgl, setTgl] = useState(() => todayJkt());
+  const [gambar, setGambar] = useState<{ jenis: Jenis; tgl: string; url: string; blob: Blob } | null>(null);
   const [err, setErr] = useState('');
   const [penuh, setPenuh] = useState(false);
   const [toast, setToast] = useState('');
@@ -66,21 +78,21 @@ export default function Laporan({ c, spv }: { c: Ctx; spv: Orang | null }) {
   useEffect(() => {
     let alive = true;
     setErr('');
-    buatGambar(jenis, c, spv).then((blob) => {
+    buatGambar(jenis, c, spv, tgl).then((blob) => {
       if (!alive) return;
       if (!blob) { setErr('Gambar tidak bisa dibuat di HP ini.'); return; }
       const url = URL.createObjectURL(blob);
       if (urlLama.current) URL.revokeObjectURL(urlLama.current);
       urlLama.current = url;
-      setGambar({ jenis, url, blob });
-    }).catch(() => { if (alive) setErr('Gambar tidak bisa dibuat. Coba muat ulang.'); });
+      setGambar({ jenis, tgl, url, blob });
+    }).catch((e) => { if (alive) setErr((e as Error)?.message && jenis === 'fu' ? (e as Error).message : 'Gambar tidak bisa dibuat. Coba muat ulang.'); });
     return () => { alive = false; };
-  }, [jenis, c, spv]);
+  }, [jenis, c, spv, tgl]);
   useEffect(() => () => { if (urlLama.current) URL.revokeObjectURL(urlLama.current); }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2200); return () => clearTimeout(t); }, [toast]);
 
-  const siap = gambar && gambar.jenis === jenis ? gambar : null;
-  const namaFile = `Laporan ${JUDUL[jenis]} ${String(c.data.cabang || 'Kendal')} ${c.today}.png`.replace(/[^\w\s.&-]/g, '').replace(/\s+/g, '-');
+  const siap = gambar && gambar.jenis === jenis && (jenis !== 'fu' || gambar.tgl === tgl) ? gambar : null;
+  const namaFile = `Laporan ${JUDUL[jenis]} ${String(c.data.cabang || 'Kendal')} ${jenis === 'fu' ? tgl : c.today}.png`.replace(/[^\w\s.&-]/g, '').replace(/\s+/g, '-');
   const bisaBagikan = typeof navigator !== 'undefined' && !!navigator.canShare && !!siap
     && navigator.canShare({ files: [new File([siap.blob], namaFile, { type: 'image/png' })] });
   const bagikan = async () => {
@@ -95,13 +107,20 @@ export default function Laporan({ c, spv }: { c: Ctx; spv: Orang | null }) {
   return (
     <div className="pb-8">
       <div className="px-4 pt-3">
-        <PillSeg value={jenis} full onChange={(v) => setJenis(v)} options={[['achievement', 'Achievement'], ['aktivitas', 'Aktivitas CMO & MAO']]} />
+        <PillSeg value={jenis} full onChange={(v) => setJenis(v)} options={[['achievement', 'Achievement'], ['aktivitas', 'Aktivitas'], ['fu', 'Follow up']]} />
+        {jenis === 'fu' && (
+          <div className="mt-2">
+            <PillSeg value={tgl === todayJkt() ? 'ini' : 'kemarin'} onChange={(v) => setTgl(v === 'ini' ? todayJkt() : kemarin(todayJkt()))}
+              options={[['ini', 'Hari ini'], ['kemarin', 'Kemarin']]} />
+          </div>
+        )}
       </div>
       <p className="px-4 pt-3 text-[13px] leading-snug text-neutral-500">
         {jenis === 'achievement'
-          ? 'Cabang, Mobilku, dan Motorku beserta pencapaian tiap PIC.'
-          : 'Visit konsumen prioritas P1–P3, maintain MA, rekrut, dan regist per orang.'}
-        {' '}Dibuat dari data pantauan terakhir.
+          ? 'Cabang, Mobilku, dan Motorku beserta pencapaian tiap PIC. Dibuat dari data pantauan terakhir.'
+          : jenis === 'aktivitas'
+            ? 'Visit konsumen prioritas P1–P3, maintain MA, rekrut, dan regist per orang. Dibuat dari data pantauan terakhir.'
+            : 'Prospek yang di-follow up: minat (termasuk order), tidak minat, dan tidak ada respon, per orang. Dari catatan "Catat hasil" di Database prospek.'}
       </p>
 
       <div className="mx-4 mt-3 overflow-hidden rounded-[20px] border border-neutral-200 bg-[#F4F2EE] dark:border-neutral-800">
