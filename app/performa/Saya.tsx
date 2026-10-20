@@ -9,9 +9,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -70,10 +70,20 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
         </Card>
       )}
 
-      {(onBahan || onInsentif || onInject || onJuara || onPengumuman || onLaporan || onProspek || onSinkron) && (
+      {(onBahan || onInsentif || onInject || onJuara || onPengumuman || onLaporan || onProspek || onSinkron || onSK) && (
         <>
           <p className="mt-8 text-[15px] font-bold">Alat kerja</p>
           <Card className="mt-2 overflow-hidden">
+            {onSK && (
+              <button onClick={onSK} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <Ico n="list" className="h-5 w-5 text-neutral-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">Tanya SK</span>
+                  <span className="block text-[13px] text-neutral-500">Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu</span>
+                </span>
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            )}
             {onProspek && (
               <button onClick={onProspek} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
                 <Ico n="users" className="h-5 w-5 text-neutral-500" />
