@@ -39,6 +39,8 @@ export type SalesBrand = {
   orang: SalesBrandOrang[];
   dipakai?: boolean;        // ditambahkan server: true kalau sudah dipakai memisahkan sukarela
   alasan?: string;          // ditambahkan server: kenapa tidak dipakai
+  dibawa?: string;          // ditambahkan server: kiriman terbaru tanpa rekap tarikan, rekap ini dibawa dari kiriman sebelumnya (waktu kirim asal)
+  diterima?: string;        // ditambahkan server: waktu rekap ini diterima
 };
 
 export type Target = { jumlah: number; target: number | null };

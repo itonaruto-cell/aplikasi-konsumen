@@ -43,10 +43,11 @@ export function pisahSukarela(data: Performa): Performa {
     motorku: { unit: Number(o?.motorku?.unit) || 0, amount: Number(o?.motorku?.amount) || 0 },
   })).filter((o) => o.nama);
 
-  // Pengaman: rekap harus bulan yang sama dengan pantauan (jumlah unit ≈ total cabang per brand)
+  // Pengaman: rekap harus bulan yang sama dengan pantauan (jumlah unit ≈ total cabang per brand).
+  // Selisih kecil wajar (tab tarikan diperbarui terpisah dari pantauan), jadi toleransi 2 unit / 20%.
   const totU = list.reduce((s, o) => s + o.mobilku.unit + o.motorku.unit, 0);
   const cab = data.cabangTotal?.unit?.ini;
-  if (isNum(cab) && Math.abs(totU - cab) > Math.max(1, cab * 0.1)) {
+  if (isNum(cab) && Math.abs(totU - cab) > Math.max(2, cab * 0.2)) {
     return { ...data, salesBrand: { ...sb, orang: list, dipakai: false, alasan: `Rekap tarikan sales ${totU} unit, pantauan cabang ${cab} unit` } };
   }
 
