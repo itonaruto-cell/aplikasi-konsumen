@@ -1,4 +1,6 @@
 'use client';
+import type { ReactNode } from 'react';
+import { periksaData } from '../../lib/kesehatan-data';
 import type { Orang } from '../../lib/performa-types';
 import { badges, ranking, streak, type Ctx } from '../../lib/performa-calc';
 import { ThemeToggle } from '../theme';
@@ -9,14 +11,39 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
   const st = me ? streak(c, me.nama) : 0;
   const mine = me ? badges(c).map((b) => ({ ...b, on: b.holders.includes(me) })) : [];
+  const ico = (n: string) => <Ico n={n} className="h-5 w-5 shrink-0 text-neutral-500" />;
+  const sehat = onKesehatan ? periksaData(c.data) : null;
+  const masalah = sehat ? sehat.filter((x) => x.tingkat === 'bahaya').length : 0;
+  const waspada = sehat ? sehat.filter((x) => x.tingkat === 'waspada').length : 0;
+  type Item = { judul: string; sub: string; ico: ReactNode; on?: () => void; badge?: string; badgeCls?: string };
+  const GRUP: [string, Item[]][] = [
+    ['Kerja harian', [
+      { judul: 'Database prospek', sub: 'Input, impor Google Maps, follow up dengan foto bukti', ico: ico('users'), on: onProspek },
+      { judul: 'Tanya SK', sub: 'Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu', ico: ico('list'), on: onSK },
+      { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
+      { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
+    ]],
+    ['Laporan & performa', [
+      { judul: 'Laporan bergambar', sub: 'Achievement, aktivitas & follow up, siap unduh', ico: ico('chart'), on: onLaporan },
+      { judul: 'Papan juara', sub: 'Peringkat amount, unit, visit, dan maintain', ico: ico('trophy'), on: onJuara },
+      { judul: 'Insentif', sub: 'Hasil hitungan HO dan simulasi bulan ini', ico: ico('value'), on: onInsentif },
+    ]],
+    ['Kelola (owner)', [
+      { judul: 'Kesehatan data', sub: masalah || waspada ? 'Ada data pantauan yang perlu dicek' : 'Kiriman, tarikan sales & isi sheet pantauan', ico: ico('check'), on: onKesehatan,
+        badge: masalah ? `${masalah} masalah` : waspada ? `${waspada} cek` : 'Aman',
+        badgeCls: masalah ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' : waspada ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300' : 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' },
+      { judul: 'Perbarui database konsumen', sub: 'Dari tab KA, SALES & MAPS ke Sheet1', ico: ico('edit'), on: onSinkron },
+      { judul: 'Buat pengumuman', sub: 'Disematkan di Pantau dan dikirim ke HP tim', ico: ico('share'), on: onPengumuman },
+    ]],
+  ];
   const role = akun.role === 'owner' ? 'Owner' : akun.role === 'konsumen' ? 'Tim + database konsumen' : 'Tim';
 
   return (
@@ -70,103 +97,28 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
         </Card>
       )}
 
-      {(onBahan || onInsentif || onInject || onJuara || onPengumuman || onLaporan || onProspek || onSinkron || onSK) && (
-        <>
-          <p className="mt-8 text-[15px] font-bold">Alat kerja</p>
-          <Card className="mt-2 overflow-hidden">
-            {onSK && (
-              <button onClick={onSK} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="list" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Tanya SK</span>
-                  <span className="block text-[13px] text-neutral-500">Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onProspek && (
-              <button onClick={onProspek} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="users" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Database prospek</span>
-                  <span className="block text-[13px] text-neutral-500">Input, impor Google Maps, follow up dengan foto bukti</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onSinkron && (
-              <button onClick={onSinkron} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="edit" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Perbarui database konsumen</span>
-                  <span className="block text-[13px] text-neutral-500">Dari tab KA, SALES & MAPS ke Sheet1</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onLaporan && (
-              <button onClick={onLaporan} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="chart" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Laporan bergambar</span>
-                  <span className="block text-[13px] text-neutral-500">Achievement & aktivitas, siap unduh atau screenshot</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onPengumuman && (
-              <button onClick={onPengumuman} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3H6l4-3z" /></svg>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Buat pengumuman</span>
-                  <span className="block text-[13px] text-neutral-500">Disematkan di Pantau dan dikirim ke HP tim</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onJuara && (
-              <button onClick={onJuara} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="trophy" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Papan juara</span>
-                  <span className="block text-[13px] text-neutral-500">Peringkat amount, unit, visit, dan maintain</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onBahan && (
-              <button onClick={onBahan} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="pin" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Bahan survey</span>
-                  <span className="block text-[13px] text-neutral-500">Belum disurvey dan sedang diproses</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onInsentif && (
-              <button onClick={onInsentif} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="chart" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Insentif</span>
-                  <span className="block text-[13px] text-neutral-500">Hasil hitungan HO dan simulasi bulan ini</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-            {onInject && (
-              <button onClick={onInject} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <Ico n="users" className="h-5 w-5 text-neutral-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px]">Inject P3</span>
-                  <span className="block text-[13px] text-neutral-500">Ajukan konsumen, unduh daftar untuk HO</span>
-                </span>
-                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-              </button>
-            )}
-          </Card>
-        </>
-      )}
+      {GRUP.map(([judul, isi]) => {
+        const ada = isi.filter((x) => x.on);
+        if (!ada.length) return null;
+        return (
+          <section key={judul}>
+            <p className="mt-8 text-[15px] font-bold">{judul}</p>
+            <Card className="mt-2 overflow-hidden">
+              {ada.map((x) => (
+                <button key={x.judul} onClick={x.on} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 py-2 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                  {x.ico}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px]">{x.judul}</span>
+                    <span className="block text-[13px] text-neutral-500">{x.sub}</span>
+                  </span>
+                  {!!x.badge && <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${x.badgeCls}`}>{x.badge}</span>}
+                  <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+                </button>
+              ))}
+            </Card>
+          </section>
+        );
+      })}
 
       <p className="mt-8 text-[15px] font-bold">Akun</p>
       <Card className="mt-2 overflow-hidden">
