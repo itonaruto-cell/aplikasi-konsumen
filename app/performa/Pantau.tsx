@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent }
 import type { Blok, KonsumenFull, Orang, Pengumuman, Performa, Sales } from '../../lib/performa-types';
 import { brandOf, cekData, hariKerjaSisa, isNum, namaBulan, pace, type CekData, type Ctx } from '../../lib/performa-calc';
 import { brandBaris, rincianMotor } from '../../lib/sales-brand';
+import { posisiKosong } from '../../lib/kesehatan-data';
 import { angka, nama, rp, type Push } from './ui';
 import {
   Avatar, BRAND, BrandArt, BrandChip, BrandIcon, CountPct, Ico, Kosong, Line, shortName, type BrandId,
@@ -123,9 +124,15 @@ function PicList({ c, push, filter }: { c: Ctx; push: Push; filter: 'semua' | Br
                 {i < 3 && <span className={`absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white text-[11px] font-extrabold text-[#3A2A00] dark:border-neutral-950 ${MEDAL[i]}`}>{i + 1}</span>}
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-2">
-                <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-bold">{shortName(o.nama)}</span><BrandChip b={b} /></span>
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-[15px] font-bold">{posisiKosong(o.nama) ? 'Posisi kosong' : shortName(o.nama)}</span>
+                  {posisiKosong(o.nama) ? <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{String(o.nama).split(/\s+/)[0].toUpperCase()}</span> : <BrandChip b={b} />}
+                </span>
                 {o.sukarela && (o.sukarela.unit > 0 || o.sukarela.amount > 0) && (
-                  <span className="-mt-1 text-xs text-neutral-500">+{angka(o.sukarela.unit)} motor sukarela · {rp(o.sukarela.amount)} <span className="text-neutral-400">(di luar achievement)</span></span>
+                  <span className="-mt-1 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+                    <span className="rounded-full bg-[#FFF4E0] px-2 py-0.5 font-bold text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">+{angka(o.sukarela.unit)} motor sukarela</span>
+                    {rp(o.sukarela.amount)} · di luar achievement Mobilku
+                  </span>
                 )}
                 <span className="grid grid-cols-2 gap-3">
                   {([['unit', o.unit], ['amount', o.amount]] as const).map(([k, s]) => (

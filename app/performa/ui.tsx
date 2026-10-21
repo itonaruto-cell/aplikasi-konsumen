@@ -2,6 +2,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { FotoVisit } from './parts';
 import type { KonsumenFull, MaFull, Orang, Performa, RekrutRegist, Sales, VisitRow } from '../../lib/performa-types';
+import { targetMingguan, todayJkt } from '../../lib/performa-calc';
 
 /* ---------- Format ---------- */
 export const nf = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 });
@@ -389,7 +390,7 @@ export function RekrutTiles({ r }: { r: RekrutRegist }) {
             </div>
             <p className="text-lg font-semibold">{x ? x.jumlah : '–'}<span className="text-sm font-normal text-neutral-400">/{x?.target ?? '–'}</span></p>
             <Bar ach={ach} />
-            <p className="mt-1 text-xs text-neutral-500">{kurang === null ? '' : kurang ? `Kurang ${kurang}` : 'Target tercapai'}</p>
+            <p className="mt-1 text-xs text-neutral-500">{kurang === null ? '' : kurang ? `Kurang ${kurang} · ±${targetMingguan(x!.jumlah, x!.target, todayJkt())!.perMinggu}/minggu` : 'Target tercapai'}</p>
           </div>
         );
       })}

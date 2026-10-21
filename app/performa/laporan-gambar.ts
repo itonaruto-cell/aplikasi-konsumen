@@ -2,7 +2,8 @@
 // Digambar langsung ke <canvas> (lebar 1080 px, cocok untuk WhatsApp), tanpa pustaka tambahan.
 import type { Orang, Sales } from '../../lib/performa-types';
 import type { LaporanFU } from '../../lib/prospek-types';
-import { brandOf, cekData, hariKerjaSisa, namaBulan, type Ctx } from '../../lib/performa-calc';
+import { brandOf, cekData, hariKerjaSisa, namaBulan, pace, targetMingguan, type Ctx } from '../../lib/performa-calc';
+import { posisiKosong } from '../../lib/kesehatan-data';
 import { brandBaris, rincianMotor } from '../../lib/sales-brand';
 
 type G = CanvasRenderingContext2D;
@@ -73,7 +74,7 @@ function chip(g: G, s: string, x: number, y: number, o: { bg: string; color: str
 }
 
 /* ---------- Kepala & kaki ---------- */
-function kepala(g: G, logo: HTMLImageElement | null, label: string, judul: string, sub: string) {
+function kepala(g: G, logo: HTMLImageElement | null, label: string, judul: string, sub: string, tingkat: Info['tingkat'] = 'aman') {
   g.fillStyle = C.dark; g.fillRect(0, 0, W, 300);
   if (logo) {
     g.save(); g.beginPath(); g.arc(P + 40, 92, 40, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.clip();
@@ -81,7 +82,12 @@ function kepala(g: G, logo: HTMLImageElement | null, label: string, judul: strin
   }
   tulis(g, label, P + 100, 80, { size: 22, weight: 700, color: C.gold, spasi: 3 });
   tulis(g, judul, P + 100, 128, { size: 46, weight: 700, color: '#fff', maks: W - P * 2 - 100 });
-  tulis(g, sub, P, 196, { size: 24, color: 'rgba(255,255,255,0.65)', maks: W - P * 2 });
+  if (tingkat === 'aman') tulis(g, sub, P, 196, { size: 24, color: 'rgba(255,255,255,0.65)', maks: W - P * 2 });
+  else {
+    // Data belum terbaru: tanda kuning (telat) / merah (gawat) supaya tidak dilaporkan sebagai angka terbaru
+    const w = chip(g, tingkat === 'gawat' ? 'DATA BELUM TERBARU' : 'CEK TANGGAL DATA', P, 170, { bg: tingkat === 'gawat' ? C.bad : C.mid, color: tingkat === 'gawat' ? '#fff' : '#3A2600', size: 18 });
+    tulis(g, sub, P + w + 14, 196, { size: 24, color: tingkat === 'gawat' ? '#FFB4B4' : '#FFD98A', maks: W - P * 2 - w - 14 });
+  }
 }
 function kaki(g: G, y: number, dibuat: string) {
   tulis(g, 'Marketing Kendal', P, y + 46, { size: 22, weight: 700, color: C.muted });
@@ -90,7 +96,7 @@ function kaki(g: G, y: number, dibuat: string) {
 const KAKI = 90;
 
 /* ---------- Data ---------- */
-type Info = { judulBulan: string; sub: string; dibuat: string };
+type Info = { judulBulan: string; sub: string; dibuat: string; tingkat: 'aman' | 'telat' | 'gawat' };
 function info(c: Ctx): Info {
   const cek = cekData(c.data);
   const bulan = cek.bedaBulan && cek.bulanData ? cek.bulanData : c.today.slice(0, 7);
@@ -101,7 +107,7 @@ function info(c: Ctx): Info {
   return {
     judulBulan: `${cab} · ${namaBulan(bulan)} ${bulan.slice(0, 4)}`,
     sub: [upd, cek.bedaBulan ? `masih data ${namaBulan(bulan)}` : sisa > 0 ? `sisa ${sisa} hari kerja` : 'bulan selesai'].join(' · '),
-    dibuat,
+    dibuat, tingkat: cek.tingkat,
   };
 }
 type Total = { amount: Sales | null; unit: Sales | null };
@@ -128,13 +134,14 @@ const orangBrand = (c: Ctx, b: BrandId, spv: Orang | null) =>
     .sort((a, x) => (x.amount?.ach ?? -1) - (a.amount?.ach ?? -1));
 
 const RINCI_JUDUL = 70, RINCI = 84;
+const KOTAK_CABANG = 340, KOTAK_BRAND = 370;
 const tinggiRinci = (c: Ctx) => { const n = rincianMotor(c.data).length; return n ? RINCI_JUDUL + n * RINCI + 16 : 0; };
 export function tinggiAchievement(c: Ctx, spv: Orang | null) {
   const n = (b: BrandId) => orangBrand(c, b, spv).length;
-  return 250 + 300 + 40 + (['mobilku', 'motorku'] as const).reduce((s, b) => s + 330 + n(b) * 104 + (b === 'motorku' ? tinggiRinci(c) : 0) + 40, 0) + KAKI;
+  return 250 + KOTAK_CABANG + 40 + (['mobilku', 'motorku'] as const).reduce((s, b) => s + KOTAK_BRAND + n(b) * 104 + (b === 'motorku' ? tinggiRinci(c) : 0) + 40, 0) + KAKI;
 }
 
-function duaAngka(g: G, x: number, y: number, w: number, t: Total, terang: boolean) {
+function duaAngka(g: G, x: number, y: number, w: number, t: Total, terang: boolean, today?: string) {
   const kol = (w - 40) / 2;
   ([['Amount', t.amount, true], ['Unit', t.unit, false]] as const).forEach(([l, s, uang], i) => {
     const x0 = x + i * (kol + 40);
@@ -145,6 +152,10 @@ function duaAngka(g: G, x: number, y: number, w: number, t: Total, terang: boole
       x0, y + 200, { size: 26, weight: 600, color: terang ? '#fff' : C.ink, maks: kol });
     const lalu = s && isNum(s.lalu) ? s.lalu : s && isNum(s.ini) && isNum(s.diffLalu) ? s.ini - s.diffLalu : null;
     if (isNum(lalu)) tulis(g, `Bulan lalu ${uang ? rp(lalu) : `${angka(lalu)} unit`}`, x0, y + 234, { size: 22, color: terang ? 'rgba(255,255,255,0.6)' : C.muted, maks: kol });
+    // Kebutuhan per hari kerja sampai akhir bulan untuk mencapai 100%
+    const p = today ? pace(s?.ini, s?.target, today) : null;
+    if (p) tulis(g, p.tercapai ? 'Target tercapai ✓' : uang ? `Perlu ±${rp(p.perHari)}/hari` : `Perlu ±${nf.format(Math.ceil(p.perHari * 10) / 10)} unit/hari`,
+      x0, y + 270, { size: 23, weight: 700, color: p.tercapai ? (terang ? '#8FE3B5' : C.good) : terang ? C.gold : '#B54708', maks: kol });
   });
 }
 
@@ -152,26 +163,35 @@ export function gambarAchievement(g: G, c: Ctx, spv: Orang | null, logo: HTMLIma
   const H = tinggiAchievement(c, spv);
   const inf = info(c);
   g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
-  kepala(g, logo, 'LAPORAN ACHIEVEMENT', inf.judulBulan, inf.sub);
+  kepala(g, logo, 'LAPORAN ACHIEVEMENT', inf.judulBulan, inf.sub, inf.tingkat);
 
   // Cabang
   let y = 250;
-  kotak(g, P, y, W - P * 2, 300, 32, C.card, true);
+  kotak(g, P, y, W - P * 2, KOTAK_CABANG, 32, C.card, true);
   tulis(g, 'CABANG', P + 40, y + 52, { size: 22, weight: 700, color: C.muted, spasi: 3 });
-  duaAngka(g, P + 40, y + 56, W - P * 2 - 80, { amount: c.data.cabangTotal?.amount || null, unit: c.data.cabangTotal?.unit || null }, false);
-  y += 300 + 40;
+  duaAngka(g, P + 40, y + 56, W - P * 2 - 80, { amount: c.data.cabangTotal?.amount || null, unit: c.data.cabangTotal?.unit || null }, false, c.today);
+  y += KOTAK_CABANG + 40;
 
   // Mobilku & Motorku
   for (const b of ['mobilku', 'motorku'] as const) {
     const list = orangBrand(c, b, spv);
     const rinci = b === 'motorku' ? rincianMotor(c.data) : [];
-    const h = 330 + list.length * 104 + (b === 'motorku' ? tinggiRinci(c) : 0);
+    const h = KOTAK_BRAND + list.length * 104 + (b === 'motorku' ? tinggiRinci(c) : 0);
     kotak(g, P, y, W - P * 2, h, 32, C.brand[b], true);
     tulis(g, LABEL[b], P + 40, y + 56, { size: 24, weight: 700, color: 'rgba(255,255,255,0.8)', spasi: 3 });
-    duaAngka(g, P + 40, y + 60, W - P * 2 - 80, totalBrand(c, b), true);
-    let yy = y + 330;
+    duaAngka(g, P + 40, y + 60, W - P * 2 - 80, totalBrand(c, b), true, c.today);
+    let yy = y + KOTAK_BRAND;
     list.forEach((o) => {
       g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(P + 24, yy - 6, W - P * 2 - 48, 1);
+      if (posisiKosong(o.nama)) {
+        // Posisi yang belum ada orangnya: jangan tampil seperti orang dengan 0%
+        tulis(g, 'Posisi kosong', P + 40, yy + 40, { size: 28, weight: 700, color: 'rgba(255,255,255,0.75)' });
+        font(g, 28, 700);
+        chip(g, String(o.nama).split(/\s+/)[0].toUpperCase(), P + 40 + g.measureText('Posisi kosong').width + 14, yy + 12, { bg: 'rgba(255,255,255,0.14)', color: '#fff', size: 17 });
+        tulis(g, `Target ${angka(o.unit?.target)} unit · ${rp(o.amount?.target)} belum ada pemegang`, P + 40, yy + 78, { size: 22, color: 'rgba(255,255,255,0.6)' });
+        yy += 104;
+        return;
+      }
       tulis(g, pendek(o.nama), P + 40, yy + 40, { size: 30, weight: 700, color: '#fff', maks: 300 });
       if (o.sukarela && (o.sukarela.unit > 0 || o.sukarela.amount > 0)) {
         font(g, 30, 700);
@@ -225,7 +245,7 @@ export function gambarAktivitas(g: G, c: Ctx, spv: Orang | null, logo: HTMLImage
   const H = tinggiAktivitas(c, spv);
   const inf = info(c);
   g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
-  kepala(g, logo, 'LAPORAN AKTIVITAS CMO & MAO', inf.judulBulan, inf.sub);
+  kepala(g, logo, 'LAPORAN AKTIVITAS CMO & MAO', inf.judulBulan, inf.sub, inf.tingkat);
   let y = 250;
   const lebar = W - P * 2;
 
@@ -291,7 +311,8 @@ export function gambarAktivitas(g: G, c: Ctx, spv: Orang | null, logo: HTMLImage
         let x = P + 32;
         ([['Rekrut', r?.rekrut], ['Regist', r?.regist]] as const).forEach(([l, t]) => {
           const ok = !!t?.target && t.jumlah >= t.target;
-          x += chip(g, `${l} ${t ? t.jumlah : '–'}/${t?.target ?? '–'}`, x, yy + 118, {
+          const mg = t ? targetMingguan(t.jumlah, t.target, c.today) : null;
+          x += chip(g, `${l} ${t ? t.jumlah : '–'}/${t?.target ?? '–'}${mg && !ok ? ` · ${mg.perMinggu}/minggu` : ''}`, x, yy + 118, {
             bg: ok ? '#E3F5EB' : '#FDECEC', color: ok ? '#12663D' : '#9B1C1C', size: 24,
           }) + 12;
         });

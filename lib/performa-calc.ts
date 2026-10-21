@@ -354,6 +354,13 @@ export function pace(ini: number | null | undefined, target: number | null | und
   const kurang = Math.max(0, target - ini);
   return { kurang, perHari: hari ? kurang / hari : kurang, hari, tercapai: kurang <= 0 };
 }
+// Target per minggu untuk sisa bulan (rekrut / regist): sisa kekurangan dibagi minggu kerja tersisa
+export function targetMingguan(jumlah: number | null | undefined, target: number | null | undefined, today: string): { perMinggu: number; minggu: number; kurang: number } | null {
+  if (!isNum(target) || target <= 0) return null;
+  const kurang = Math.max(0, target - (isNum(jumlah) ? jumlah : 0));
+  const minggu = Math.max(1, Math.ceil(hariKerjaSisa(today) / 6));
+  return { perMinggu: Math.ceil(kurang / minggu), minggu, kurang };
+}
 export function paceText(p: Pace | null, what: 'amount' | 'unit'): string {
   if (!p) return '';
   if (p.tercapai) return 'Target tercapai';
