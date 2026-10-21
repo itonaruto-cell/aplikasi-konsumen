@@ -49,11 +49,35 @@ const parseSnaps = (v: unknown): Snaps => { try { return JSON.parse(String(v || 
 const kemarinOf = (s: Snaps, today: string) =>
   s.cur && s.cur.tgl < today ? s.cur : s.prev && s.prev.tgl < today ? s.prev : undefined;
 
+// Kiriman yang tidak membawa rekap tarikan sales / bulan lalu (mis. jadwal kirimPerforma lama masih jalan,
+// atau tab tarikan sedang tidak terbaca) memakai rekap dari kiriman sebelumnya di bulan yang sama,
+// supaya pemisahan motor sukarela tidak hilang-timbul.
+const bulanOf = (s?: string | null) => String(s || '').slice(0, 7);
+export function bawaRekapLama(baru: Performa, lama: Performa | null, sekarang = new Date().toISOString()): Performa {
+  let d: Performa = baru.salesBrand ? { ...baru, salesBrand: { ...baru.salesBrand, diterima: sekarang, dibawa: undefined } } : baru;
+  if (!lama || !bulanOf(lama.updated) || bulanOf(lama.updated) !== bulanOf(baru.updated)) return d;
+  if (!d.salesBrand && lama.salesBrand?.orang?.length) {
+    const sb = lama.salesBrand;
+    d = { ...d, salesBrand: { sumber: sb.sumber, orang: sb.orang, diterima: sb.diterima, dibawa: sb.dibawa || sb.diterima || 'sebelumnya' } };
+  }
+  if (!d.salesLalu && lama.salesLalu) d = { ...d, salesLalu: lama.salesLalu };
+  return d;
+}
+
+async function bacaMentah(api: ReturnType<typeof sheets>, spreadsheetId?: string): Promise<Performa | null> {
+  try {
+    const res = await api.spreadsheets.values.get({ spreadsheetId, range: `${PERF_TAB}!A2:A` });
+    const json = (res.data.values || []).map((r) => String(r[0] || '')).join('');
+    return json ? (JSON.parse(json) as Performa) : null;
+  } catch { return null; }
+}
+
 export async function savePerforma(data: Performa) {
-  data = rapikanPerforma({ ...data, riwayat: undefined });
   await ensureTab();
   const api = sheets();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  const perluLama = !data.salesBrand || !data.salesLalu;
+  data = rapikanPerforma({ ...bawaRekapLama(data, perluLama ? await bacaMentah(api, spreadsheetId) : null), riwayat: undefined });
   const json = JSON.stringify(data);
   const chunks: string[][] = [];
   for (let i = 0; i < json.length; i += CHUNK) chunks.push([json.slice(i, i + CHUNK)]);
