@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { sesiProspek } from '../../../../lib/prospek-store';
-import { canSeeKonsumen } from '../../../../lib/access';
 import { MAX_B64, saveFotos } from '../../../../lib/foto-store';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +9,6 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   const x = await sesiProspek(req);
   if (!x) return NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 });
-  if (!canSeeKonsumen(x.role as 'owner')) return NextResponse.json({ error: 'Tidak punya akses.' }, { status: 403 });
   const b = await req.json().catch(() => null) as { mime?: string; data?: string } | null;
   const mime = b?.mime === 'image/png' ? 'image/png' : 'image/jpeg';
   const data = typeof b?.data === 'string' ? b.data : '';

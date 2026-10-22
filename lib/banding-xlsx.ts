@@ -129,7 +129,8 @@ export function lembarBanding(b: Banding, foto: FotoFile[]): Lembar {
   r = jarak(l, r);
   l.set(r, C, 'Disetujui Oleh:', S.label13); r++;
   l.set(r, C, b.bh, S.pSel).set(r, D, 'Branch Head', S.pSel).set(r, E, '', S.pTengah).gab(r, F, r, G, '', S.pTengah).t(r, 20); r++;
-  l.set(r, C, b.buh, S.pSel).set(r, D, 'BU Head', S.pSel).set(r, E, '', S.pTengah).gab(r, F, r, G, '', S.pTengah).t(r, 20); r++;
+  // Approval BU Head opsional: baris hanya dicetak kalau namanya diisi
+  if (b.buh.trim()) { l.set(r, C, b.buh, S.pSel).set(r, D, 'BU Head', S.pSel).set(r, E, '', S.pTengah).gab(r, F, r, G, '', S.pTengah).t(r, 20); r++; }
   r = jarak(l, r);
   l.gab(r, C, r, G, '*disclaimer, formulir ini Untuk Kalangan Internal WOM Finance', S.disc).t(r, 15.75);
   return l;
