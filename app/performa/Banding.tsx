@@ -290,7 +290,7 @@ function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; 
           <Isian label="Dibuat oleh"><input value={b.pembuat} onChange={(e) => set('pembuat', e.target.value)} placeholder={akun.name || ''} className={`${FIELD} min-h-11`} /></Isian>
           <Isian label="Jabatan"><input value={b.jabatan} onChange={(e) => set('jabatan', e.target.value)} className={`${FIELD} min-h-11`} /></Isian>
         </div>
-        <Isian label="BU Head"><input value={b.buh} onChange={(e) => set('buh', e.target.value)} className={`${FIELD} min-h-11`} /></Isian>
+        <Isian label="BU Head (opsional)" hint="Kosongkan kalau banding tidak perlu approval BU Head. Barisnya tidak ikut di Excel."><input value={b.buh} onChange={(e) => set('buh', e.target.value)} className={`${FIELD} min-h-11`} /></Isian>
         <label className="mt-3 flex min-h-11 items-center gap-2 text-[14px]">
           <input type="checkbox" checked={b.status === 'selesai'} onChange={(e) => set('status', e.target.checked ? 'selesai' : 'draft')} className="h-5 w-5 accent-neutral-900" />
           Sudah selesai, status &quot;Submitted&quot;
@@ -337,7 +337,7 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
   };
   const baru = () => {
     const contoh = list?.[0];
-    setBuka(bandingBaru({ tanggal: todayJkt(), bh: contoh?.bh || '', buh: contoh?.buh || '', pembuat: contoh?.pembuat || akun.perfName || akun.name || '', jabatan: contoh?.jabatan || 'BMH Mobilku', cabang: contoh?.cabang || 'KENDAL' }));
+    setBuka(bandingBaru({ tanggal: todayJkt(), bh: contoh?.bh || '', pembuat: contoh?.pembuat || akun.perfName || akun.name || '', jabatan: contoh?.jabatan || 'BMH Mobilku', cabang: contoh?.cabang || 'KENDAL' }));
   };
 
   if (buka) return <Editor key={buka.id || 'baru'} awal={buka} akun={akun} onTutup={() => { setBuka(null); muat(); }} onSimpan={simpanLokal} />;

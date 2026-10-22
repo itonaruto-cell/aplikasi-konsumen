@@ -1,17 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { sesiProspek } from '../../../lib/prospek-store';
-import { canSeeKonsumen } from '../../../lib/access';
 import { rapikanBanding } from '../../../lib/banding-types';
 import { MAKS_JSON, semuaBanding, tambahBanding, ubahBanding } from '../../../lib/banding-store';
 
 export const dynamic = 'force-dynamic';
 
-// Form Analisa Banding: owner & akun yang boleh melihat database konsumen (data konsumen & SLIK)
+// Form Analisa Banding: semua akun yang sudah login boleh melihat & mengubah
 async function akses(req: NextRequest) {
   const x = await sesiProspek(req);
   if (!x) return { gagal: NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 }) };
-  if (!canSeeKonsumen(x.role as 'owner')) return { gagal: NextResponse.json({ error: 'Form banding hanya untuk owner dan tim pemegang database konsumen.' }, { status: 403 }) };
   return { x };
 }
 
