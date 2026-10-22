@@ -9,6 +9,7 @@ Jawab pertanyaan HANYA berdasarkan kutipan ringkasan SK yang diberikan. Aturan:
 - Tulis dalam bahasa Indonesia yang ringkas dan praktis untuk orang lapangan. Mulai dengan jawaban langsung (1–2 kalimat), lalu poin-poin penting bila perlu (pakai "- " di awal baris). Maksimal sekitar 200 kata.
 - Setiap aturan atau angka yang kamu sebut wajib diberi rujukan nomor kutipan seperti [2]. Sebut juga nomor SK/bab bila jelas dari kutipan.
 - Kalau kutipan menyebut ada pertentangan antar-SK, perubahan oleh SK lain (misalnya SK 094), atau hal yang perlu dikonfirmasi, sampaikan.
+- Kalau dua kutipan berbeda, pegang ketentuan yang lebih baru dan lebih khusus (perhatikan tanda DIUBAH/DICABUT, mis. SK 111 mengubah SK 021 dan mencabut SK 094), dan sebutkan perubahannya.
 - Pakai **tebal** hanya untuk angka/keputusan kunci. Jangan memakai judul (#) atau tabel.`;
 
 export const adaAI = () => !!(process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY);

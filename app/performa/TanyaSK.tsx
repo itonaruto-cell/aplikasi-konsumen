@@ -124,9 +124,19 @@ function Perbarui({ onSelesai }: { onSelesai: () => void }) {
       if (!daftar.length) throw new Error('File ini bukan paket dokumen SK.');
       for (const [i, d] of daftar.entries()) {
         setMsg(`Mengunggah ${i + 1}/${daftar.length}: ${String(d.judul || d.dok)}…`);
-        const r = await fetch('/api/sk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, urut: d.urut ?? i + 1 }) });
-        const j = await r.json().catch(() => null);
-        if (!r.ok) throw new Error(j?.error || `Gagal mengunggah ${String(d.judul || d.dok)}.`);
+        // PDF besar dipecah per ±2 MB (batas kiriman server); bagian pertama membawa teks & data dokumen
+        const pdf = typeof d.pdf === 'string' ? d.pdf : '';
+        const PER = 2_700_000;
+        const total = Math.max(1, Math.ceil(pdf.length / PER));
+        for (let ke = 1; ke <= total; ke++) {
+          if (total > 1) setMsg(`Mengunggah ${i + 1}/${daftar.length}: ${String(d.judul || d.dok)} (bagian ${ke}/${total})…`);
+          const isi = ke === 1
+            ? { ...d, urut: d.urut ?? i + 1, pdf: pdf ? pdf.slice(0, PER) : undefined, pdfBagian: { ke, total, ukuran: Math.floor(pdf.length * 3 / 4) } }
+            : { dok: d.dok, pdf: pdf.slice((ke - 1) * PER, ke * PER), pdfBagian: { ke, total } };
+          const r = await fetch('/api/sk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(isi) });
+          const j = await r.json().catch(() => null);
+          if (!r.ok) throw new Error(j?.error || `Gagal mengunggah ${String(d.judul || d.dok)}.`);
+        }
       }
       setMsg(`${daftar.length} dokumen SK sudah diperbarui.`);
       onSelesai();
