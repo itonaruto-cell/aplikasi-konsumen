@@ -4,7 +4,9 @@ import {
   C6, DOK_CEK, KAT_FOTO, bacaSlik, bandingBaru, namaFileBanding, saranReasonMh, saranSwot, tglPanjang,
   type Banding, type Cek, type FotoBanding, type KatFoto,
 } from '../../lib/banding-types';
-import { buatFormBanding, type FotoFile } from '../../lib/banding-xlsx';
+import { GAYA_BANDING, buatFormBanding, susunBanding, type FotoFile } from '../../lib/banding-xlsx';
+import PreviewLembar, { ukuranLembar } from './PreviewLembar';
+import { useOverlay } from '../overlay';
 import { TIPE_XLSX } from '../../lib/xlsx-mini';
 import { todayJkt } from '../../lib/performa-calc';
 import { FIELD } from './form';
@@ -45,7 +47,7 @@ async function ambilFoto(f: FotoBanding): Promise<FotoFile | null> {
     if (!r.ok) return null;
     const blob = await r.blob();
     const bm = await createImageBitmap(blob);
-    return { kat: f.kat, ket: f.ket, data: new Uint8Array(await blob.arrayBuffer()), ext: blob.type === 'image/png' ? 'png' : 'jpeg', w: bm.width, h: bm.height };
+    return { kat: f.kat, ket: f.ket, data: new Uint8Array(await blob.arrayBuffer()), ext: blob.type === 'image/png' ? 'png' : 'jpeg', w: bm.width, h: bm.height, src: `/api/foto/${encodeURIComponent(f.id)}` };
   } catch { return null; }
 }
 
@@ -126,13 +128,68 @@ function FotoKat({ kat, label, foto, onTambah, onUbah, onHapus, sibuk }: {
   );
 }
 
+/* ---------- Unduh & pratinjau ---------- */
+type Siap = { b: Banding; fotos: FotoFile[] };
+async function simpanFile(x: Siap, bagikan: boolean) {
+  const bytes = buatFormBanding(x.b, x.fotos);
+  const nama = `${namaFileBanding(x.b)}.xlsx`;
+  const file = new File([bytes.buffer as ArrayBuffer], nama, { type: TIPE_XLSX });
+  if (bagikan && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: nama }); return; } catch (e) { if ((e as Error)?.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.download = nama; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+function Pratinjau({ siap, onTutup, onUnduh }: { siap: Siap; onTutup: () => void; onUnduh: (bagikan: boolean) => void }) {
+  useOverlay(true, onTutup);
+  const lembar = susunBanding(siap.b, siap.fotos);
+  const [tab, setTab] = useState(0);
+  const [zoom, setZoom] = useState(false);
+  const [lebarLayar, setLebarLayar] = useState(380);
+  useEffect(() => {
+    const f = () => setLebarLayar(Math.min(window.innerWidth, 1100));
+    f(); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f);
+  }, []);
+  const l = lembar[Math.min(tab, lembar.length - 1)];
+  const { w } = ukuranLembar(l);
+  const pas = (lebarLayar - 16) / w;
+  const skala = zoom ? Math.max(pas, 0.5) : pas;
+  return (
+    <div role="dialog" aria-label="Preview Excel" className="fixed inset-0 z-[80] flex flex-col bg-neutral-200 dark:bg-neutral-900">
+      <div className="flex items-center gap-2 border-b border-neutral-300 bg-white px-2 pb-2 pt-[calc(env(safe-area-inset-top)+8px)] dark:border-neutral-800 dark:bg-neutral-950">
+        <button onClick={onTutup} className="min-h-11 rounded-xl px-3 text-[14px] font-semibold">Tutup</button>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{namaFileBanding(siap.b)}.xlsx</span>
+        <button onClick={() => setZoom(!zoom)} aria-pressed={zoom} className="min-h-11 rounded-xl border border-neutral-300 px-3 text-[13px] font-semibold dark:border-neutral-700">{zoom ? 'Pas layar' : 'Perbesar'}</button>
+      </div>
+      {lembar.length > 1 && (
+        <div role="tablist" className="flex gap-1 bg-white px-2 py-1.5 dark:bg-neutral-950">
+          {lembar.map((x, i) => <button key={x.nama} role="tab" aria-selected={tab === i} onClick={() => setTab(i)} className={`min-h-9 rounded-lg px-3 text-[13px] font-semibold ${tab === i ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-neutral-100 dark:bg-neutral-800'}`}>{x.nama}</button>)}
+        </div>
+      )}
+      <div className="min-h-0 flex-1 overflow-auto p-2">
+        <div className="mx-auto w-fit shadow-lg"><PreviewLembar lembar={l} gaya={GAYA_BANDING} skala={skala} /></div>
+        <p className="mt-2 text-center text-[12px] text-neutral-600 dark:text-neutral-400">Tampilan sama dengan file yang diunduh. Ketuk Perbesar untuk membaca tulisan, geser untuk melihat sisi kanan.</p>
+      </div>
+      <div className="grid grid-cols-[1fr_auto] gap-2 border-t border-neutral-300 bg-white px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2.5 dark:border-neutral-800 dark:bg-neutral-950">
+        <button onClick={() => onUnduh(false)} className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white dark:bg-white dark:text-neutral-900">Unduh Excel</button>
+        <button onClick={() => onUnduh(true)} className="min-h-12 rounded-2xl bg-[#0F8048] px-4 text-[15px] font-bold text-white">Bagikan</button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Editor ---------- */
 function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; onTutup: () => void; onSimpan: (b: Banding) => void }) {
+  useOverlay(true, onTutup);   // tombol kembali menutup form dulu, baru keluar dari halaman
   const [b, setB] = useState<Banding>(awal);
   const [simpan, setSimpan] = useState<'' | 'menyimpan' | 'tersimpan' | 'gagal'>(awal.id ? 'tersimpan' : '');
   const [pesan, setPesan] = useState('');
   const [upload, setUpload] = useState('');
   const [unduh, setUnduh] = useState(false);
+  const [pratinjau, setPratinjau] = useState<Siap | null>(null);
   const ubah = useRef(0);
   const terakhir = useRef(b);
   terakhir.current = b;
@@ -177,24 +234,23 @@ function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; 
     if (baru.length) set('foto', [...terakhir.current.foto, ...baru]);
   };
 
-  const unduhExcel = async (bagikan: boolean) => {
+  // Simpan dulu, lalu muat foto: dipakai untuk pratinjau dan unduhan (hasilnya sama persis)
+  const siapkan = async (): Promise<Siap | null> => {
     setUnduh(true); setPesan('');
     try {
       const tersimpan = (await kirim(terakhir.current)) || terakhir.current;
       const fotos = (await Promise.all(tersimpan.foto.map(ambilFoto))).filter((x): x is FotoFile => !!x);
       if (fotos.length < tersimpan.foto.length) setPesan(`${tersimpan.foto.length - fotos.length} foto tidak bisa dimuat dan tidak ikut di Excel.`);
-      const bytes = buatFormBanding(tersimpan, fotos);
-      const nama = `${namaFileBanding(tersimpan)}.xlsx`;
-      const file = new File([bytes.buffer as ArrayBuffer], nama, { type: TIPE_XLSX });
-      if (bagikan && navigator.canShare?.({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: nama }); return; } catch (e) { if ((e as Error)?.name === 'AbortError') return; }
-      }
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      a.href = url; a.download = nama; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    } catch { setPesan('Excel gagal dibuat. Coba lagi.'); } finally { setUnduh(false); }
+      return { b: tersimpan, fotos };
+    } catch { setPesan('Data form belum bisa disiapkan. Coba lagi.'); return null; } finally { setUnduh(false); }
   };
+  const unduhExcel = async (bagikan: boolean, siap?: Siap | null) => {
+    const x = siap || (await siapkan());
+    if (!x) return;
+    try { await simpanFile(x, bagikan); } catch { setPesan('Excel gagal dibuat. Coba lagi.'); }
+  };
+  const bukaPreview = async () => { const x = await siapkan(); if (x) setPratinjau(x); };
+
 
   const nSlik = Math.max(0, bacaSlik(b.slik).length - 1);
   const isiCek = DOK_CEK.filter((d) => b.dok[d.k]).length;
@@ -300,13 +356,17 @@ function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; 
       {pesan && <p role="alert" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[13px] text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">{pesan}</p>}
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+64px)] z-30 border-t border-neutral-200 bg-white/95 px-4 py-2.5 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
-        <div className="mx-auto grid max-w-xl grid-cols-[1fr_auto] gap-2">
-          <button onClick={() => unduhExcel(false)} disabled={unduh || !(b.nama || b.appNo)} className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900">
-            {unduh ? 'Menyiapkan Excel…' : 'Unduh Excel F-761'}
+        <div className="mx-auto grid max-w-xl grid-cols-[1fr_1fr_auto] gap-2">
+          <button onClick={bukaPreview} disabled={unduh || !(b.nama || b.appNo)} className="min-h-12 rounded-2xl border border-neutral-300 text-[15px] font-bold disabled:opacity-40 dark:border-neutral-700">
+            {unduh ? 'Menyiapkan…' : 'Preview'}
+          </button>
+          <button onClick={() => unduhExcel(false)} disabled={unduh || !(b.nama || b.appNo)} aria-label="Unduh Excel F-761" className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900">
+            Unduh Excel
           </button>
           <button onClick={() => unduhExcel(true)} disabled={unduh || !(b.nama || b.appNo)} aria-label="Bagikan Excel" className="min-h-12 rounded-2xl bg-[#0F8048] px-4 text-[15px] font-bold text-white disabled:opacity-40">Bagikan</button>
         </div>
       </div>
+      {pratinjau && <Pratinjau siap={pratinjau} onTutup={() => setPratinjau(null)} onUnduh={(bg) => unduhExcel(bg, pratinjau)} />}
     </div>
   );
 }

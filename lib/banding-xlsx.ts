@@ -1,9 +1,9 @@
 // Excel F-761 Form Analisa Banding Branch Head, susunan mengikuti template kantor (kolom B–H, judul biru muda,
 // checklist dokumen, analisa 6C+1EP, SWOT, reason, lampiran foto 3 kolom, lembar persetujuan, lembar SLIK).
-import { Lembar, buatXlsxLembar, type Gaya } from './xlsx-lembar';
+import { Lembar, buatXlsxLembar, kolomPx, type Gaya } from './xlsx-lembar';
 import { DOK_CEK, KAT_FOTO, bacaSlik, teks6C, teksSwot, tglPanjang, type Banding, type Cek, type KatFoto } from './banding-types';
 
-export type FotoFile = { kat: KatFoto; ket: string; data: Uint8Array; ext: 'jpeg' | 'png'; w: number; h: number };
+export type FotoFile = { kat: KatFoto; ket: string; data: Uint8Array; ext: 'jpeg' | 'png'; w: number; h: number; src?: string };
 
 const GAYA: Gaya[] = [
   /* 1 judul */ { size: 20, bold: true, fill: '00FFFF', border: 'thick', h: 'center', v: 'center' },
@@ -30,6 +30,52 @@ const GAYA: Gaya[] = [
 const S = { judul: 1, label: 2, kepala: 3, teks: 4, merah: 5, kTabel: 6, grup: 7, sel: 8, cek: 9, ket: 10, lJudul: 11, lKepala: 12, lSel: 13, pKepala: 14, pSel: 15, pTengah: 16, disc: 17, sKepala: 18, sSel: 19, label13: 20 };
 const LEBAR = [1.25, 1.88, 36.25, 37, 68.88, 25.13, 129, 1.88];
 const C = 3, D = 4, E = 5, F = 6, G = 7;
+
+// Area lampiran per kategori: kolom awal, kolom akhir (gabungan) dan lebar dalam piksel
+const lebarKolom = (dari: number, sampai: number) => LEBAR.slice(dari - 1, sampai).reduce((s, w) => s + kolomPx(w), 0);
+export const AREA_FOTO: Record<KatFoto, { col: number; gab?: number; lebar: number }> = {
+  mandatory: { col: C, gab: D, lebar: lebarKolom(C, D) },
+  ots: { col: E, lebar: lebarKolom(E, E) },
+  tambahan: { col: F, gab: G, lebar: lebarKolom(F, G) },
+};
+// Posisi x di dalam area → kolom & geseran (oneCellAnchor menempel ke kolom tempat foto mulai)
+function jangkar(col: number, x: number) {
+  let c = col, sisa = x;
+  while (c < LEBAR.length && sisa >= kolomPx(LEBAR[c - 1])) { sisa -= kolomPx(LEBAR[c - 1]); c++; }
+  return { kolom: c, dx: sisa };
+}
+
+export type Posisi = { baris: number; x: number; w: number; h: number };
+const JARAK = 8, MAKS_BARIS = 4;
+// Susun foto berderet menyamping dengan tinggi sama; pindah baris kalau tidak muat
+export function deret(foto: { w: number; h: number }[], lebar: number, H: number): Posisi[] {
+  const out: Posisi[] = [];
+  let x = JARAK, baris = 0;
+  for (const f of foto) {
+    let h = H, w = Math.round((f.w / f.h) * H);
+    const maks = lebar - JARAK * 2;
+    if (w > maks) { w = maks; h = Math.round((f.h / f.w) * w); }
+    if (x > JARAK && x + w > lebar - JARAK) { baris++; x = JARAK; }
+    out.push({ baris, x, w, h });
+    x += w + JARAK;
+  }
+  return out;
+}
+// Cari tinggi foto terbesar (maks. 400 px) yang membuat semua kategori muat dalam 4 baris
+export function tataLampiran(per: Record<KatFoto, { w: number; h: number }[]>) {
+  const susun = (h: number) => Object.fromEntries(KAT_FOTO.map(([k]) => [k, deret(per[k], AREA_FOTO[k].lebar, h)])) as Record<KatFoto, Posisi[]>;
+  const nBaris = (p: Record<KatFoto, Posisi[]>) => Math.max(0, ...KAT_FOTO.map(([k]) => (p[k].length ? p[k][p[k].length - 1].baris + 1 : 0)));
+  // Utamakan baris sesedikit mungkin (foto menyamping) selama foto masih terbaca (tinggi ≥ 260 px),
+  // lalu pilih foto terbesar untuk jumlah baris itu.
+  let H = 400, posisi = susun(H), terbaik = nBaris(posisi);
+  for (let h = 390; h >= 260; h -= 10) {
+    const p = susun(h), n = nBaris(p);
+    if (n < terbaik) { H = h; posisi = p; terbaik = n; }
+  }
+  while (H > 90 && nBaris(posisi) > MAKS_BARIS) { H -= 10; posisi = susun(H); }
+  const tinggi = Math.max(120, ...KAT_FOTO.flatMap(([k]) => posisi[k].map((p) => p.h)));
+  return { posisi, baris: Math.max(1, nBaris(posisi)), tinggi };
+}
 
 // Perkiraan tinggi kotak teks (font 14 tebal, lebar C–G ≈ 170 karakter per baris)
 export function tinggiTeks(t: string, perBaris = 170, min = 24): number {
@@ -93,32 +139,32 @@ export function lembarBanding(b: Banding, foto: FotoFile[]): Lembar {
   r = blok(l, r, b.reasonBh, 150);
   r = jarak(l, r, 6);
 
-  // Lampiran foto: tiga kolom (Mandatory C:D, OTS E, Tambahan F:G), keterangan di atas tiap foto
+  // Lampiran foto: tiga kolom (Mandatory C:D, OTS E, Tambahan F:G). Foto disusun menyamping selama muat,
+  // maksimal 4 baris ke bawah; tinggi foto disamakan supaya rapi.
   l.set(r, C, 'Lampiran Dokumen', S.lJudul); r++;
   l.gab(r, C, r, D, 'Dokumen Mandatory', S.lKepala).set(r, E, 'Dokumen & PIC OTS', S.lKepala).gab(r, F, r, G, 'Dokumen Tambahan', S.lKepala).t(r, 25.5); r++;
-  const per = Object.fromEntries(KAT_FOTO.map(([k]) => [k, foto.filter((f) => f.kat === k)])) as Record<KatFoto, FotoFile[]>;
-  const tempat: Record<KatFoto, { col: number; maxW: number; gab?: number }> = { mandatory: { col: C, maxW: 500, gab: D }, ots: { col: E, maxW: 470 }, tambahan: { col: F, maxW: 520, gab: G } };
-  const nBaris = Math.max(1, ...KAT_FOTO.map(([k]) => per[k].length));
-  for (let i = 0; i < nBaris; i++) {
-    // baris keterangan
+  const tempat = AREA_FOTO;
+  const per = Object.fromEntries(KAT_FOTO.map(([k]) => [k, foto.filter((f) => f.kat === k && f.w && f.h)])) as Record<KatFoto, FotoFile[]>;
+  const tata = tataLampiran(per);
+  for (let i = 0; i < tata.baris; i++) {
+    // baris keterangan: nomor + keterangan foto di baris ini
     for (const [k] of KAT_FOTO) {
-      const t = tempat[k], f = per[k][i];
-      const teks = f ? `${i + 1}. ${f.ket || ''}`.trim() : '';
+      const t = tempat[k];
+      const teks = tata.posisi[k].map((p, n) => (p.baris === i ? `${n + 1}. ${per[k][n].ket || ''}`.trim() : '')).filter(Boolean).join('   ');
       if (t.gab) l.gab(r, t.col, r, t.gab, teks, S.lSel); else l.set(r, t.col, teks, S.lSel);
     }
     l.t(r, 18); r++;
-    // baris foto
-    let tinggi = 120;
     for (const [k] of KAT_FOTO) {
-      const t = tempat[k], f = per[k][i];
+      const t = tempat[k];
       if (t.gab) l.gab(r, t.col, r, t.gab, null, S.lSel); else l.set(r, t.col, null, S.lSel);
-      if (!f || !f.w || !f.h) continue;
-      const sk = Math.min(1, t.maxW / f.w, 560 / f.h);
-      const w = Math.round(f.w * sk), h = Math.round(f.h * sk);
-      l.gambar.push({ baris: r, kolom: t.col, dx: 6, dy: 6, w, h, data: f.data, ext: f.ext });
-      tinggi = Math.max(tinggi, h * 0.75 + 10);
+      tata.posisi[k].forEach((p, n) => {
+        if (p.baris !== i) return;
+        const f = per[k][n];
+        const a = jangkar(t.col, p.x);
+        l.gambar.push({ baris: r, kolom: a.kolom, dx: a.dx, dy: 6, w: p.w, h: p.h, data: f.data, ext: f.ext, src: f.src });
+      });
     }
-    l.t(r, tinggi); r++;
+    l.t(r, tata.tinggi * 0.75 + 12); r++;
   }
   r = jarak(l, r, 7.5);
 
@@ -154,9 +200,13 @@ export function lembarSlik(b: Banding): Lembar | null {
   return l;
 }
 
-export function buatFormBanding(b: Banding, foto: FotoFile[]): Uint8Array {
+export const GAYA_BANDING = GAYA;
+export function susunBanding(b: Banding, foto: FotoFile[]): Lembar[] {
   const lembar = [lembarBanding(b, foto)];
   const slik = lembarSlik(b);
   if (slik) lembar.push(slik);
-  return buatXlsxLembar(lembar, GAYA, `F-761 ${b.nama}`);
+  return lembar;
+}
+export function buatFormBanding(b: Banding, foto: FotoFile[]): Uint8Array {
+  return buatXlsxLembar(susunBanding(b, foto), GAYA, `F-761 ${b.nama}`);
 }
