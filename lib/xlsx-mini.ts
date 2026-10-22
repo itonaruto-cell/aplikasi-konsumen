@@ -18,7 +18,7 @@ const crc32 = (b: Uint8Array) => {
 };
 
 // ZIP tanpa kompresi (metode "stored")
-function zip(files: { name: string; data: Uint8Array }[]): Uint8Array {
+export function zip(files: { name: string; data: Uint8Array }[]): Uint8Array {
   const bagian: Uint8Array[] = [];
   const pusat: Uint8Array[] = [];
   let offset = 0;
@@ -54,11 +54,11 @@ function zip(files: { name: string; data: Uint8Array }[]): Uint8Array {
   return out;
 }
 
-const esc = (s: string) => String(s ?? '')
+export const esc = (s: string) => String(s ?? '')
   // eslint-disable-next-line no-control-regex
   .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const kolom = (i: number) => { let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
+export const kolom = (i: number) => { let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
 
 // rows[0] = judul kolom. lebar = lebar tiap kolom (satuan karakter).
 export function buatXlsx(rows: string[][], sheet = 'Sheet1', lebar: number[] = []): Uint8Array {

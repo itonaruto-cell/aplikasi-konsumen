@@ -11,9 +11,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -28,6 +28,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
     ['Kerja harian', [
       { judul: 'Database prospek', sub: 'Input, impor Google Maps, follow up dengan foto bukti', ico: ico('users'), on: onProspek },
       { judul: 'Tanya SK', sub: 'Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu', ico: ico('list'), on: onSK },
+      { judul: 'Form banding (F-761)', sub: 'Reason, analisa 6C, SWOT & foto → Excel untuk G Suite', ico: ico('edit'), on: onBanding },
       { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
       { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
     ]],
