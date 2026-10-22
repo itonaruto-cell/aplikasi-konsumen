@@ -76,7 +76,7 @@ async function ganti(tab: string, header: string[], dok: string, rows: string[][
   }
 }
 
-export type ImporSK = { dok: string; judul: string; keterangan?: string; namaFile?: string; halaman?: number; urut?: number; teks: { hal: number; bagian: string; isi: string }[]; pdf?: string };
+export type ImporSK = { dok: string; judul: string; keterangan?: string; namaFile?: string; halaman?: number; urut?: number; teks: { hal: number; bagian: string; isi: string }[]; pdf?: string; pdfUkuran?: number };
 
 export async function simpanDokumen(d: ImporSK, oleh: string) {
   if (d.pdf) {
@@ -87,10 +87,25 @@ export async function simpanDokumen(d: ImporSK, oleh: string) {
   }
   await ganti(TAB_TEKS, HEAD_TEKS, d.dok, d.teks.map((t) => [d.dok, String(t.hal), t.bagian, t.isi]), 300);
   const lama = (await daftarDokumen(true)).find((x) => x.dok === d.dok);
-  const ukuran = d.pdf ? Math.floor(d.pdf.length * 3 / 4) : lama?.ukuran || 0;
+  const ukuran = d.pdfUkuran || (d.pdf ? Math.floor(d.pdf.length * 3 / 4) : lama?.ukuran || 0);
   await ganti(TAB_DOK, HEAD_DOK, d.dok, [[d.dok, d.judul, d.keterangan || '', d.namaFile || lama?.namaFile || `${d.dok}.pdf`, String(d.halaman || lama?.halaman || ''),
     String(d.teks.length), String(ukuran), new Date().toISOString(), oleh, String(d.urut ?? lama?.urut ?? 99)]], 10);
   cache = null; daftarCache = null;
+}
+
+// PDF besar dikirim beberapa bagian (batas kiriman Vercel ±4,5 MB). Bagian pertama ikut simpanDokumen
+// (mengganti PDF lama); bagian berikutnya ditambahkan di sini, nomor potongan melanjutkan.
+export const PDF_PER_BAGIAN = 60 * CHUNK; // 2.700.000 karakter base64 ≈ 2 MB
+export async function tambahBagianPdf(dok: string, ke: number, data: string) {
+  const mulai = (ke - 1) * (PDF_PER_BAGIAN / CHUNK) + 1;
+  const rows: string[][] = [];
+  for (let i = 0, k = mulai; i < data.length; i += CHUNK, k++) rows.push([dok, String(k), data.slice(i, i + CHUNK)]);
+  await siapkan(TAB_BERKAS, HEAD_BERKAS);
+  const api = sheets();
+  for (let i = 0; i < rows.length; i += 8) {
+    await api.spreadsheets.values.append({ spreadsheetId: sid(), range: `${TAB_BERKAS}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values: rows.slice(i, i + 8) } });
+  }
+  pdfMem.delete(dok);
 }
 
 export async function hapusDokumen(dok: string) {
