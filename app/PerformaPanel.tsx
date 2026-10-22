@@ -48,6 +48,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const loadedAt = useRef(0);
 
   const [page, setPage] = useState<Page>('pantau');
+  // Halaman sebelumnya, supaya tombol kembali mundur satu halaman (mis. Form banding → Saya → Pantau)
+  const [riwayatHal, setRiwayatHal] = useState<Page[]>([]);
   const brand: BrandKey = 'semua';
   const [wrap, setWrap] = useState(false);
   const [rayakan, setRayakan] = useState<string | null>(null);
@@ -187,7 +189,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
   /* ---------- Tombol kembali Android: tutup panel / sorotan / balik ke Pantau ---------- */
   const push = (v: View) => setStack((s) => [...s, v]);
-  const depth = ovN + stack.length + (story !== null ? 1 : 0) + (page !== 'pantau' ? 1 : 0);
+  const depth = ovN + stack.length + (story !== null ? 1 : 0) + riwayatHal.length;
   const prevDepth = useRef(0);
   const fromPop = useRef(false);
   const ignorePop = useRef(0);
@@ -196,6 +198,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     if (overlays.current.length) overlays.current[overlays.current.length - 1]();
     else if (story !== null) setStory(null);
     else if (stack.length) setStack((s) => s.slice(0, -1));
+    else if (riwayatHal.length) { setPage(riwayatHal[riwayatHal.length - 1]); setRiwayatHal((h) => h.slice(0, -1)); window.scrollTo({ top: 0 }); }
     else if (page !== 'pantau') setPage('pantau');
   };
   useEffect(() => {
@@ -220,7 +223,13 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     return () => { document.body.style.overflow = ''; };
   }, [stack.length, story, wrap]);
 
-  const go = (p: Page) => { setPage(p); window.scrollTo({ top: 0 }); };
+  // Dari menu bawah = mulai dari awal (kembali → Pantau); dari dalam halaman = tambah satu langkah
+  const go = (p: Page) => {
+    if (p === page) return;
+    setRiwayatHal((h) => [...h.filter((x) => x !== p), page].slice(-10));
+    setPage(p); window.scrollTo({ top: 0 });
+  };
+  const goNav = (p: Page) => { setRiwayatHal(p === 'pantau' ? [] : ['pantau']); setPage(p); window.scrollTo({ top: 0 }); };
 
   /* ---------- Tarik ke bawah untuk muat ulang ---------- */
   const overlay = ovN > 0 || stack.length > 0 || story !== null || wrap;
@@ -342,7 +351,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
           {NAV.map(([k, icon, label]) => {
             const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif' || page === 'inject' || page === 'juara' || page === 'laporan' || page === 'prospek' || page === 'sinkron' || page === 'sk' || page === 'kesehatan' || page === 'banding'));
             return (
-              <button key={k} onClick={() => (k === page ? window.scrollTo({ top: 0, behavior: 'smooth' }) : go(k))}
+              <button key={k} onClick={() => (k === page ? window.scrollTo({ top: 0, behavior: 'smooth' }) : goNav(k))}
                 aria-current={on ? 'page' : undefined}
                 className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${on ? 'font-bold text-neutral-900 dark:text-white' : 'font-medium text-neutral-500 dark:text-neutral-400'}`}>
                 <span className={`flex h-8 items-center justify-center rounded-full transition ${NAV.length > 5 ? 'w-12' : 'w-14'} ${on ? 'bg-neutral-200/80 dark:bg-neutral-800' : ''}`}>

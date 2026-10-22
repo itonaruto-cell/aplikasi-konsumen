@@ -16,7 +16,10 @@ export type Gaya = {
   h?: 'left' | 'center' | 'right'; v?: 'top' | 'center' | 'bottom'; wrap?: boolean;
 };
 type Sel = { v: string | number | boolean | null; s: number };
-export type Gambar = { baris: number; kolom: number; dx?: number; dy?: number; w: number; h: number; data: Uint8Array; ext: 'jpeg' | 'png' };
+export type Gambar = { baris: number; kolom: number; dx?: number; dy?: number; w: number; h: number; data: Uint8Array; ext: 'jpeg' | 'png'; src?: string };
+// Lebar kolom Excel (satuan karakter) → piksel, rumus yang dipakai Excel untuk font standar
+export const kolomPx = (w: number) => Math.floor(w * 7 + 0.5);
+export const ptKePx = (pt: number) => (pt * 4) / 3;
 
 export class Lembar {
   sel = new Map<number, Map<number, Sel>>();
