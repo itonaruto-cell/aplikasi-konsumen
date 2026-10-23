@@ -3,6 +3,7 @@
 // (salesBrand, dikirim Apps Script) memberi rincian per jenis kendaraan, jadi motor bisa dikeluarkan dari
 // achievement Mobilku orang itu dan dicatat terpisah sebagai `sukarela`.
 import type { Blok, Performa, Sales, SalesBrandOrang } from './performa-types';
+import { namaPengisi } from './posisi-isi';
 
 const key = (s: unknown) => String(s ?? '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
 const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
@@ -81,6 +82,25 @@ const barisTotal = (b: Blok | undefined): Sales | null => {
   const n = (v: unknown) => (isNum(v) ? v : null);
   return { lalu: n(r[2]), ini: r[3] as number, target: n(r[4]), ach: n(r[5]), diffLalu: n(r[6]), diffTarget: n(r[7]) };
 };
+
+/* ---------- Posisi kosong yang sudah ada orangnya ---------- */
+// Baris "MAO MOTOR" / "CMO MOTORKU" di pantauan diganti nama pengisinya (lib/posisi-isi.ts),
+// di daftar orang dan di tabel blok.
+export function isiPosisiKosong(data: Performa): Performa {
+  let ubah = false;
+  const orang = (data.orang || []).map((o) => {
+    const n = namaPengisi(o.nama);
+    if (!n) return o;
+    ubah = true;
+    return { ...o, nama: n };
+  });
+  const blok = data.blok?.map((b) => {
+    if (!b.r.some((r) => namaPengisi(r[0]))) return b;
+    ubah = true;
+    return { ...b, r: b.r.map((r) => { const n = namaPengisi(r[0]); return n ? [n, ...r.slice(1)] : r; }) };
+  });
+  return ubah ? { ...data, orang, ...(blok ? { blok } : {}) } : data;
+}
 
 /* ---------- Kolom "bulan lalu" per orang ---------- */
 // Mulai Oktober kolom bulan lalu per PIC juga kosong / 0. Diisi dari salesLalu.orang (tabel per PIC di file
@@ -162,7 +182,7 @@ export function totalCabangPerBrand(data: Performa): Performa {
 }
 
 // Dipakai saat menyimpan dan membaca data pantauan (aman dipanggil berulang)
-export const rapikanPerforma = (data: Performa): Performa => pisahSukarela(totalCabangPerBrand(isiBulanLalu(isiLaluOrang(data))));
+export const rapikanPerforma = (data: Performa): Performa => pisahSukarela(totalCabangPerBrand(isiBulanLalu(isiLaluOrang(isiPosisiKosong(data)))));
 
 /* ---------- Rincian pencairan Motorku per nama (untuk tab Motorku & laporan) ---------- */
 export type RincianMotor = { nama: string; unit: number; amount: number; sukarela: boolean };
