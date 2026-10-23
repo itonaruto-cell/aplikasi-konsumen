@@ -20,6 +20,8 @@ import InjectP3 from './performa/Inject';
 import Plan from './performa/Plan';
 import Kejar from './performa/Kejar';
 import Laporan, { type Jenis as JenisLaporan } from './performa/Laporan';
+import { posisiKosong } from '../lib/kesehatan-data';
+import { PIC_TAMBAHAN } from '../lib/posisi-isi';
 import ProspekPage from './performa/Prospek';
 import Sinkron from './performa/Sinkron';
 import TanyaSK from './performa/TanyaSK';
@@ -158,8 +160,9 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const storyList = useMemo(() => (c ? stories(c, brand, me) : []), [c, brand, me]);
   // Owner adalah SPV: tidak ikut ditagih plan, bukan pilihan PIC survey, dan tidak punya hitungan insentif perorangan
   const spv = akun.role === 'owner' ? me : null;
-  // Pilihan PIC survey di Bahan survey: anggota Mobilku dari pantauan
-  const tim = useMemo(() => (data?.orang || []).filter((o) => brandOf(o) === 'mobilku' && o !== spv).map((o) => o.nama), [data, spv]);
+  // Pilihan PIC survey di Bahan survey: anggota Mobilku dari pantauan, ditambah PIC_TAMBAHAN (Agus & Yoga, Motorku)
+  const tim = useMemo(() => (data?.orang || []).filter((o) => o !== spv && !posisiKosong(o.nama)
+    && (brandOf(o) === 'mobilku' || String(o.nama).toUpperCase().split(/\s+/).some((w) => PIC_TAMBAHAN.includes(w)))).map((o) => o.nama), [data, spv]);
   // Yang ditagih plan aktivitas: semua anggota di pantauan (Mobilku dan Motorku), kecuali owner sendiri
   const staf = useMemo(() => (data?.orang || []).filter((o) => o !== spv).map((o) => ({ nama: o.nama, brand: brandOf(o) })), [data, spv]);
   const myStreak = c && me ? streak(c, me.nama) : 0;
