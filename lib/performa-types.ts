@@ -33,7 +33,10 @@ export type Orang = {
 // Rekap tarikan sales bulan berjalan per nama CMO, dipisah per jenis kendaraan (dikirim Apps Script).
 export type JualBrand = { unit: number; amount: number };
 export type SalesBrandOrang = { nama: string; mobilku: JualBrand; motorku: JualBrand };
-export type SalesLalu = { bulan?: string; sumber?: string; mobilku?: JualBrand; motorku?: JualBrand; total?: JualBrand };
+export type SalesLalu = {
+  bulan?: string; sumber?: string; mobilku?: JualBrand; motorku?: JualBrand; total?: JualBrand;
+  orang?: { nama: string; unit: number | null; amount: number | null }[];   // per PIC dari tabel per PIC file bulan lalu
+};
 export type SalesBrand = {
   sumber?: string;          // nama tab tarikan sales yang dibaca
   orang: SalesBrandOrang[];
