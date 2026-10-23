@@ -5,7 +5,7 @@ import type { Orang } from '../../lib/performa-types';
 import type { Bahan } from '../../lib/bahan-types';
 import { brandOf, hariKerjaSisa, type Ctx } from '../../lib/performa-calc';
 import { samaNama } from '../../lib/sales-brand';
-import { hitungProyeksi, type Angka, type Proyeksi } from '../../lib/proyeksi';
+import { hitungProyeksi, jumlahBahan, type Angka, type Proyeksi } from '../../lib/proyeksi';
 import { posisiKosong } from '../../lib/kesehatan-data';
 import { totalBrand } from './laporan-gambar';
 import { shortName } from './parts';
@@ -93,6 +93,30 @@ function SimKolom({ jenis, now, after, target }: { jenis: 'amount' | 'unit'; now
   );
 }
 
+// Satu blok hasil simulasi: angka sekarang → setelah tambahan, dibanding target
+function SimBlok({ judul, sub, now, after, target }: { judul: string; sub: string; now: Angka; after: Angka; target: Angka | null }) {
+  return (
+    <div className="rounded-2xl bg-neutral-50 p-3 dark:bg-neutral-900">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[15px] font-bold">{judul}</p>
+        <p className="min-w-0 truncate text-right text-[12px] text-neutral-500">{sub}</p>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-4">
+        <SimKolom jenis="amount" now={now.amount} after={after.amount} target={target?.amount ?? null} />
+        <SimKolom jenis="unit" now={now.unit} after={after.unit} target={target?.unit ?? null} />
+      </div>
+    </div>
+  );
+}
+
+type Jenis = 'mobil' | 'motor';
+const JENIS: { k: Jenis; label: string; brand: 'mobilku' | 'motorku' }[] = [
+  { k: 'mobil', label: 'Mobil', brand: 'mobilku' },
+  { k: 'motor', label: 'Motor', brand: 'motorku' },
+];
+const plus = (a: Angka, ...b: Angka[]): Angka => b.reduce((x, y) => ({ amount: x.amount + y.amount, unit: x.unit + y.unit }), a);
+const NOL: Angka = { amount: 0, unit: 0 };
+
 function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: string, today: string): string {
   const tgl = new Date(today + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   const satu = (a: Angka) => `${rp(a.amount)} (${nf.format(a.unit)} unit)`;
@@ -115,8 +139,8 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
   const [mode, setMode] = useState<Mode>('maksimal');
   const [pesan, setPesan] = useState('');
   const [simId, setSimId] = useState('');
-  const [simRp, setSimRp] = useState(0);
-  const [simUnit, setSimUnit] = useState(0);
+  const [tamb, setTamb] = useState<Record<Jenis, Angka>>({ mobil: NOL, motor: NOL });
+  const ubahTamb = (k: Jenis, f: keyof Angka, v: number) => setTamb((x) => ({ ...x, [k]: { ...x[k], [f]: v } }));
   const isOwner = akun.role === 'owner';
 
   useEffect(() => {
@@ -144,19 +168,31 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
       .sort((a, b) => b.p[mode].amount - a.p[mode].amount);
     const brand = (['mobilku', 'motorku'] as const).map((b) => ({ b, p: hitungProyeksi(totalBrand(c, b), aktif.filter((x) => brandBahan(x) === b)) }));
     const tanpaPemilik = aktif.filter((b) => !pemilik(b) && !b.kendaraan).length;
-    return { cabang: hitungProyeksi(c.data.cabangTotal || {}, aktif), brand, orang, tanpaPemilik, nAktif: aktif.length };
+    // Bahan yang sedang berjalan per orang, dipisah mobil / motor (untuk info di simulasi)
+    const nilai = (list: Bahan[]): Angka => { const j = jumlahBahan(list); return mode === 'maksimal' ? plus(j.proses, j.survey) : j.proses; };
+    const bahanOrang = new Map(orang.map(({ o }) => {
+      const milik = aktif.filter((b) => samaNama(o.nama, b.nama));
+      return [o.nama, { mobil: nilai(milik.filter((b) => brandBahan(b) === 'mobilku')), motor: nilai(milik.filter((b) => brandBahan(b) === 'motorku')) }] as const;
+    }));
+    return { cabang: hitungProyeksi(c.data.cabangTotal || {}, aktif), brand, orang, bahanOrang, tanpaPemilik, nAktif: aktif.length };
   }, [bahan, c, me, isOwner, mode]);
 
-  // Pilihan untuk simulasi: cabang & brand (owner), lalu per orang
-  const opsi: { id: string; judul: string; p: Proyeksi }[] = data ? [
-    ...(isOwner ? [{ id: 'cabang', judul: 'Cabang', p: data.cabang }, ...data.brand.map((x) => ({ id: x.b, judul: x.b === 'mobilku' ? 'Mobilku' : 'Motorku', p: x.p }))] : []),
+  // Simulasi per PIC: tambahan mobil & motor dipisah. Owner juga bisa tanpa PIC (langsung ke brand & cabang).
+  const opsi: { id: string; judul: string; p: Proyeksi | null }[] = data ? [
     ...data.orang.map((x) => ({ id: x.o.nama, judul: shortName(x.o.nama), p: x.p })),
+    ...(isOwner ? [{ id: 'tanpa-pic', judul: 'Tanpa PIC (langsung brand & cabang)', p: null }] : []),
   ] : [];
   const pilih = opsi.find((o) => o.id === simId) ?? opsi[0];
-  const sim = pilih ? {
-    judul: pilih.judul, now: pilih.p[mode], target: pilih.p.target,
-    after: { amount: pilih.p[mode].amount + simRp, unit: pilih.p[mode].unit + simUnit },
+  const adaTamb = !!(tamb.mobil.amount || tamb.mobil.unit || tamb.motor.amount || tamb.motor.unit);
+  const total = plus(tamb.mobil, tamb.motor);
+  const sim = pilih && data ? {
+    pic: pilih.p ? { judul: pilih.judul, now: pilih.p[mode], after: plus(pilih.p[mode], total), target: pilih.p.target } : null,
+    brand: isOwner ? JENIS.map((j) => { const p = data.brand.find((x) => x.b === j.brand)!.p; return { j, now: p[mode], after: plus(p[mode], tamb[j.k]), target: p.target }; }) : [],
+    cabang: isOwner ? { now: data.cabang[mode], after: plus(data.cabang[mode], total), target: data.cabang.target } : null,
+    bahan: pilih.p ? data.bahanOrang.get(pilih.id) ?? null : null,
   } : null;
+  const satu = (a: Angka) => `${rp(a.amount)} (${nf.format(a.unit)} unit)`;
+  const subTamb = (a: Angka) => (a.amount || a.unit ? `+ ${satu(a)}` : 'tanpa tambahan');
 
   const salin = async () => {
     if (!data) return;
@@ -164,9 +200,15 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
       ? [{ judul: 'CABANG', p: data.cabang }, ...data.brand.map((x) => ({ judul: x.b === 'mobilku' ? 'MOBILKU' : 'MOTORKU', p: x.p })), ...data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }))]
       : data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }));
     let t = teksWa(baris, mode, c.data.cabang || 'Kendal', c.today);
-    if (sim && (simRp || simUnit)) {
-      const tgt = sim.target?.amount ? ` · ${pct(sim.after.amount, sim.target.amount)} dari target` : '';
-      t += `\n\n*SIMULASI ${sim.judul.toUpperCase()}*\n+ ${rp(simRp)} (${nf.format(simUnit)} unit) → proyeksi ${rp(sim.after.amount)} (${nf.format(sim.after.unit)} unit)${tgt}`;
+    if (sim && adaTamb) {
+      const hasil = (judul: string, x: { after: Angka; target: Angka | null }) =>
+        `${judul} → ${satu(x.after)}${x.target?.amount ? ` · ${pct(x.after.amount, x.target.amount)} dari target` : ''}`;
+      const out = ['', '', `*SIMULASI${sim.pic ? ` ${sim.pic.judul.toUpperCase()}` : ''}*`];
+      for (const j of JENIS) if (tamb[j.k].amount || tamb[j.k].unit) out.push(`+ ${j.label} ${satu(tamb[j.k])}`);
+      if (sim.pic) out.push(hasil(sim.pic.judul, sim.pic));
+      for (const b of sim.brand) if (tamb[b.j.k].amount || tamb[b.j.k].unit) out.push(hasil(b.j.brand === 'mobilku' ? 'Mobilku' : 'Motorku', b));
+      if (sim.cabang) out.push(hasil('Cabang', sim.cabang));
+      t += out.join('\n');
     }
     try { await navigator.clipboard.writeText(t); setPesan('Ringkasan proyeksi tersalin. Tempel di WhatsApp.'); } catch { setPesan('Tidak bisa menyalin otomatis di HP ini.'); }
   };
@@ -200,30 +242,43 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
           {sim && (
             <section className="rounded-3xl border border-dashed border-neutral-400 p-4 dark:border-neutral-600">
               <h3 className="text-[16px] font-bold">Simulasi estimasi</h3>
-              <p className="mt-0.5 text-[12px] text-neutral-500">Ketik tambahan estimasi, angkanya tidak disimpan. Buat bahan briefing tim.</p>
-              <label className="mt-3 block text-[12px] font-semibold text-neutral-500" htmlFor="sim-pilih">Untuk</label>
+              <p className="mt-0.5 text-[12px] text-neutral-500">Pilih PIC, ketik tambahan mobil dan motor. Angkanya tidak disimpan, buat bahan briefing tim.</p>
+              <label className="mt-3 block text-[12px] font-semibold text-neutral-500" htmlFor="sim-pilih">PIC</label>
               <select id="sim-pilih" value={pilih!.id} onChange={(e) => setSimId(e.target.value)}
                 className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950">
                 {opsi.map((o) => <option key={o.id} value={o.id}>{o.judul}</option>)}
               </select>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="text-[12px] font-semibold text-neutral-500">Tambahan amount (Rp)</span>
-                  <input inputMode="numeric" value={simRp ? simRp.toLocaleString('id-ID') : ''} placeholder="0" onChange={(e) => setSimRp(digit(e.target.value))}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
-                </label>
-                <label className="block">
-                  <span className="text-[12px] font-semibold text-neutral-500">Tambahan unit</span>
-                  <input inputMode="numeric" value={simUnit || ''} placeholder="0" onChange={(e) => setSimUnit(digit(e.target.value))}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
-                </label>
+              {JENIS.map((j) => (
+                <fieldset key={j.k} className="mt-3">
+                  <legend className="text-[13px] font-bold">Tambahan {j.label}</legend>
+                  {sim.bahan && (
+                    <p className="text-[12px] text-neutral-500">
+                      Bahan {j.label.toLowerCase()} {sim.pic?.judul} sekarang: {sim.bahan[j.k].unit ? satu(sim.bahan[j.k]) : 'belum ada'}
+                    </p>
+                  )}
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[12px] font-semibold text-neutral-500">Amount (Rp)</span>
+                      <input inputMode="numeric" aria-label={`Tambahan ${j.label} amount (Rp)`} value={tamb[j.k].amount ? tamb[j.k].amount.toLocaleString('id-ID') : ''} placeholder="0"
+                        onChange={(e) => ubahTamb(j.k, 'amount', digit(e.target.value))}
+                        className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
+                    </label>
+                    <label className="block">
+                      <span className="text-[12px] font-semibold text-neutral-500">Unit</span>
+                      <input inputMode="numeric" aria-label={`Tambahan ${j.label} unit`} value={tamb[j.k].unit || ''} placeholder="0"
+                        onChange={(e) => ubahTamb(j.k, 'unit', digit(e.target.value))}
+                        className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
+                    </label>
+                  </div>
+                </fieldset>
+              ))}
+              <div className="mt-4 space-y-2">
+                {sim.pic && <SimBlok judul={sim.pic.judul} sub={subTamb(total)} now={sim.pic.now} after={sim.pic.after} target={sim.pic.target} />}
+                {sim.brand.map((b) => <SimBlok key={b.j.k} judul={b.j.brand === 'mobilku' ? 'Mobilku' : 'Motorku'} sub={subTamb(tamb[b.j.k])} now={b.now} after={b.after} target={b.target} />)}
+                {sim.cabang && <SimBlok judul="Cabang" sub={subTamb(total)} now={sim.cabang.now} after={sim.cabang.after} target={sim.cabang.target} />}
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <SimKolom jenis="amount" now={sim.now.amount} after={sim.after.amount} target={sim.target?.amount ?? null} />
-                <SimKolom jenis="unit" now={sim.now.unit} after={sim.after.unit} target={sim.target?.unit ?? null} />
-              </div>
-              {(simRp > 0 || simUnit > 0) && (
-                <button onClick={() => { setSimRp(0); setSimUnit(0); }} className="mt-3 min-h-10 text-[13px] font-semibold text-neutral-600 underline dark:text-neutral-400">Atur ulang simulasi</button>
+              {adaTamb && (
+                <button onClick={() => setTamb({ mobil: NOL, motor: NOL })} className="mt-3 min-h-10 text-[13px] font-semibold text-neutral-600 underline dark:text-neutral-400">Atur ulang simulasi</button>
               )}
             </section>
           )}
