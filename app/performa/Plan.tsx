@@ -16,7 +16,7 @@ import { rp } from './ui';
 // Plan aktivitas: rencana pagi (minimal 5 aktivitas per staff), realisasi dicentang sepanjang hari,
 // dan report sore siap kirim ke WhatsApp. Semua diisi manual di aplikasi, jadi langsung terlihat owner.
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 type Tab = 'tim' | 'saya' | 'bahan' | 'report';
 type Pilihan = { jenis: Jenis; siapa: string; lokasi: string; request?: boolean };
 // Staff yang ditagih plan: semua anggota di pantauan, Mobilku maupun Motorku
@@ -132,7 +132,7 @@ export function usePlan(tgl: string, reloadKey = 0) {
 export function PlanKartu({ akun, reloadKey = 0, onOpen }: { akun: Akun; reloadKey?: number; onOpen: () => void }) {
   const { list, loading, err } = usePlan(todayJkt(), reloadKey);
   if (err) return null;
-  const isOwner = akun.role === 'owner';
+  const isOwner = akun.role === 'owner' || akun.role === 'spv';   // owner & SPV melihat plan tim
   const timList = list.filter((x) => !x.spv);   // owner (SPV) tidak ikut dihitung
   const r = ringkas(isOwner ? timList : list.filter((x) => x.punyaku));
   const staff = new Set(timList.filter((x) => x.status !== 'batal').map((x) => x.nama)).size;
@@ -510,7 +510,7 @@ function PilihHari({ tgl, hariIni, onChange }: { tgl: string; hariIni: string; o
 export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDAL', reloadKey = 0, onInsentif }: {
   c: Ctx | null; me: Orang | null; akun: Akun; tim?: string[]; staf?: Staf[]; cabang?: string; reloadKey?: number; onInsentif: () => void;
 }) {
-  const isOwner = akun.role === 'owner';
+  const isOwner = akun.role === 'owner' || akun.role === 'spv';   // owner & SPV melihat plan tim
   const hariIni = todayJkt();
   const [tab, setTab] = useState<Tab>(isOwner ? 'tim' : 'saya');
   const [tgl, setTgl] = useState(hariIni);

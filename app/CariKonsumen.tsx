@@ -7,7 +7,7 @@ import { Ico, Kosong } from './performa/parts';
 // Nomor HP hanya tampil untuk owner (server juga menyaringnya).
 
 type Row = Record<string, string>;
-type Akun = { email: string; role: 'owner' | 'konsumen' | 'tim' };
+type Akun = { email: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 
 /* ---------- Ikon tambahan ---------- */
 const PATHS: Record<string, ReactNode> = {

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '../../../../lib/session';
-import { getRole } from '../../../../lib/access';
+import { getRole, lihatTim } from '../../../../lib/access';
 import { listSubs, sameName, sendMany } from '../../../../lib/notif';
 import { MIN_AKTIVITAS } from '../../../../lib/plan-types';
 
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   const s = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
   if (!s) return NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 });
-  if ((await getRole(s.email)) !== 'owner') return NextResponse.json({ error: 'Khusus owner.' }, { status: 403 });
+  if (!lihatTim(await getRole(s.email))) return NextResponse.json({ error: 'Khusus owner / SPV.' }, { status: 403 });
   const b = await req.json().catch(() => null);
   const nama: string[] = (Array.isArray(b?.nama) ? b.nama : []).map((x: unknown) => String(x || '').trim()).filter(Boolean).slice(0, 30);
   if (!nama.length) return NextResponse.json({ error: 'Pilih siapa yang diingatkan.' }, { status: 400 });

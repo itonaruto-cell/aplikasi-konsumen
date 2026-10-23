@@ -9,7 +9,7 @@ import { Avatar, Card, Ico } from './parts';
 import { MONITORING_MOTORKU } from './Rute';
 import { NotifSetting } from './Notif';
 
-type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
+type Me = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 
 export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport, onProyeksi }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
@@ -48,7 +48,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
       { judul: 'Buat pengumuman', sub: 'Disematkan di Pantau dan dikirim ke HP tim', ico: ico('share'), on: onPengumuman },
     ]],
   ];
-  const role = akun.role === 'owner' ? 'Owner' : akun.role === 'konsumen' ? 'Tim + database konsumen' : 'Tim';
+  const role = akun.role === 'owner' ? 'Owner' : akun.role === 'spv' ? 'SPV · plan & bahan tim' : akun.role === 'konsumen' ? 'Tim + database konsumen' : 'Tim';
 
   return (
     <div className="px-4 pb-10 pt-4">

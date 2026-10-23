@@ -6,7 +6,7 @@ import { AngkaInput, FIELD } from './form';
 import { Ico } from './parts';
 import { useOverlay } from '../overlay';
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 const TA = `${FIELD} py-2.5 leading-relaxed`;
 const PROGRAM = ['Normal Kilat', 'RO Super', 'NC Super', 'Take Over Super', 'Pre Approval', 'MotorKu Reguler'];
 const STATUS = ['NC', 'RO', 'AO', 'Top Up'];

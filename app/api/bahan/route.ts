@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
-import { getPerfName, getRole } from '../../../lib/access';
+import { getPerfName, getRole, lihatTim } from '../../../lib/access';
 import { appendRow, readRows, updateRowById } from '../../../lib/sheet-store';
 import { KENDARAAN, SUMBER, TAHAP, tebakTahap, type Bahan, type Kendaraan, type StatusBahan, type Sumber, type Tahap } from '../../../lib/bahan-types';
 import { keyOf } from '../../../lib/performa-calc';
@@ -36,11 +36,12 @@ const gagalSimpan = (err: unknown) => {
   return NextResponse.json({ error: 'Gagal menyimpan. Pastikan service account punya akses Editor.' }, { status: 500 });
 };
 
-// Boleh melihat/mengubah: owner, pembuat bahan, atau PIC survey-nya
+// Boleh melihat/mengubah: owner & SPV (semua), pembuat bahan, atau PIC survey-nya
 async function akses(emailAsli: string, role: string) {
   const email = emailAsli.toLowerCase();
-  const aku = role === 'owner' ? '' : keyOf((await getPerfName(email)) || '');
-  return (b: Bahan) => role === 'owner' || b.email === email || (!!aku && keyOf(b.pic) === aku);
+  const semua = lihatTim(role);
+  const aku = semua ? '' : keyOf((await getPerfName(email)) || '');
+  return (b: Bahan) => semua || b.email === email || (!!aku && keyOf(b.pic) === aku);
 }
 
 export async function GET(req: NextRequest) {

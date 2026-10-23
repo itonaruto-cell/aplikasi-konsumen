@@ -1,6 +1,6 @@
 'use client';
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-type Akun = { email: string; role: 'owner' | 'konsumen' | 'tim' };
+type Akun = { email: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 import { Ico } from './parts';
 
 type DokSK = { dok: string; judul: string; keterangan: string; namaFile: string; halaman: number; potongan: number; ukuran: number; diperbarui: string };

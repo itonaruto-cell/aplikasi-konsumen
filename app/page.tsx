@@ -8,7 +8,7 @@ import AktivitasTim from './AktivitasTim';
 // - owner    : Performa + Cari konsumen (dengan nomor HP) + Aktivitas tim
 // - konsumen : Performa + Cari konsumen (tanpa nomor HP)
 // - tim      : Performa saja
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 
 export default function Home() {
   const [me, setMe] = useState<Akun | null>(null);
@@ -76,7 +76,7 @@ export default function Home() {
     );
   }
 
-  const canKonsumen = me.role === 'owner' || me.role === 'konsumen';
+  const canKonsumen = me.role === 'owner' || me.role === 'spv' || me.role === 'konsumen';
   return (
     <PerformaPanel me={me}
       cari={canKonsumen ? (reloadKey) => <CariKonsumen me={me} reloadKey={reloadKey} /> : undefined}

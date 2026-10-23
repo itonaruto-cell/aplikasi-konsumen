@@ -7,13 +7,16 @@ import { google } from 'googleapis';
 //   halaman Performa tahu "Kamu" yang mana. Kalau kosong, dicocokkan dari nama akun Google.
 //     owner    = semua fitur, termasuk nomor HP konsumen & aktivitas tim
 //     konsumen = performa tim + database konsumen (tanpa nomor HP)
+//     spv      = performa tim + database konsumen (tanpa nomor HP) + lihat & ubah plan dan bahan semua orang
 //     tim      = hanya performa tim
 //   Email yang tidak ada di daftar tidak bisa masuk. ROLE kosong/lainnya dianggap "tim".
 
-export type Role = 'owner' | 'konsumen' | 'tim';
+export type Role = 'owner' | 'spv' | 'konsumen' | 'tim';
 
 // Boleh membuka database konsumen?
-export const canSeeKonsumen = (role: Role | null | undefined) => role === 'owner' || role === 'konsumen';
+export const canSeeKonsumen = (role: Role | null | undefined) => role === 'owner' || role === 'spv' || role === 'konsumen';
+// Boleh melihat & mengubah plan dan bahan semua orang?
+export const lihatTim = (role: Role | string | null | undefined) => role === 'owner' || role === 'spv';
 
 let cache: { at: number; map: Map<string, Role>; names: Map<string, string> } | null = null;
 const CACHE_MS = 60_000;
@@ -41,7 +44,7 @@ async function loadAccessSheet(): Promise<{ map: Map<string, Role>; names: Map<s
       const email = String(row[0] || '').trim().toLowerCase();
       if (!email || !email.includes('@')) continue;
       const role = String(row[1] || '').trim().toLowerCase();
-      map.set(email, role === 'owner' ? 'owner' : role === 'konsumen' ? 'konsumen' : 'tim');
+      map.set(email, role === 'owner' ? 'owner' : role === 'spv' ? 'spv' : role === 'konsumen' ? 'konsumen' : 'tim');
       const nama = String(row[2] || '').trim();
       if (nama) names.set(email, nama);
     }
