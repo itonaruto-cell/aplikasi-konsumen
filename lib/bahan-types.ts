@@ -12,6 +12,10 @@ export const TAHAP_LABEL: Record<Tahap, string> = { survey: 'Bahan survey', pros
 export const tebakTahap = (step: string): Tahap =>
   /(sudah|habis|selesai)\s*(di)?survey|approv|banding|map\b|pencairan|proses|akad|\bpo\b|tinggal\s*(melengkapi|dokumen|submit)/i.test(step || '') ? 'proses' : 'survey';
 export const tahapOf = (b: { tahap?: Tahap; step: string }): Tahap => b.tahap || tebakTahap(b.step);
+// Jenis kendaraan bahan: menentukan brand di proyeksi. Kosong = ikut brand staff pemilik bahan.
+export const KENDARAAN = ['motor', 'mobil'] as const;
+export type Kendaraan = (typeof KENDARAAN)[number];
+export const KENDARAAN_LABEL: Record<Kendaraan, string> = { motor: 'Motor', mobil: 'Mobil' };
 
 export type Bahan = {
   id: string;
@@ -26,6 +30,7 @@ export type Bahan = {
   pic: string;        // PIC survey: nama staff seperti di pantauan (boleh kosong)
   status: StatusBahan;
   tahap: Tahap;       // berlaku selama status aktif
+  kendaraan: Kendaraan | '';  // motor / mobil; kosong = ikut brand staff
   dibuat: string;     // ISO
   diubah: string;     // ISO
 };
