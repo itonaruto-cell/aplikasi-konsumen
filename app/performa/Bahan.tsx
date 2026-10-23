@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import { keyOf } from '../../lib/performa-calc';
-import { SUMBER, TAHAP_LABEL, tahapOf, type Bahan, type StatusBahan, type Sumber, type Tahap } from '../../lib/bahan-types';
+import { KENDARAAN, KENDARAAN_LABEL, SUMBER, TAHAP_LABEL, tahapOf, type Bahan, type Kendaraan, type StatusBahan, type Sumber, type Tahap } from '../../lib/bahan-types';
 import { useOverlay } from '../overlay';
 import { rp } from './ui';
 import { Ico, Kosong, shortName } from './parts';
@@ -62,6 +62,7 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
   const [step, setStep] = useState(awal?.step || '');
   const [pic, setPic] = useState(awal ? awal.pic : picAwal);
   const [tahap, setTahap] = useState<Tahap>(awal ? tahapOf(awal) : 'survey');
+  const [kendaraan, setKendaraan] = useState<Kendaraan | ''>(awal?.kendaraan || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -71,7 +72,7 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
     try {
       const res = await fetch('/api/bahan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, agg: sumber === 'Agent' && agg, step, pic, status, tahap: tahapBaru }),
+        body: JSON.stringify({ id: awal?.id, konsumen, nominal, sumber, ket, agg: sumber === 'Agent' && agg, step, pic, status, tahap: tahapBaru, kendaraan }),
       });
       const j = await res.json();
       if (!res.ok) { setErr(j?.error || 'Gagal menyimpan.'); return; }
@@ -174,6 +175,19 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
           </>
         )}
 
+        <p className="mt-3 text-[13px] font-semibold text-neutral-500">Jenis kendaraan</p>
+        <div className="mt-1.5 flex flex-wrap gap-2" role="group" aria-label="Jenis kendaraan">
+          {KENDARAAN.map((x) => (
+            <button key={x} onClick={() => setKendaraan(kendaraan === x ? '' : x)} aria-pressed={kendaraan === x}
+              className={`min-h-10 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${kendaraan === x
+                ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
+                : 'border-neutral-300 dark:border-neutral-700'}`}>
+              {KENDARAAN_LABEL[x]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[13px] leading-snug text-neutral-500">Dipakai untuk memisahkan proyeksi Mobilku dan Motorku. Kosongkan kalau belum tahu.</p>
+
         <label className="mt-3 block text-[13px] font-semibold text-neutral-500">Step sekarang
           <textarea value={step} onChange={(e) => setStep(e.target.value)} maxLength={300} rows={3}
             placeholder="mis. Rencana survey besok jam 10 pagi" className={`${FIELD} mt-1.5 resize-none py-2.5`} />
@@ -221,6 +235,7 @@ function BahanCard({ b, onClick }: { b: Bahan; onClick: () => void }) {
       </span>
       <span className="flex flex-wrap gap-1.5">
         <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{sumberLabel(b)}</span>
+        {b.kendaraan && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{KENDARAAN_LABEL[b.kendaraan]}</span>}
         {b.pic
           ? <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">PIC {shortName(b.pic)}</span>
           : <span className="rounded-full bg-[#FFF4E0] px-2 py-0.5 text-xs font-semibold text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">PIC belum diisi</span>}

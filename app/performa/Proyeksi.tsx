@@ -133,12 +133,17 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
     if (!bahan) return null;
     const aktif = bahan.filter((b) => b.status === 'aktif');
     const pemilik = (b: Bahan) => c.sales.find((o) => samaNama(o.nama, b.nama)) || null;
-    const brandBahan = (b: Bahan) => { const o = pemilik(b); return o ? brandOf(o) : ''; };
+    // Jenis kendaraan yang diisi di Bahan survey dipakai dulu; kalau kosong, ikut brand staff pemiliknya
+    const brandBahan = (b: Bahan) => {
+      if (b.kendaraan === 'motor') return 'motorku';
+      if (b.kendaraan === 'mobil') return 'mobilku';
+      const o = pemilik(b); return o ? brandOf(o) : '';
+    };
     const orang = c.sales.filter((o) => !posisiKosong(o.nama) && (isOwner || o === me))
       .map((o) => ({ o, p: hitungProyeksi(o, aktif.filter((b) => samaNama(o.nama, b.nama))) }))
       .sort((a, b) => b.p[mode].amount - a.p[mode].amount);
     const brand = (['mobilku', 'motorku'] as const).map((b) => ({ b, p: hitungProyeksi(totalBrand(c, b), aktif.filter((x) => brandBahan(x) === b)) }));
-    const tanpaPemilik = aktif.filter((b) => !pemilik(b)).length;
+    const tanpaPemilik = aktif.filter((b) => !pemilik(b) && !b.kendaraan).length;
     return { cabang: hitungProyeksi(c.data.cabangTotal || {}, aktif), brand, orang, tanpaPemilik, nAktif: aktif.length };
   }, [bahan, c, me, isOwner, mode]);
 
@@ -222,7 +227,7 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
               )}
             </section>
           )}
-          {isOwner && data.tanpaPemilik > 0 &&<p className="text-[12px] text-neutral-500">{data.tanpaPemilik} bahan dibuat oleh akun yang tidak ada di pantauan (mis. owner); ikut di total cabang, tidak masuk per brand.</p>}
+          {isOwner && data.tanpaPemilik > 0 &&<p className="text-[12px] text-neutral-500">{data.tanpaPemilik} bahan dibuat oleh akun yang tidak ada di pantauan dan belum diisi jenis kendaraan; ikut di total cabang, tidak masuk per brand.</p>}
           <button onClick={salin} className="min-h-12 w-full rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white">Salin ringkasan untuk WA</button>
           {pesan && <p role="status" className="text-[13px] text-neutral-600 dark:text-neutral-400">{pesan}</p>}
         </div>
