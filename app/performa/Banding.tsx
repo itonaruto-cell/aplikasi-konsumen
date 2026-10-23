@@ -12,7 +12,7 @@ import { todayJkt } from '../../lib/performa-calc';
 import { FIELD } from './form';
 import { Ico } from './parts';
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 
 /* ---------- Foto: diperkecil di HP (dokumen perlu terbaca, jadi mulai 1400 px) ---------- */
 const MAKS_B64 = 175_000;

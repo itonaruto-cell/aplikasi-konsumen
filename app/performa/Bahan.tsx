@@ -12,7 +12,7 @@ import { AngkaInput, FIELD } from './form';
 // Tiap bahan punya PIC survey. Staff melihat bahan yang ia buat atau yang PIC-nya dia; owner melihat semua
 // dan bisa menyaring per PIC.
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 
 /* ---------- Muat daftar (dipakai juga halaman Insentif) ---------- */
 export function useBahan(reloadKey = 0) {
@@ -255,7 +255,7 @@ export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsen
   akun: Akun; me: Orang | null; tim?: string[]; reloadKey?: number; onInsentif: () => void;
 }) {
   const { list, loading, err, reload } = useBahan(reloadKey);
-  const isOwner = akun.role === 'owner';
+  const isOwner = akun.role === 'owner' || akun.role === 'spv';   // owner & SPV melihat semua bahan
   const [siapa, setSiapa] = useState('semua');
   const [form, setForm] = useState<Bahan | 'baru' | null>(null);
   const [lama, setLama] = useState(false);

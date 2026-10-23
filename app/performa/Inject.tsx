@@ -8,7 +8,7 @@ import { FIELD, Lembar } from './form';
 // Inject P3: staff memilih konsumen dari database (Cari konsumen) untuk diajukan,
 // owner mengunduh daftarnya (Excel, format HO) atau membagikannya.
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 type Manual = { nama: string; kontrak: string; cust: string; kecamatan: string };
 const MANUAL_KOSONG: Manual = { nama: '', kontrak: '', cust: '', kecamatan: '' };
 const kunciCalon = (c: Calon) => c.kontrak || `${c.nama}|${c.cust}`;

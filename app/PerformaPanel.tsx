@@ -34,7 +34,7 @@ import Kesehatan, { PeringatanData } from './performa/Kesehatan';
 // Bahan survey, Insentif, dan Inject P3 dibuka dari halaman Saya.
 // Data performa boleh dilihat semua akun terdaftar; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 type Page = 'pantau' | 'plan' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas' | 'bahan' | 'insentif' | 'inject' | 'laporan' | 'prospek' | 'sinkron' | 'sk' | 'kesehatan' | 'banding' | 'pdf' | 'report' | 'proyeksi';
 type Slot = (reloadKey: number) => ReactNode;
 const SEEN_KEY = 'ck_story_seen';

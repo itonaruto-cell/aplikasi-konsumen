@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
-import { getAccessList, getPerfName, getRole } from '../../../lib/access';
+import { getAccessList, getPerfName, getRole, lihatTim } from '../../../lib/access';
 import { appendRows, readRows, updateRowById } from '../../../lib/sheet-store';
 import { JENIS, type Jenis, type PlanItem, type StatusPlan } from '../../../lib/plan-types';
 import { addDays, keyOf, todayJkt } from '../../../lib/performa-calc';
@@ -74,10 +74,10 @@ export async function GET(req: NextRequest) {
     const semua = await semuaBaris();
     const hari = semua.filter((x) => !x.hapus && x.tgl === tgl);
     const list = [...hari, ...(tgl === hariIni ? wajibHariIni(semua, hariIni) : [])]
-      .filter((x) => role === 'owner' || x.email === email);
-    // Owner adalah SPV: aktivitas miliknya ditandai, dan namanya dikirim supaya tidak ikut ditagih di plan tim
-    const owner = new Set((await getAccessList()).filter((a) => a.role === 'owner').map((a) => a.email.toLowerCase()));
-    const spv = role === 'owner' ? (await Promise.all([...owner].map((e) => getPerfName(e)))).filter((n): n is string => !!n) : [];
+      .filter((x) => lihatTim(role) || x.email === email);
+    // Owner & peran SPV: aktivitas miliknya ditandai, dan namanya dikirim supaya tidak ikut ditagih di plan tim
+    const owner = new Set((await getAccessList()).filter((a) => lihatTim(a.role)).map((a) => a.email.toLowerCase()));
+    const spv = lihatTim(role) ? (await Promise.all([...owner].map((e) => getPerfName(e)))).filter((n): n is string => !!n) : [];
     return NextResponse.json({ tgl, hariIni, list: list.map((x) => keluar(x, email, owner)), spv }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('Gagal membaca plan aktivitas:', err);
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       });
       if (id.startsWith('wajib:')) {
         // Map pencairan wajib: disimpan saat pertama kali dicentang / dibatalkan
-        const v = wajibHariIni(semua, hariIni).find((x) => x.id === id && (x.email === email || role === 'owner'));
+        const v = wajibHariIni(semua, hariIni).find((x) => x.id === id && (x.email === email || lihatTim(role)));
         if (!v) return NextResponse.json({ error: 'Aktivitas tidak ditemukan. Muat ulang dulu.' }, { status: 404 });
         const baru = ubah({ ...v, id: randomUUID().slice(0, 8), catatan: '', dibuat: now });
         await appendRows(TAB, HEAD, [toRow(baru)]);
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
       }
       const lama = semua.find((x) => x.id === id && !x.hapus);
       if (!lama) return NextResponse.json({ error: 'Aktivitas tidak ditemukan.' }, { status: 404 });
-      if (lama.email !== email && role !== 'owner') return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
+      if (lama.email !== email && !lihatTim(role)) return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
       const baru = ubah(lama);
       await updateRowById(TAB, HEAD, id, toRow(baru));
       return NextResponse.json({ ok: true, item: keluar(baru, email) });
@@ -165,7 +165,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const lama = (await semuaBaris()).find((x) => x.id === id && !x.hapus);
     if (!lama) return NextResponse.json({ ok: true });
-    if (lama.email !== s.email.toLowerCase() && role !== 'owner') return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
+    if (lama.email !== s.email.toLowerCase() && !lihatTim(role)) return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
     if (lama.ref) return NextResponse.json({ error: 'Map pencairan wajib tidak bisa dihapus. Tandai selesai atau batal.' }, { status: 400 });
     await updateRowById(TAB, HEAD, id, toRow({ ...lama, diubah: new Date().toISOString() }, 'hapus'));
     return NextResponse.json({ ok: true });

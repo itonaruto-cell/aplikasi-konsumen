@@ -8,7 +8,7 @@ import type { Angka, Proyeksi } from '../../lib/proyeksi';
 import { ambilBahanProyeksi, hitungSemua, plus, type Mode } from './proyeksi-data';
 import { shortName } from './parts';
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 
 const cf = new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 });
 const nf = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 });

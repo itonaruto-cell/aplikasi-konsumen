@@ -11,7 +11,7 @@ import { KATA_INTI, KATA_KUNCI, WILAYAH, pencarian } from '../../lib/ambil-maps'
 // Database prospek: semua akun bisa menambah (manual / impor CSV hasil scrape Google Maps), mengubah, mengatur PIC,
 // menelepon / WhatsApp, lalu mencatat hasil follow up dengan foto bukti.
 
-type Akun = { email: string; role: 'owner' | 'konsumen' | 'tim' };
+type Akun = { email: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 const WARNA: Record<StatusProspek, string> = {
   baru: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
   minat: 'bg-[#FFF4E0] text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]',

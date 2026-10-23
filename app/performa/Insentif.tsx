@@ -16,7 +16,7 @@ import { useBahan } from './Bahan';
 // Simulasi insentif: pencapaian bulan ini (dari pantauan, bisa dikoreksi) dihitung dengan skema dari server.
 // Koreksi angka hanya disimpan di HP ini (ck_insentif), tidak dikirim ke mana pun.
 
-type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
+type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 type Simpanan = { bulan: string; isi: Record<string, Partial<Masukan>>; tetap: Partial<Masukan>; jenis: Record<string, Jenis> };
 const KEY = 'ck_insentif';
 export const CABANG = '__cabang';
