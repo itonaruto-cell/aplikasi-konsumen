@@ -9,6 +9,7 @@ import { Ico } from './parts';
 
 export const KATEGORI_PDF: { k: string; nama: string; isi: string }[] = [
   { k: 'mandatory', nama: 'MANDATORY', isi: 'KTP, KK, NPWP' },
+  { k: 'absah', nama: 'ABSAH', isi: 'Cek absah: KTP, STNK, BPKB, faktur' },
   { k: 'dokkend', nama: 'DOKUMEN KENDARAAN', isi: 'STNK, BPKB, faktur, kwitansi jual beli, KIR, dsb.' },
   { k: 'fotokend', nama: 'FOTO KENDARAAN', isi: 'Foto unit detail & unit dengan surveyor' },
   { k: 'rumah', nama: 'DOK RUMAH', isi: 'Rekening listrik, web PLN, nota bayar listrik, PBB, dsb.' },
