@@ -30,7 +30,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
       { judul: 'Tanya SK', sub: 'Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu', ico: ico('list'), on: onSK },
       { judul: 'Report survey (6C + 1E + 1P)', sub: 'Hasil survey per unsur, salin langsung ke WA', ico: ico('list'), on: onReport },
       { judul: 'PDF berkas survey', sub: 'Foto per kategori → PDF, bagikan sekaligus ke WA', ico: ico('share'), on: onPdf },
-      { judul: 'Rekap mutasi rekening', sub: 'PDF Mandiri / BCA → kredit per bulan & rata-rata, salin ke WA', ico: ico('chart'), on: onMutasi },
+      { judul: 'Rekap mutasi rekening', sub: 'PDF Mandiri / BCA / BRI / BNI → kredit per bulan & rata-rata, ke WA', ico: ico('chart'), on: onMutasi },
       { judul: 'Form banding (F-761)', sub: 'Reason, analisa 6C, SWOT & foto → Excel untuk G Suite', ico: ico('edit'), on: onBanding },
       { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
       { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
