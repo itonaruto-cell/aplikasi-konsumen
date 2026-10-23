@@ -3,15 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { Bahan } from '../../lib/bahan-types';
-import { brandOf, hariKerjaSisa, type Ctx } from '../../lib/performa-calc';
-import { samaNama } from '../../lib/sales-brand';
-import { hitungProyeksi, jumlahBahan, type Angka, type Proyeksi } from '../../lib/proyeksi';
-import { posisiKosong } from '../../lib/kesehatan-data';
-import { totalBrand } from './laporan-gambar';
+import { hariKerjaSisa, type Ctx } from '../../lib/performa-calc';
+import type { Angka, Proyeksi } from '../../lib/proyeksi';
+import { ambilBahanProyeksi, hitungSemua, plus, type Mode } from './proyeksi-data';
 import { shortName } from './parts';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
-type Mode = 'realistis' | 'maksimal';
 
 const cf = new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 });
 const nf = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 });
@@ -114,7 +111,6 @@ const JENIS: { k: Jenis; label: string; brand: 'mobilku' | 'motorku' }[] = [
   { k: 'mobil', label: 'Mobil', brand: 'mobilku' },
   { k: 'motor', label: 'Motor', brand: 'motorku' },
 ];
-const plus = (a: Angka, ...b: Angka[]): Angka => b.reduce((x, y) => ({ amount: x.amount + y.amount, unit: x.unit + y.unit }), a);
 const NOL: Angka = { amount: 0, unit: 0 };
 
 function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: string, today: string): string {
@@ -134,7 +130,7 @@ function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: str
 }
 
 // Semua akun (owner & tim) melihat proyeksi lengkap: cabang, brand, per orang, dan simulasi.
-export default function ProyeksiPage({ c, me }: { c: Ctx; me: Orang | null; akun?: Akun }) {
+export default function ProyeksiPage({ c, me, onFoto }: { c: Ctx; me: Orang | null; akun?: Akun; onFoto?: () => void }) {
   const [bahan, setBahan] = useState<Bahan[] | null>(null);
   const [err, setErr] = useState('');
   const [mode, setMode] = useState<Mode>('maksimal');
@@ -145,37 +141,12 @@ export default function ProyeksiPage({ c, me }: { c: Ctx; me: Orang | null; akun
 
   useEffect(() => {
     let hidup = true;
-    fetch('/api/bahan?untuk=proyeksi', { cache: 'no-store' }).then(async (r) => {
-      const j = await r.json().catch(() => null);
-      if (!hidup) return;
-      if (r.ok && Array.isArray(j?.list)) setBahan(j.list); else { setErr(j?.error || 'Bahan gagal dimuat.'); setBahan([]); }
-    }).catch(() => { if (hidup) { setErr('Koneksi bermasalah.'); setBahan([]); } });
+    ambilBahanProyeksi().then((list) => { if (hidup) setBahan(list); })
+      .catch((e) => { if (hidup) { setErr((e as Error)?.message || 'Koneksi bermasalah.'); setBahan([]); } });
     return () => { hidup = false; };
   }, []);
 
-  const data = useMemo(() => {
-    if (!bahan) return null;
-    const aktif = bahan.filter((b) => b.status === 'aktif');
-    const pemilik = (b: Bahan) => c.sales.find((o) => samaNama(o.nama, b.nama)) || null;
-    // Jenis kendaraan yang diisi di Bahan survey dipakai dulu; kalau kosong, ikut brand staff pemiliknya
-    const brandBahan = (b: Bahan) => {
-      if (b.kendaraan === 'motor') return 'motorku';
-      if (b.kendaraan === 'mobil') return 'mobilku';
-      const o = pemilik(b); return o ? brandOf(o) : '';
-    };
-    const orang = c.sales.filter((o) => !posisiKosong(o.nama))
-      .map((o) => ({ o, p: hitungProyeksi(o, aktif.filter((b) => samaNama(o.nama, b.nama))) }))
-      .sort((a, b) => b.p[mode].amount - a.p[mode].amount);
-    const brand = (['mobilku', 'motorku'] as const).map((b) => ({ b, p: hitungProyeksi(totalBrand(c, b), aktif.filter((x) => brandBahan(x) === b)) }));
-    const tanpaPemilik = aktif.filter((b) => !pemilik(b) && !b.kendaraan).length;
-    // Bahan yang sedang berjalan per orang, dipisah mobil / motor (untuk info di simulasi)
-    const nilai = (list: Bahan[]): Angka => { const j = jumlahBahan(list); return mode === 'maksimal' ? plus(j.proses, j.survey) : j.proses; };
-    const bahanOrang = new Map(orang.map(({ o }) => {
-      const milik = aktif.filter((b) => samaNama(o.nama, b.nama));
-      return [o.nama, { mobil: nilai(milik.filter((b) => brandBahan(b) === 'mobilku')), motor: nilai(milik.filter((b) => brandBahan(b) === 'motorku')) }] as const;
-    }));
-    return { cabang: hitungProyeksi(c.data.cabangTotal || {}, aktif), brand, orang, bahanOrang, tanpaPemilik, nAktif: aktif.length };
-  }, [bahan, c, mode]);
+  const data = useMemo(() => (bahan ? hitungSemua(c, bahan, mode) : null), [bahan, c, mode]);
 
   // Simulasi per PIC: tambahan mobil & motor dipisah. Owner juga bisa tanpa PIC (langsung ke brand & cabang).
   const opsi: { id: string; judul: string; p: Proyeksi | null }[] = data ? [
@@ -280,7 +251,10 @@ export default function ProyeksiPage({ c, me }: { c: Ctx; me: Orang | null; akun
             </section>
           )}
           {data.tanpaPemilik > 0 &&<p className="text-[12px] text-neutral-500">{data.tanpaPemilik} bahan dibuat oleh akun yang tidak ada di pantauan dan belum diisi jenis kendaraan; ikut di total cabang, tidak masuk per brand.</p>}
-          <button onClick={salin} className="min-h-12 w-full rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white">Salin ringkasan untuk WA</button>
+          <div className={`grid gap-2 ${onFoto ? 'grid-cols-2' : ''}`}>
+            <button onClick={salin} className="min-h-12 rounded-2xl bg-[#0F8048] px-2 text-[15px] font-bold text-white">Salin ringkasan WA</button>
+            {onFoto && <button onClick={onFoto} className="min-h-12 rounded-2xl bg-neutral-900 px-2 text-[15px] font-bold text-white dark:bg-white dark:text-neutral-900">Foto laporan</button>}
+          </div>
           {pesan && <p role="status" className="text-[13px] text-neutral-600 dark:text-neutral-400">{pesan}</p>}
         </div>
       )}
