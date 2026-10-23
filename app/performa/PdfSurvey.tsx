@@ -18,6 +18,7 @@ export const KATEGORI_PDF: { k: string; nama: string; isi: string }[] = [
   { k: 'fotousaha', nama: 'FOTO USAHA', isi: 'Foto detail usaha & dengan surveyor' },
   { k: 'survey', nama: 'FOTO SURVEY', isi: 'TTD konsumen & pasangan, foto rumah, cek lingkungan dengan tetangga, dsb.' },
   { k: 'tambahan', nama: 'DOKUMEN TAMBAHAN', isi: 'Foto OTS, form OTS, surat yang diperlukan, foto tambahan, dsb.' },
+  { k: 'print', nama: 'PDF PRINT', isi: 'Screenshot Sakpole, SS m-banking, STNK, KTP, KK' },
 ];
 
 type Foto = { id: string; kat: string; blob: Blob; w: number; h: number; urut: number };
