@@ -19,7 +19,7 @@ import Insentif from './performa/Insentif';
 import InjectP3 from './performa/Inject';
 import Plan from './performa/Plan';
 import Kejar from './performa/Kejar';
-import Laporan from './performa/Laporan';
+import Laporan, { type Jenis as JenisLaporan } from './performa/Laporan';
 import ProspekPage from './performa/Prospek';
 import Sinkron from './performa/Sinkron';
 import TanyaSK from './performa/TanyaSK';
@@ -53,6 +53,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const [page, setPage] = useState<Page>('pantau');
   // Halaman sebelumnya, supaya tombol kembali mundur satu halaman (mis. Form banding → Saya → Pantau)
   const [riwayatHal, setRiwayatHal] = useState<Page[]>([]);
+  const [lapAwal, setLapAwal] = useState<JenisLaporan>('achievement');
   const brand: BrandKey = 'semua';
   const [wrap, setWrap] = useState(false);
   const [rayakan, setRayakan] = useState<string | null>(null);
@@ -327,18 +328,18 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
                 openWrapped={() => setWrap(true)}
                 kejar={(cek) => <Kejar c={c} me={me} spv={spv} isOwner={akun.role === 'owner'} reloadKey={reloadKey} cek={cek} onBahan={() => go('bahan')} />} />
             )}
-            {page === 'laporan' && <>{akun.role === 'owner' && data && <div className="px-4 pt-4"><PeringatanData data={data} onBuka={() => go('kesehatan')} /></div>}<Laporan c={c} spv={spv} /></>}
+            {page === 'laporan' && <>{akun.role === 'owner' && data && <div className="px-4 pt-4"><PeringatanData data={data} onBuka={() => go('kesehatan')} /></div>}<Laporan key={lapAwal} c={c} spv={spv} awal={lapAwal} /></>}
             {page === 'sinkron' && akun.role === 'owner' && <Sinkron />}
             {page === 'sk' && <TanyaSK akun={akun} reloadKey={reloadKey} />}
             {page === 'kesehatan' && akun.role === 'owner' && <Kesehatan data={data} />}
             {page === 'pdf' && <PdfSurvey />}
-            {page === 'proyeksi' && <ProyeksiPage c={c} me={me} akun={akun} />}
+            {page === 'proyeksi' && <ProyeksiPage c={c} me={me} akun={akun} onFoto={() => { setLapAwal('proyeksi'); go('laporan'); }} />}
             {page === 'report' && <ReportSurveyPage akun={akun} reloadKey={reloadKey} onBanding={() => go('banding')} />}
             {page === 'banding' && <BandingPage akun={akun} reloadKey={reloadKey} />}
             {page === 'prospek' && <ProspekPage akun={akun} tim={staf.map((x) => x.nama)} reloadKey={reloadKey} cabang={String(data?.cabang || 'Kendal')} />}
             {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
             {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => go('laporan')} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onReport={() => go('report')} onProyeksi={() => go('proyeksi')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
+            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => { setLapAwal('achievement'); go('laporan'); }} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onReport={() => go('report')} onProyeksi={() => go('proyeksi')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
           </>
         )}
       </div>

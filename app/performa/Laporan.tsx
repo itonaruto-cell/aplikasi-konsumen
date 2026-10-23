@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { Ctx } from '../../lib/performa-calc';
-import { gambarAchievement, gambarAktivitas, gambarFollowUp, pakaiFont, tinggiAchievement, tinggiAktivitas, tinggiFollowUp } from './laporan-gambar';
+import { gambarAchievement, gambarAktivitas, gambarFollowUp, gambarProyeksi, pakaiFont, tinggiAchievement, tinggiAktivitas, tinggiFollowUp, tinggiProyeksi } from './laporan-gambar';
+import { ambilBahanProyeksi, hitungSemua, type DataProyeksi, type Mode } from './proyeksi-data';
 import type { LaporanFU } from '../../lib/prospek-types';
 import { todayJkt } from '../../lib/performa-calc';
 import { useOverlay } from '../overlay';
@@ -12,8 +13,8 @@ import { PillSeg } from './parts';
 // Gambar dibuat di HP dari data pantauan terakhir, bisa diunduh (PNG), dibagikan, atau dibuka layar penuh
 // supaya gampang di-screenshot.
 
-type Jenis = 'achievement' | 'aktivitas' | 'fu';
-const JUDUL: Record<Jenis, string> = { achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO', fu: 'Follow Up Prospek' };
+export type Jenis = 'achievement' | 'aktivitas' | 'fu' | 'proyeksi';
+const JUDUL: Record<Jenis, string> = { achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO', fu: 'Follow Up Prospek', proyeksi: 'Proyeksi Sales' };
 const kemarin = (tgl: string) => { const d = new Date(tgl + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
 
 const muatGambar = (src: string) => new Promise<HTMLImageElement | null>((ok) => {
@@ -23,7 +24,7 @@ const muatGambar = (src: string) => new Promise<HTMLImageElement | null>((ok) =>
   img.src = src;
 });
 
-async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string): Promise<Blob | null> {
+async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string, mode: Mode): Promise<Blob | null> {
   const fam = getComputedStyle(document.documentElement).getPropertyValue('--font-instrument').trim();
   if (fam) {
     pakaiFont(`${fam}, system-ui, sans-serif`);
@@ -37,12 +38,15 @@ async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string):
     if (!r.ok || !j?.total) throw new Error(j?.error || 'Laporan follow up gagal dimuat.');
     fu = j as LaporanFU;
   }
+  let pro: DataProyeksi | null = null;
+  if (jenis === 'proyeksi') pro = hitungSemua(c, await ambilBahanProyeksi(), mode);
   const cv = document.createElement('canvas');
   cv.width = 1080;
-  cv.height = fu ? tinggiFollowUp(fu) : jenis === 'achievement' ? tinggiAchievement(c, spv) : tinggiAktivitas(c, spv);
+  cv.height = fu ? tinggiFollowUp(fu) : pro ? tinggiProyeksi(pro) : jenis === 'achievement' ? tinggiAchievement(c, spv) : tinggiAktivitas(c, spv);
   const g = cv.getContext('2d');
   if (!g) return null;
   if (fu) gambarFollowUp(g, fu, String(c.data.cabang || 'Kendal'), logo, (c.data.orang || []).filter((o) => o !== spv && (o.visit || o.maintain)).length);
+  else if (pro) gambarProyeksi(g, c, pro, mode, logo);
   else if (jenis === 'achievement') gambarAchievement(g, c, spv, logo);
   else gambarAktivitas(g, c, spv, logo);
   return new Promise((ok) => cv.toBlob((b) => ok(b), 'image/png'));
@@ -69,7 +73,8 @@ function LayarPenuh({ url, onClose }: { url: string; onClose: () => void }) {
 export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv: Orang | null; awal?: Jenis }) {
   const [jenis, setJenis] = useState<Jenis>(awal);
   const [tgl, setTgl] = useState(() => todayJkt());
-  const [gambar, setGambar] = useState<{ jenis: Jenis; tgl: string; url: string; blob: Blob } | null>(null);
+  const [mode, setMode] = useState<Mode>('maksimal');
+  const [gambar, setGambar] = useState<{ jenis: Jenis; tgl: string; mode: Mode; url: string; blob: Blob } | null>(null);
   const [err, setErr] = useState('');
   const [penuh, setPenuh] = useState(false);
   const [toast, setToast] = useState('');
@@ -78,20 +83,20 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
   useEffect(() => {
     let alive = true;
     setErr('');
-    buatGambar(jenis, c, spv, tgl).then((blob) => {
+    buatGambar(jenis, c, spv, tgl, mode).then((blob) => {
       if (!alive) return;
       if (!blob) { setErr('Gambar tidak bisa dibuat di HP ini.'); return; }
       const url = URL.createObjectURL(blob);
       if (urlLama.current) URL.revokeObjectURL(urlLama.current);
       urlLama.current = url;
-      setGambar({ jenis, tgl, url, blob });
-    }).catch((e) => { if (alive) setErr((e as Error)?.message && jenis === 'fu' ? (e as Error).message : 'Gambar tidak bisa dibuat. Coba muat ulang.'); });
+      setGambar({ jenis, tgl, mode, url, blob });
+    }).catch((e) => { if (alive) setErr((e as Error)?.message && (jenis === 'fu' || jenis === 'proyeksi') ? (e as Error).message : 'Gambar tidak bisa dibuat. Coba muat ulang.'); });
     return () => { alive = false; };
-  }, [jenis, c, spv, tgl]);
+  }, [jenis, c, spv, tgl, mode]);
   useEffect(() => () => { if (urlLama.current) URL.revokeObjectURL(urlLama.current); }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2200); return () => clearTimeout(t); }, [toast]);
 
-  const siap = gambar && gambar.jenis === jenis && (jenis !== 'fu' || gambar.tgl === tgl) ? gambar : null;
+  const siap = gambar && gambar.jenis === jenis && (jenis !== 'fu' || gambar.tgl === tgl) && (jenis !== 'proyeksi' || gambar.mode === mode) ? gambar : null;
   const namaFile = `Laporan ${JUDUL[jenis]} ${String(c.data.cabang || 'Kendal')} ${jenis === 'fu' ? tgl : c.today}.png`.replace(/[^\w\s.&-]/g, '').replace(/\s+/g, '-');
   const bisaBagikan = typeof navigator !== 'undefined' && !!navigator.canShare && !!siap
     && navigator.canShare({ files: [new File([siap.blob], namaFile, { type: 'image/png' })] });
@@ -107,7 +112,12 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
   return (
     <div className="pb-8">
       <div className="px-4 pt-3">
-        <PillSeg value={jenis} full onChange={(v) => setJenis(v)} options={[['achievement', 'Achievement'], ['aktivitas', 'Aktivitas'], ['fu', 'Follow up']]} />
+        <PillSeg value={jenis} full rapat onChange={(v) => setJenis(v)} options={[['achievement', 'Achievement'], ['aktivitas', 'Aktivitas'], ['fu', 'Follow up'], ['proyeksi', 'Proyeksi']]} />
+        {jenis === 'proyeksi' && (
+          <div className="mt-2">
+            <PillSeg value={mode} onChange={(v) => setMode(v)} options={[['maksimal', '+ Diproses + Bahan survey'], ['realistis', '+ Diproses saja']]} />
+          </div>
+        )}
         {jenis === 'fu' && (
           <div className="mt-2">
             <PillSeg value={tgl === todayJkt() ? 'ini' : 'kemarin'} onChange={(v) => setTgl(v === 'ini' ? todayJkt() : kemarin(todayJkt()))}
@@ -118,7 +128,9 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
       <p className="px-4 pt-3 text-[13px] leading-snug text-neutral-500">
         {jenis === 'achievement'
           ? 'Cabang, Mobilku, dan Motorku beserta pencapaian tiap PIC. Dibuat dari data pantauan terakhir.'
-          : jenis === 'aktivitas'
+          : jenis === 'proyeksi'
+            ? 'Proyeksi = tercapai + bahan yang masih berjalan (menu Bahan survey), dibanding target dan bulan lalu, per brand dan per orang.'
+            : jenis === 'aktivitas'
             ? 'Visit konsumen prioritas P1–P3, maintain MA, rekrut, dan regist per orang. Dibuat dari data pantauan terakhir.'
             : 'Prospek yang di-follow up: minat (termasuk order), tidak minat, dan tidak ada respon, per orang. Dari catatan "Catat hasil" di Database prospek.'}
       </p>

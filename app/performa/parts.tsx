@@ -217,14 +217,14 @@ export function FotoVisit({ id, alt }: { id: string; alt: string }) {
 }
 
 /* ---------- Tombol pilihan bentuk pil (min. 40dp) ---------- */
-export function PillSeg<T extends string>({ value, options, onChange, full = false }: {
-  value: T; options: [T, string, boolean?][]; onChange: (v: T) => void; full?: boolean;
+export function PillSeg<T extends string>({ value, options, onChange, full = false, rapat = false }: {
+  value: T; options: [T, string, boolean?][]; onChange: (v: T) => void; full?: boolean; rapat?: boolean;
 }) {
   return (
     <div role="tablist" className={`flex gap-0.5 rounded-full bg-neutral-100 p-[3px] dark:bg-neutral-900 ${full ? 'w-full' : 'w-max'}`}>
       {options.map(([k, label, disabled]) => (
         <button key={k} role="tab" aria-selected={value === k} disabled={disabled} onClick={() => onChange(k)}
-          className={`min-h-10 whitespace-nowrap rounded-full px-3.5 text-sm transition disabled:opacity-40 ${full ? 'flex-1' : ''} ${value === k
+          className={`min-h-10 whitespace-nowrap rounded-full transition disabled:opacity-40 ${rapat ? 'min-w-0 px-2 text-[13px]' : 'px-3.5 text-sm'} ${full ? 'flex-1' : ''} ${value === k
             ? 'bg-white font-bold text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white'
             : 'font-semibold text-neutral-500 dark:text-neutral-400'}`}>
           {label}

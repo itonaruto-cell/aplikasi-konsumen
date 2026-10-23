@@ -5,6 +5,8 @@ import type { LaporanFU } from '../../lib/prospek-types';
 import { brandOf, cekData, hariKerjaSisa, namaBulan, pace, targetMingguan, type Ctx } from '../../lib/performa-calc';
 import { posisiKosong } from '../../lib/kesehatan-data';
 import { brandBaris, rincianMotor } from '../../lib/sales-brand';
+import type { Proyeksi } from '../../lib/proyeksi';
+import type { DataProyeksi, Mode } from './proyeksi-data';
 
 type G = CanvasRenderingContext2D;
 type BrandId = 'mobilku' | 'motorku';
@@ -441,5 +443,120 @@ export function gambarFollowUp(g: G, l: LaporanFU, cabang: string, logo: HTMLIma
   });
   y += FU_TINGGI.db + 40;
   kaki(g, y - 40, dibuat);
+  return H;
+}
+
+/* ---------- Laporan proyeksi sales ---------- */
+// Proyeksi = tercapai + bahan sedang diproses (+ bahan survey), dibanding target dan bulan lalu.
+const WARNA_PRO = {
+  terang: { capai: '#FFFFFF', proses: '#5CC8FF', survey: '#F5C451', target: '#FF7A7A', track: 'rgba(255,255,255,0.18)' },
+  biasa: { capai: '#121212', proses: '#0EA5E9', survey: '#F5C451', target: '#E5484D', track: '#ECE9E3' },
+};
+const KOTAK_PRO = 490, BARIS_PRO = 132, LEGENDA_PRO = 70;
+type JnPro = 'amount' | 'unit';
+const fPro = (j: JnPro, v: number) => (j === 'amount' ? rp(Math.abs(v)) : `${angka(Math.abs(v))} unit`);
+const persen = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '–');
+
+function batangPro(g: G, x: number, y: number, w: number, h: number, p: Proyeksi, j: JnPro, mode: Mode, terang: boolean) {
+  const k = terang ? WARNA_PRO.terang : WARNA_PRO.biasa;
+  const t = p.target?.[j] ?? 0;
+  const lebar = Math.max(t, p.maksimal[j], 1);
+  const fr = (v: number) => Math.max(0, Math.min(1, v / lebar));
+  kotak(g, x, y, w, h, h / 2, k.track);
+  const seg = (v: number, warna: string) => { const f = fr(v); if (f > 0) kotak(g, x, y, Math.max(h, w * f), h, h / 2, warna); };
+  if (mode === 'maksimal') seg(p.maksimal[j], k.survey);
+  seg(p.realistis[j], k.proses);
+  seg(p.tercapai[j], k.capai);
+  if (t > 0) { g.fillStyle = k.target; g.fillRect(x + w * fr(t) - 2, y - 6, 4, h + 12); }
+}
+
+function kolomPro(g: G, x: number, y: number, w: number, j: JnPro, p: Proyeksi, mode: Mode, terang: boolean) {
+  const pro = p[mode][j], t = p.target?.[j] ?? 0, l = p.lalu?.[j] ?? null;
+  const muted = terang ? 'rgba(255,255,255,0.7)' : C.muted, ink = terang ? '#fff' : C.ink;
+  const redup = terang ? 'rgba(255,255,255,0.35)' : '#B5B0A8';
+  tulis(g, j === 'amount' ? 'Amount' : 'Unit', x, y + 30, { size: 24, color: muted });
+  tulis(g, fPro(j, pro), x, y + 104, { size: 62, weight: 700, color: ink, maks: w });
+  tulis(g, t ? `${persen(pro, t)} dari target ${fPro(j, t)}` : 'Target belum ada', x, y + 142, { size: 22, color: muted, maks: w });
+  batangPro(g, x, y + 164, w, 16, p, j, mode, terang);
+  ([['Tercapai', p.tercapai[j]], ['+ Diproses', p.proses[j]], ['+ Bahan survey', p.survey[j]]] as const).forEach(([lbl, v], i) => {
+    const yy = y + 230 + i * 36, mati = i === 2 && mode === 'realistis';
+    tulis(g, lbl, x, yy, { size: 22, color: mati ? redup : muted });
+    tulis(g, fPro(j, v), x + w, yy, { size: 22, weight: 700, color: mati ? redup : ink, align: 'right' });
+  });
+  const kurang = t - pro;
+  const [bg, warna, teks] = !t
+    ? [terang ? 'rgba(255,255,255,0.14)' : C.track, ink, 'Target –']
+    : kurang > 0
+      ? [terang ? 'rgba(229,72,77,0.30)' : '#FDECEC', terang ? '#FFC2C2' : '#B42318', `Kurang ${fPro(j, kurang)}`]
+      : [terang ? 'rgba(31,164,99,0.32)' : '#E4F5EC', terang ? '#9BE8BE' : '#0F7A45', `Lebih ${fPro(j, -kurang)}`];
+  chip(g, teks, x, y + 326, { bg, color: warna, size: 21 });
+  tulis(g, l === null ? 'Bulan lalu –' : `${pro - l >= 0 ? '▲' : '▼'} ${fPro(j, pro - l)} vs bulan lalu (${fPro(j, l)})`, x, y + 410, { size: 21, color: muted, maks: w });
+}
+
+function duaPro(g: G, x: number, y: number, w: number, p: Proyeksi, mode: Mode, terang: boolean) {
+  const kol = (w - 48) / 2;
+  kolomPro(g, x, y, kol, 'amount', p, mode, terang);
+  kolomPro(g, x + kol + 48, y, kol, 'unit', p, mode, terang);
+}
+
+const orangPro = (d: DataProyeksi, b: 'mobilku' | 'motorku') => d.orang.filter((x) => x.brand === b);
+export function tinggiProyeksi(d: DataProyeksi) {
+  return 250 + KOTAK_PRO + 40 + (['mobilku', 'motorku'] as const).reduce((s, b) => s + KOTAK_PRO + orangPro(d, b).length * BARIS_PRO + 40, 0) + LEGENDA_PRO + KAKI;
+}
+
+export function gambarProyeksi(g: G, c: Ctx, d: DataProyeksi, mode: Mode, logo: HTMLImageElement | null) {
+  const H = tinggiProyeksi(d);
+  const inf = info(c);
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  const cara = mode === 'maksimal' ? 'Tercapai + diproses + bahan survey' : 'Tercapai + sedang diproses';
+  kepala(g, logo, 'PROYEKSI SALES', inf.judulBulan, `${cara} · ${inf.sub}`, inf.tingkat);
+
+  // Cabang
+  let y = 250;
+  kotak(g, P, y, W - P * 2, KOTAK_PRO, 32, C.card, true);
+  tulis(g, 'CABANG', P + 40, y + 52, { size: 22, weight: 700, color: C.muted, spasi: 3 });
+  tulis(g, `${d.nAktif} bahan aktif`, W - P - 40, y + 52, { size: 22, color: C.muted, align: 'right' });
+  duaPro(g, P + 40, y + 56, W - P * 2 - 80, d.cabang, mode, false);
+  y += KOTAK_PRO + 40;
+
+  // Mobilku & Motorku + per orang
+  for (const { b, p } of d.brand) {
+    const list = orangPro(d, b);
+    const h = KOTAK_PRO + list.length * BARIS_PRO;
+    kotak(g, P, y, W - P * 2, h, 32, C.brand[b], true);
+    tulis(g, LABEL[b], P + 40, y + 56, { size: 24, weight: 700, color: 'rgba(255,255,255,0.8)', spasi: 3 });
+    tulis(g, `${list.length} orang`, W - P - 40, y + 56, { size: 22, color: 'rgba(255,255,255,0.6)', align: 'right' });
+    duaPro(g, P + 40, y + 60, W - P * 2 - 80, p, mode, true);
+    let yy = y + KOTAK_PRO;
+    list.forEach(({ o, p: po }) => {
+      const pro = po[mode], t = po.target;
+      g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(P + 24, yy - 10, W - P * 2 - 48, 1);
+      tulis(g, pendek(o.nama), P + 40, yy + 34, { size: 30, weight: 700, color: '#fff', maks: 420 });
+      tulis(g, rp(pro.amount), W - P - 170, yy + 34, { size: 26, weight: 600, color: '#fff', align: 'right' });
+      tulis(g, t?.amount ? persen(pro.amount, t.amount) : '–', W - P - 40, yy + 36, { size: 34, weight: 700, color: C.gold, align: 'right' });
+      batangPro(g, P + 40, yy + 56, W - P * 2 - 80, 12, po, 'amount', mode, true);
+      tulis(g, `Unit ${angka(pro.unit)}/${angka(t?.unit ?? null)} · tercapai ${rp(po.tercapai.amount)}`, P + 40, yy + 104, { size: 22, color: 'rgba(255,255,255,0.7)', maks: 560 });
+      if (t?.amount) {
+        const kurang = t.amount - pro.amount;
+        tulis(g, kurang > 0 ? `Kurang ${rp(kurang)}` : `Lebih ${rp(-kurang)}`, W - P - 40, yy + 104, { size: 22, weight: 700, color: kurang > 0 ? '#FFC2C2' : '#9BE8BE', align: 'right' });
+      }
+      yy += BARIS_PRO;
+    });
+    y += h + 40;
+  }
+
+  // Keterangan warna batang
+  const k = WARNA_PRO.biasa;
+  let x = P;
+  const leg: [string, string][] = [['Tercapai', k.capai], ['Diproses', k.proses], ...(mode === 'maksimal' ? [['Bahan survey', k.survey] as [string, string]] : []), ['Target', k.target]];
+  leg.forEach(([lbl, warna]) => {
+    if (lbl === 'Target') { g.fillStyle = warna; g.fillRect(x + 8, y + 8, 4, 28); }
+    else kotak(g, x, y + 14, 34, 16, 8, warna);
+    tulis(g, lbl, x + 46, y + 32, { size: 22, color: C.muted });
+    font(g, 22, 400);
+    x += 46 + g.measureText(lbl).width + 36;
+  });
+  y += LEGENDA_PRO;
+  kaki(g, y - 20, inf.dibuat);
   return H;
 }
