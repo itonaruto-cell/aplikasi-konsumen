@@ -25,6 +25,7 @@ import Sinkron from './performa/Sinkron';
 import TanyaSK from './performa/TanyaSK';
 import BandingPage from './performa/Banding';
 import PdfSurvey from './performa/PdfSurvey';
+import ReportSurveyPage from './performa/ReportSurvey';
 import Kesehatan, { PeringatanData } from './performa/Kesehatan';
 
 // Kerangka aplikasi (gaya sosmed): Pantau (pantauan cabang / Mobilku / Motorku), Plan (plan aktivitas harian), Rute,
@@ -33,7 +34,7 @@ import Kesehatan, { PeringatanData } from './performa/Kesehatan';
 // Data performa boleh dilihat semua akun terdaftar; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
 
 type Akun = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim'; perfName?: string | null };
-type Page = 'pantau' | 'plan' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas' | 'bahan' | 'insentif' | 'inject' | 'laporan' | 'prospek' | 'sinkron' | 'sk' | 'kesehatan' | 'banding' | 'pdf';
+type Page = 'pantau' | 'plan' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas' | 'bahan' | 'insentif' | 'inject' | 'laporan' | 'prospek' | 'sinkron' | 'sk' | 'kesehatan' | 'banding' | 'pdf' | 'report';
 type Slot = (reloadKey: number) => ReactNode;
 const SEEN_KEY = 'ck_story_seen';
 
@@ -244,7 +245,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
   const cabang = (data?.cabang || 'kendal').toLowerCase();
   const namaApp = `Marketing ${cabang.replace(/\b\w/g, (h) => h.toUpperCase())}`;
-  const TITLE: Record<Page, string> = { pantau: namaApp, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3', laporan: 'Laporan', prospek: 'Database prospek', sinkron: 'Perbarui database', sk: 'Tanya SK', kesehatan: 'Kesehatan data', banding: 'Form banding', pdf: 'PDF berkas survey' };
+  const TITLE: Record<Page, string> = { pantau: namaApp, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3', laporan: 'Laporan', prospek: 'Database prospek', sinkron: 'Perbarui database', sk: 'Tanya SK', kesehatan: 'Kesehatan data', banding: 'Form banding', pdf: 'PDF berkas survey', report: 'Report survey' };
 
   const NAV: [Page, string, string][] = [
     ['pantau', 'chart', 'Pantau'], ['plan', 'list', 'Plan'], ['rute', 'pin', 'Rute'],
@@ -330,11 +331,12 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             {page === 'sk' && <TanyaSK akun={akun} reloadKey={reloadKey} />}
             {page === 'kesehatan' && akun.role === 'owner' && <Kesehatan data={data} />}
             {page === 'pdf' && <PdfSurvey />}
+            {page === 'report' && <ReportSurveyPage akun={akun} reloadKey={reloadKey} onBanding={() => go('banding')} />}
             {page === 'banding' && <BandingPage akun={akun} reloadKey={reloadKey} />}
             {page === 'prospek' && <ProspekPage akun={akun} tim={staf.map((x) => x.nama)} reloadKey={reloadKey} cabang={String(data?.cabang || 'Kendal')} />}
             {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
             {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => go('laporan')} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
+            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => go('laporan')} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onReport={() => go('report')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
           </>
         )}
       </div>
@@ -351,7 +353,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       <nav aria-label="Menu utama" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <div className="mx-auto grid max-w-xl" style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}>
           {NAV.map(([k, icon, label]) => {
-            const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif' || page === 'inject' || page === 'juara' || page === 'laporan' || page === 'prospek' || page === 'sinkron' || page === 'sk' || page === 'kesehatan' || page === 'banding' || page === 'pdf'));
+            const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif' || page === 'inject' || page === 'juara' || page === 'laporan' || page === 'prospek' || page === 'sinkron' || page === 'sk' || page === 'kesehatan' || page === 'banding' || page === 'pdf' || page === 'report'));
             return (
               <button key={k} onClick={() => (k === page ? window.scrollTo({ top: 0, behavior: 'smooth' }) : goNav(k))}
                 aria-current={on ? 'page' : undefined}

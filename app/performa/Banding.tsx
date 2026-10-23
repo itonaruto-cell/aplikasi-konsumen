@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  C6, DOK_CEK, KAT_FOTO, bacaSlik, bandingBaru, namaFileBanding, saranReasonMh, saranSwot, tglPanjang,
+  C6, DOK_CEK, KAT_FOTO, bacaSlik, bandingBaru, namaFileBanding, rapikanBanding, saranReasonMh, saranSwot, tglPanjang,
   type Banding, type Cek, type FotoBanding, type KatFoto,
 } from '../../lib/banding-types';
 import { GAYA_BANDING, buatFormBanding, susunBanding, type FotoFile } from '../../lib/banding-xlsx';
@@ -384,7 +384,7 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
       const r = await fetch('/api/banding', { cache: 'no-store' });
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error || 'Gagal memuat.');
-      setList(j.list || []);
+      setList((j.list || []).map(rapikanBanding));
     } catch (e) { setErr((e as Error).message); setList([]); }
   }, []);
   useEffect(() => { muat(); }, [muat, reloadKey]);

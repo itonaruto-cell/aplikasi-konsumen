@@ -11,9 +11,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void; onReport?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -28,6 +28,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
     ['Kerja harian', [
       { judul: 'Database prospek', sub: 'Input, impor Google Maps, follow up dengan foto bukti', ico: ico('users'), on: onProspek },
       { judul: 'Tanya SK', sub: 'Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu', ico: ico('list'), on: onSK },
+      { judul: 'Report survey (6C + 1E + 1P)', sub: 'Hasil survey per unsur, salin langsung ke WA', ico: ico('list'), on: onReport },
       { judul: 'PDF berkas survey', sub: 'Foto per kategori → PDF, bagikan sekaligus ke WA', ico: ico('share'), on: onPdf },
       { judul: 'Form banding (F-761)', sub: 'Reason, analisa 6C, SWOT & foto → Excel untuk G Suite', ico: ico('edit'), on: onBanding },
       { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
