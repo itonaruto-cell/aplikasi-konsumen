@@ -5,6 +5,7 @@ import { getPerfName, getRole, lihatTim } from '../../../lib/access';
 import { appendRow, readRows, updateRowById } from '../../../lib/sheet-store';
 import { KENDARAAN, SUMBER, TAHAP, tebakTahap, type Bahan, type Kendaraan, type StatusBahan, type Sumber, type Tahap } from '../../../lib/bahan-types';
 import { keyOf } from '../../../lib/performa-calc';
+import { samaOrang } from '../../../lib/sales-brand';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,7 @@ async function akses(emailAsli: string, role: string) {
   const email = emailAsli.toLowerCase();
   const semua = lihatTim(role);
   const aku = semua ? '' : keyOf((await getPerfName(email)) || '');
-  return (b: Bahan) => semua || b.email === email || (!!aku && keyOf(b.pic) === aku);
+  return (b: Bahan) => semua || b.email === email || (!!aku && !!b.pic && samaOrang(b.pic, aku));
 }
 
 export async function GET(req: NextRequest) {

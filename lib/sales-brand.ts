@@ -18,6 +18,15 @@ export const samaNama = (a: string, b: string) => {
   const w = p.split(' ');
   return w.length >= 2 && w.every((k) => kata.has(k));
 };
+// Untuk PIC survey: sama seperti samaNama, ditambah nama satu kata ("YOGA") yang ada di nama lain ("YOGA PRATAMA")
+const KATA_UMUM = /^(MUHAMMAD|MUHAMAD|MOHAMMAD|MOH|MOCH|M|AHMAD|NUR|SITI|DWI|TRI|EKA)$/;
+export const samaOrang = (a: string, b: string) => {
+  const x = key(a), y = key(b);
+  if (!x || !y) return false;
+  if (x === y || samaNama(a, b)) return true;
+  const [p, q] = x.length <= y.length ? [x, y] : [y, x];
+  return !p.includes(' ') && p.length >= 3 && !KATA_UMUM.test(p) && q.split(' ').includes(p);
+};
 export const cariSalesBrand = (list: SalesBrandOrang[] | undefined, nama: string) =>
   (list || []).find((s) => samaNama(s.nama, nama));
 

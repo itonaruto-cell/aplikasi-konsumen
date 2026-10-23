@@ -7,6 +7,7 @@ import { useOverlay } from '../overlay';
 import { rp } from './ui';
 import { Ico, Kosong, shortName } from './parts';
 import { AngkaInput, FIELD } from './form';
+import { samaOrang } from '../../lib/sales-brand';
 
 // Bahan survey: konsumen yang rencana disurvey (bahan survey) dan yang sudah disurvey (sedang diproses), per staff.
 // Tiap bahan punya PIC survey. Staff melihat bahan yang ia buat atau yang PIC-nya dia; owner melihat semua
@@ -60,7 +61,8 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
   const [ket, setKet] = useState(awal?.ket || '');
   const [agg, setAgg] = useState(!!awal?.agg);
   const [step, setStep] = useState(awal?.step || '');
-  const [pic, setPic] = useState(awal ? awal.pic : picAwal);
+  // PIC tersimpan yang ejaannya beda (mis. nama lengkap) dicocokkan ke pilihan yang sama orangnya
+  const [pic, setPic] = useState(awal ? (tim.find((t) => samaOrang(t, awal.pic)) ?? awal.pic) : picAwal);
   const [tahap, setTahap] = useState<Tahap>(awal ? tahapOf(awal) : 'survey');
   const [kendaraan, setKendaraan] = useState<Kendaraan | ''>(awal?.kendaraan || '');
   const [busy, setBusy] = useState(false);
