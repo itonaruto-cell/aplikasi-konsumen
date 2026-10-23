@@ -47,6 +47,16 @@ export async function GET(req: NextRequest) {
   const { s, role } = await session(req);
   if (!s || !role) return NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 });
   try {
+    // Untuk halaman Proyeksi: semua akun melihat angka bahan aktif seluruh tim,
+    // tanpa data konsumen (nama konsumen, agent, step, PIC, email dikosongkan).
+    if (req.nextUrl.searchParams.get('untuk') === 'proyeksi') {
+      const list = (await readRows(TAB, HEAD))
+        .filter((r) => r[0] && r[8] !== 'hapus')
+        .map(toObj)
+        .filter((b) => b.status === 'aktif')
+        .map((b): Bahan => ({ ...b, email: '', konsumen: '', ket: '', step: '', pic: '' }));
+      return NextResponse.json({ list }, { headers: { 'Cache-Control': 'no-store' } });
+    }
     const boleh = await akses(s.email, role);
     const list = (await readRows(TAB, HEAD))
       .filter((r) => r[0] && r[8] !== 'hapus')
