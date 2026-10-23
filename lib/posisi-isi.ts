@@ -14,3 +14,11 @@ export function namaPengisi(nama: unknown): string | null {
 
 // Selalu jadi pilihan PIC survey (selain anggota Mobilku)
 export const PIC_TAMBAHAN = Object.values(ISI_POSISI);
+
+// Peran PIC (ditampilkan di simulasi proyeksi). Dicocokkan per kata nama, mis. "MUHAMMAD RIZAL HIMAWAN" → RIZAL.
+export const PERAN_PIC: Record<string, 'MAO' | 'CMO'> = { RIZAL: 'MAO', NAUFAL: 'CMO', AGUS: 'MAO', YOGA: 'CMO' };
+export function peranDari(nama: string): 'MAO' | 'CMO' | null {
+  const kata = String(nama || '').toUpperCase().split(/\s+/);
+  for (const k of kata) if (PERAN_PIC[k]) return PERAN_PIC[k];
+  return null;
+}

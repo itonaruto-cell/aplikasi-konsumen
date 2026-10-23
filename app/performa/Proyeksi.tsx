@@ -6,6 +6,7 @@ import type { Bahan } from '../../lib/bahan-types';
 import { hariKerjaSisa, type Ctx } from '../../lib/performa-calc';
 import type { Angka, Proyeksi } from '../../lib/proyeksi';
 import { ambilBahanProyeksi, hitungSemua, plus, type Mode } from './proyeksi-data';
+import { peranDari } from '../../lib/posisi-isi';
 import { shortName } from './parts';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
@@ -106,12 +107,8 @@ function SimBlok({ judul, sub, now, after, target }: { judul: string; sub: strin
   );
 }
 
-type Jenis = 'mobil' | 'motor';
-const JENIS: { k: Jenis; label: string; brand: 'mobilku' | 'motorku' }[] = [
-  { k: 'mobil', label: 'Mobil', brand: 'mobilku' },
-  { k: 'motor', label: 'Motor', brand: 'motorku' },
-];
 const NOL: Angka = { amount: 0, unit: 0 };
+const BRAND_SIM = [{ b: 'mobilku', label: 'Mobilku' }, { b: 'motorku', label: 'Motorku' }] as const;
 
 function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: string, today: string): string {
   const tgl = new Date(today + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -135,9 +132,9 @@ export default function ProyeksiPage({ c, me, onFoto }: { c: Ctx; me: Orang | nu
   const [err, setErr] = useState('');
   const [mode, setMode] = useState<Mode>('maksimal');
   const [pesan, setPesan] = useState('');
-  const [simId, setSimId] = useState('');
-  const [tamb, setTamb] = useState<Record<Jenis, Angka>>({ mobil: NOL, motor: NOL });
-  const ubahTamb = (k: Jenis, f: keyof Angka, v: number) => setTamb((x) => ({ ...x, [k]: { ...x[k], [f]: v } }));
+  // Tambahan estimasi per PIC (kunci = nama di pantauan); tidak disimpan
+  const [tamb, setTamb] = useState<Record<string, Angka>>({});
+  const ubahTamb = (nama: string, f: keyof Angka, v: number) => setTamb((x) => ({ ...x, [nama]: { ...(x[nama] || NOL), [f]: v } }));
 
   useEffect(() => {
     let hidup = true;
@@ -148,35 +145,42 @@ export default function ProyeksiPage({ c, me, onFoto }: { c: Ctx; me: Orang | nu
 
   const data = useMemo(() => (bahan ? hitungSemua(c, bahan, mode) : null), [bahan, c, mode]);
 
-  // Simulasi per PIC: tambahan mobil & motor dipisah. Owner juga bisa tanpa PIC (langsung ke brand & cabang).
-  const opsi: { id: string; judul: string; p: Proyeksi | null }[] = data ? [
-    ...data.orang.map((x) => ({ id: x.o.nama, judul: shortName(x.o.nama), p: x.p })),
-    { id: 'tanpa-pic', judul: 'Tanpa PIC (langsung brand & cabang)', p: null },
-  ] : [];
-  const pilih = opsi.find((o) => o.id === simId) ?? opsi.find((o) => !!me && o.id === me.nama) ?? opsi[0];
-  const adaTamb = !!(tamb.mobil.amount || tamb.mobil.unit || tamb.motor.amount || tamb.motor.unit);
-  const total = plus(tamb.mobil, tamb.motor);
-  const sim = pilih && data ? {
-    pic: pilih.p ? { judul: pilih.judul, now: pilih.p[mode], after: plus(pilih.p[mode], total), target: pilih.p.target } : null,
-    brand: JENIS.map((j) => { const p = data.brand.find((x) => x.b === j.brand)!.p; return { j, now: p[mode], after: plus(p[mode], tamb[j.k]), target: p.target }; }),
-    cabang: { now: data.cabang[mode], after: plus(data.cabang[mode], total), target: data.cabang.target },
-    bahan: pilih.p ? data.bahanOrang.get(pilih.id) ?? null : null,
-  } : null;
+  // Simulasi: tiap PIC di brand-nya sendiri, tambahan semua PIC dijumlah ke brand lalu ke cabang
   const satu = (a: Angka) => `${rp(a.amount)} (${nf.format(a.unit)} unit)`;
-  const subTamb = (a: Angka) => (a.amount || a.unit ? `+ ${satu(a)}` : 'tanpa tambahan');
+  const ada = (a?: Angka) => !!a && (a.amount > 0 || a.unit > 0);
+  const sim = data ? (() => {
+    const brand = BRAND_SIM.map(({ b, label }) => {
+      const org = data.orang.filter((x) => x.brand === b).map((x) => {
+        const t = tamb[x.o.nama] || NOL;
+        return { ...x, judul: shortName(x.o.nama), peran: peranDari(x.o.nama), tamb: t, now: x.p[mode], after: plus(x.p[mode], t) };
+      });
+      const p = data.brand.find((x) => x.b === b)!.p;
+      const t = plus(NOL, ...org.map((x) => x.tamb));
+      return { b, label, org, tamb: t, now: p[mode], after: plus(p[mode], t), target: p.target };
+    });
+    const t = plus(NOL, ...brand.map((x) => x.tamb));
+    return { brand, tamb: t, cabang: { now: data.cabang[mode], after: plus(data.cabang[mode], t), target: data.cabang.target } };
+  })() : null;
+  const adaTamb = !!sim && ada(sim.tamb);
+  const subTamb = (a: Angka, n?: number) => (ada(a) ? `+ ${satu(a)}${n ? ` dari ${n} PIC` : ''}` : 'tanpa tambahan');
+  const sisa = (after: number, target: number | undefined, f: (v: number) => string) =>
+    !target ? '' : after >= target ? `lebih ${f(after - target)}` : `kurang ${f(target - after)}`;
 
   const salin = async () => {
     if (!data) return;
     const baris = [{ judul: 'CABANG', p: data.cabang }, ...data.brand.map((x) => ({ judul: x.b === 'mobilku' ? 'MOBILKU' : 'MOTORKU', p: x.p })), ...data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }))];
     let t = teksWa(baris, mode, c.data.cabang || 'Kendal', c.today);
     if (sim && adaTamb) {
-      const hasil = (judul: string, x: { after: Angka; target: Angka | null }) =>
-        `${judul} → ${satu(x.after)}${x.target?.amount ? ` · ${pct(x.after.amount, x.target.amount)} dari target` : ''}`;
-      const out = ['', '', `*SIMULASI${sim.pic ? ` ${sim.pic.judul.toUpperCase()}` : ''}*`];
-      for (const j of JENIS) if (tamb[j.k].amount || tamb[j.k].unit) out.push(`+ ${j.label} ${satu(tamb[j.k])}`);
-      if (sim.pic) out.push(hasil(sim.pic.judul, sim.pic));
-      for (const b of sim.brand) if (tamb[b.j.k].amount || tamb[b.j.k].unit) out.push(hasil(b.j.brand === 'mobilku' ? 'Mobilku' : 'Motorku', b));
-      if (sim.cabang) out.push(hasil('Cabang', sim.cabang));
+      const hasil = (x: { after: Angka; target: Angka | null }) =>
+        `${satu(x.after)}${x.target?.amount ? ` · ${pct(x.after.amount, x.target.amount)} dari target` : ''}`;
+      const out = ['', '', '*SIMULASI ESTIMASI*'];
+      for (const g of sim.brand) {
+        if (!ada(g.tamb)) continue;
+        out.push('', `*${g.label.toUpperCase()}*`);
+        for (const o of g.org) if (ada(o.tamb)) out.push(`• ${o.judul}${o.peran ? ` (${o.peran})` : ''} + ${satu(o.tamb)} → ${hasil({ after: o.after, target: o.p.target })}`);
+        out.push(`${g.label} + ${satu(g.tamb)} → ${hasil(g)}`);
+      }
+      out.push('', `Cabang + ${satu(sim.tamb)} → ${hasil(sim.cabang)}`);
       t += out.join('\n');
     }
     try { await navigator.clipboard.writeText(t); setPesan('Ringkasan proyeksi tersalin. Tempel di WhatsApp.'); } catch { setPesan('Tidak bisa menyalin otomatis di HP ini.'); }
@@ -210,43 +214,48 @@ export default function ProyeksiPage({ c, me, onFoto }: { c: Ctx; me: Orang | nu
           {sim && (
             <section className="rounded-3xl border border-dashed border-neutral-400 p-4 dark:border-neutral-600">
               <h3 className="text-[16px] font-bold">Simulasi estimasi</h3>
-              <p className="mt-0.5 text-[12px] text-neutral-500">Pilih PIC, ketik tambahan mobil dan motor. Angkanya tidak disimpan, buat bahan briefing tim.</p>
-              <label className="mt-3 block text-[12px] font-semibold text-neutral-500" htmlFor="sim-pilih">PIC</label>
-              <select id="sim-pilih" value={pilih!.id} onChange={(e) => setSimId(e.target.value)}
-                className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950">
-                {opsi.map((o) => <option key={o.id} value={o.id}>{o.judul}</option>)}
-              </select>
-              {JENIS.map((j) => (
-                <fieldset key={j.k} className="mt-3">
-                  <legend className="text-[13px] font-bold">Tambahan {j.label}</legend>
-                  {sim.bahan && (
-                    <p className="text-[12px] text-neutral-500">
-                      Bahan {j.label.toLowerCase()} {sim.pic?.judul} sekarang: {sim.bahan[j.k].unit ? satu(sim.bahan[j.k]) : 'belum ada'}
-                    </p>
-                  )}
-                  <div className="mt-1 grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="text-[12px] font-semibold text-neutral-500">Amount (Rp)</span>
-                      <input inputMode="numeric" aria-label={`Tambahan ${j.label} amount (Rp)`} value={tamb[j.k].amount ? tamb[j.k].amount.toLocaleString('id-ID') : ''} placeholder="0"
-                        onChange={(e) => ubahTamb(j.k, 'amount', digit(e.target.value))}
-                        className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
-                    </label>
-                    <label className="block">
-                      <span className="text-[12px] font-semibold text-neutral-500">Unit</span>
-                      <input inputMode="numeric" aria-label={`Tambahan ${j.label} unit`} value={tamb[j.k].unit || ''} placeholder="0"
-                        onChange={(e) => ubahTamb(j.k, 'unit', digit(e.target.value))}
-                        className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
-                    </label>
+              <p className="mt-0.5 text-[12px] text-neutral-500">Ketik tambahan tiap PIC. Dijumlah ke brand-nya dan cabang. Angkanya tidak disimpan, buat bahan briefing tim.</p>
+              {sim.brand.map((g) => (
+                <div key={g.b} className="mt-4">
+                  <p className={`text-[13px] font-bold uppercase tracking-wide ${g.b === 'mobilku' ? 'text-[#1B2F5B] dark:text-sky-300' : 'text-[#1D6A4B] dark:text-emerald-300'}`}>{g.label}</p>
+                  <div className="mt-1.5 space-y-2">
+                    {g.org.map((o) => (
+                      <div key={o.o.nama} className="rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="text-[15px] font-bold">{o.judul}{o.peran && <span className="ml-1.5 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[11px] font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{o.peran}</span>}</p>
+                          <p className="whitespace-nowrap text-[12px] text-neutral-500">sekarang {satu(o.now)}</p>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <label className="block">
+                            <span className="text-[12px] font-semibold text-neutral-500">+ Amount (Rp)</span>
+                            <input inputMode="numeric" aria-label={`Tambahan ${o.judul} amount (Rp)`} value={o.tamb.amount ? o.tamb.amount.toLocaleString('id-ID') : ''} placeholder="0"
+                              onChange={(e) => ubahTamb(o.o.nama, 'amount', digit(e.target.value))}
+                              className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
+                          </label>
+                          <label className="block">
+                            <span className="text-[12px] font-semibold text-neutral-500">+ Unit</span>
+                            <input inputMode="numeric" aria-label={`Tambahan ${o.judul} unit`} value={o.tamb.unit || ''} placeholder="0"
+                              onChange={(e) => ubahTamb(o.o.nama, 'unit', digit(e.target.value))}
+                              className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
+                          </label>
+                        </div>
+                        {ada(o.tamb) && (
+                          <p className="mt-2 text-[13px] leading-snug">
+                            → <b>{satu(o.after)}</b>
+                            {o.p.target?.amount ? <span className="text-neutral-500"> · {pct(o.after.amount, o.p.target.amount)} target · {sisa(o.after.amount, o.p.target.amount, rp)}{o.p.target.unit ? `, ${sisa(o.after.unit, o.p.target.unit, unit)}` : ''}</span> : null}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    <SimBlok judul={`Total ${g.label}`} sub={subTamb(g.tamb, g.org.filter((o) => ada(o.tamb)).length)} now={g.now} after={g.after} target={g.target} />
                   </div>
-                </fieldset>
+                </div>
               ))}
-              <div className="mt-4 space-y-2">
-                {sim.pic && <SimBlok judul={sim.pic.judul} sub={subTamb(total)} now={sim.pic.now} after={sim.pic.after} target={sim.pic.target} />}
-                {sim.brand.map((b) => <SimBlok key={b.j.k} judul={b.j.brand === 'mobilku' ? 'Mobilku' : 'Motorku'} sub={subTamb(tamb[b.j.k])} now={b.now} after={b.after} target={b.target} />)}
-                {sim.cabang && <SimBlok judul="Cabang" sub={subTamb(total)} now={sim.cabang.now} after={sim.cabang.after} target={sim.cabang.target} />}
+              <div className="mt-4">
+                <SimBlok judul="Cabang" sub={subTamb(sim.tamb)} now={sim.cabang.now} after={sim.cabang.after} target={sim.cabang.target} />
               </div>
               {adaTamb && (
-                <button onClick={() => setTamb({ mobil: NOL, motor: NOL })} className="mt-3 min-h-10 text-[13px] font-semibold text-neutral-600 underline dark:text-neutral-400">Atur ulang simulasi</button>
+                <button onClick={() => setTamb({})} className="mt-3 min-h-10 text-[13px] font-semibold text-neutral-600 underline dark:text-neutral-400">Atur ulang simulasi</button>
               )}
             </section>
           )}
