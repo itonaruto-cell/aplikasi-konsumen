@@ -74,6 +74,25 @@ function Kartu({ judul, sub, p, mode, gelap = false }: { judul: string; sub?: st
   );
 }
 
+// Angka ketikan (hanya untuk simulasi di layar, tidak disimpan)
+const digit = (s: string) => Number(s.replace(/\D/g, '')) || 0;
+
+function SimKolom({ jenis, now, after, target }: { jenis: 'amount' | 'unit'; now: number; after: number; target: number | null }) {
+  const f = jenis === 'amount' ? rp : unit;
+  const kurang = target === null ? null : target - after;
+  return (
+    <div className="min-w-0">
+      <p className="text-[12px] font-semibold uppercase tracking-wide text-neutral-500">{jenis === 'amount' ? 'Amount' : 'Unit'}</p>
+      <p className="mt-0.5 text-[12px] text-neutral-500">dari {f(now)}</p>
+      <p className="text-[22px] font-bold leading-tight">{f(after)}</p>
+      <p className="text-[12px] text-neutral-500">{target ? `${pct(after, target)} dari target` : 'Target belum ada'}</p>
+      <p className={`mt-1.5 rounded-lg px-2 py-1 text-[12px] font-bold ${!target ? 'bg-neutral-100 dark:bg-neutral-900' : kurang! > 0 ? 'bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300' : 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300'}`}>
+        {kurang === null ? 'Target –' : kurang > 0 ? `Kurang ${f(kurang)}` : `Lebih ${f(-kurang)} dari target`}
+      </p>
+    </div>
+  );
+}
+
 function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: string, today: string): string {
   const tgl = new Date(today + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   const satu = (a: Angka) => `${rp(a.amount)} (${nf.format(a.unit)} unit)`;
@@ -95,6 +114,9 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
   const [err, setErr] = useState('');
   const [mode, setMode] = useState<Mode>('maksimal');
   const [pesan, setPesan] = useState('');
+  const [simId, setSimId] = useState('');
+  const [simRp, setSimRp] = useState(0);
+  const [simUnit, setSimUnit] = useState(0);
   const isOwner = akun.role === 'owner';
 
   useEffect(() => {
@@ -120,12 +142,27 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
     return { cabang: hitungProyeksi(c.data.cabangTotal || {}, aktif), brand, orang, tanpaPemilik, nAktif: aktif.length };
   }, [bahan, c, me, isOwner, mode]);
 
+  // Pilihan untuk simulasi: cabang & brand (owner), lalu per orang
+  const opsi: { id: string; judul: string; p: Proyeksi }[] = data ? [
+    ...(isOwner ? [{ id: 'cabang', judul: 'Cabang', p: data.cabang }, ...data.brand.map((x) => ({ id: x.b, judul: x.b === 'mobilku' ? 'Mobilku' : 'Motorku', p: x.p }))] : []),
+    ...data.orang.map((x) => ({ id: x.o.nama, judul: shortName(x.o.nama), p: x.p })),
+  ] : [];
+  const pilih = opsi.find((o) => o.id === simId) ?? opsi[0];
+  const sim = pilih ? {
+    judul: pilih.judul, now: pilih.p[mode], target: pilih.p.target,
+    after: { amount: pilih.p[mode].amount + simRp, unit: pilih.p[mode].unit + simUnit },
+  } : null;
+
   const salin = async () => {
     if (!data) return;
     const baris = isOwner
       ? [{ judul: 'CABANG', p: data.cabang }, ...data.brand.map((x) => ({ judul: x.b === 'mobilku' ? 'MOBILKU' : 'MOTORKU', p: x.p })), ...data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }))]
       : data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }));
-    const t = teksWa(baris, mode, c.data.cabang || 'Kendal', c.today);
+    let t = teksWa(baris, mode, c.data.cabang || 'Kendal', c.today);
+    if (sim && (simRp || simUnit)) {
+      const tgt = sim.target?.amount ? ` · ${pct(sim.after.amount, sim.target.amount)} dari target` : '';
+      t += `\n\n*SIMULASI ${sim.judul.toUpperCase()}*\n+ ${rp(simRp)} (${nf.format(simUnit)} unit) → proyeksi ${rp(sim.after.amount)} (${nf.format(sim.after.unit)} unit)${tgt}`;
+    }
     try { await navigator.clipboard.writeText(t); setPesan('Ringkasan proyeksi tersalin. Tempel di WhatsApp.'); } catch { setPesan('Tidak bisa menyalin otomatis di HP ini.'); }
   };
 
@@ -155,7 +192,37 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
           {data.orang.length > 0 && <p className="pt-2 text-[15px] font-bold">{isOwner ? 'Per orang' : 'Proyeksi kamu'}</p>}
           {data.orang.map((x) => <Kartu key={x.o.nama} judul={shortName(x.o.nama)} sub={`${x.p.proses.unit + x.p.survey.unit} bahan`} p={x.p} mode={mode} />)}
           {!isOwner && !data.orang.length && <p className="text-[14px] text-neutral-500">Akun ini belum tertaut ke nama di pantauan, jadi proyeksi pribadi belum bisa dihitung.</p>}
-          {isOwner && data.tanpaPemilik > 0 && <p className="text-[12px] text-neutral-500">{data.tanpaPemilik} bahan dibuat oleh akun yang tidak ada di pantauan (mis. owner); ikut di total cabang, tidak masuk per brand.</p>}
+          {sim && (
+            <section className="rounded-3xl border border-dashed border-neutral-400 p-4 dark:border-neutral-600">
+              <h3 className="text-[16px] font-bold">Simulasi estimasi</h3>
+              <p className="mt-0.5 text-[12px] text-neutral-500">Ketik tambahan estimasi, angkanya tidak disimpan. Buat bahan briefing tim.</p>
+              <label className="mt-3 block text-[12px] font-semibold text-neutral-500" htmlFor="sim-pilih">Untuk</label>
+              <select id="sim-pilih" value={pilih!.id} onChange={(e) => setSimId(e.target.value)}
+                className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950">
+                {opsi.map((o) => <option key={o.id} value={o.id}>{o.judul}</option>)}
+              </select>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="text-[12px] font-semibold text-neutral-500">Tambahan amount (Rp)</span>
+                  <input inputMode="numeric" value={simRp ? simRp.toLocaleString('id-ID') : ''} placeholder="0" onChange={(e) => setSimRp(digit(e.target.value))}
+                    className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
+                </label>
+                <label className="block">
+                  <span className="text-[12px] font-semibold text-neutral-500">Tambahan unit</span>
+                  <input inputMode="numeric" value={simUnit || ''} placeholder="0" onChange={(e) => setSimUnit(digit(e.target.value))}
+                    className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] dark:border-neutral-700 dark:bg-neutral-950" />
+                </label>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <SimKolom jenis="amount" now={sim.now.amount} after={sim.after.amount} target={sim.target?.amount ?? null} />
+                <SimKolom jenis="unit" now={sim.now.unit} after={sim.after.unit} target={sim.target?.unit ?? null} />
+              </div>
+              {(simRp > 0 || simUnit > 0) && (
+                <button onClick={() => { setSimRp(0); setSimUnit(0); }} className="mt-3 min-h-10 text-[13px] font-semibold text-neutral-600 underline dark:text-neutral-400">Atur ulang simulasi</button>
+              )}
+            </section>
+          )}
+          {isOwner && data.tanpaPemilik > 0 &&<p className="text-[12px] text-neutral-500">{data.tanpaPemilik} bahan dibuat oleh akun yang tidak ada di pantauan (mis. owner); ikut di total cabang, tidak masuk per brand.</p>}
           <button onClick={salin} className="min-h-12 w-full rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white">Salin ringkasan untuk WA</button>
           {pesan && <p role="status" className="text-[13px] text-neutral-600 dark:text-neutral-400">{pesan}</p>}
         </div>
