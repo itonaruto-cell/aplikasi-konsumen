@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { bagiPdf, buatPdfFoto } from '../../lib/pdf-foto';
 import { FIELD } from './form';
 import { Ico } from './parts';
+import GabungMutasi from './GabungMutasi';
 
 export const KATEGORI_PDF: { k: string; nama: string; isi: string }[] = [
   { k: 'mandatory', nama: 'MANDATORY', isi: 'KTP, KK, NPWP' },
@@ -197,6 +198,7 @@ export default function PdfSurvey() {
         </div>
       </section>
       <p className="mt-2 text-[12px] text-neutral-500">Foto tersimpan di HP ini saja (tidak diunggah) sampai diketuk &quot;Mulai survey baru&quot;.</p>
+      <GabungMutasi nama={info.nama} />
 
       <div className="mt-3 space-y-2.5">
         {KATEGORI_PDF.map((k) => {
