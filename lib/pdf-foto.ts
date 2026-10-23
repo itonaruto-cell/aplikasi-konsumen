@@ -53,3 +53,18 @@ export function buatPdfFoto(halaman: HalamanFoto[], judul = ''): Uint8Array {
   for (const b of bagian) { out.set(b, p); p += b.length; }
   return out;
 }
+
+// Batas ukuran satu PDF: 10 MB (dihitung 10.000.000 byte seperti tampilan HP), dengan ruang aman.
+export const MAKS_PDF = 9_800_000;
+const CADANGAN = 300 * 1024, PER_HAL = 1500;
+// Bagi foto (urutan tetap) ke beberapa PDF supaya tiap file ≤ batas; foto tidak dikecilkan
+export function bagiPdf(ukuranJpeg: number[], maks = MAKS_PDF): number[][] {
+  const out: number[][] = [];
+  let cur: number[] = [], total = CADANGAN;
+  ukuranJpeg.forEach((u, i) => {
+    if (cur.length && total + u + PER_HAL > maks) { out.push(cur); cur = []; total = CADANGAN; }
+    cur.push(i); total += u + PER_HAL;
+  });
+  if (cur.length) out.push(cur);
+  return out;
+}

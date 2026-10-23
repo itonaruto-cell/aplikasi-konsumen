@@ -3,7 +3,7 @@
 // dan dibagikan sekaligus ke WhatsApp. Foto disimpan di HP ini saja (IndexedDB), tidak diunggah ke server,
 // jadi tetap ada walau aplikasi ditutup, sampai dihapus dengan "Mulai survey baru".
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { buatPdfFoto } from '../../lib/pdf-foto';
+import { bagiPdf, buatPdfFoto } from '../../lib/pdf-foto';
 import { FIELD } from './form';
 import { Ico } from './parts';
 
@@ -63,16 +63,19 @@ async function keJpeg(file: File, sisi: number, q: number): Promise<{ blob: Blob
   } finally { URL.revokeObjectURL(url); }
 }
 
-const namaFile = (kat: string, nama: string) => `${kat}${nama.trim() ? ` - ${nama.trim().toUpperCase()}` : ''}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
+const namaFile = (kat: string, nama: string, bagian = '') => `${kat}${nama.trim() ? ` - ${nama.trim().toUpperCase()}` : ''}${bagian}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
 const mb = (n: number) => `${(n / 1_048_576).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
 
-async function pdfKategori(kat: { nama: string }, foto: Foto[], nama: string): Promise<File> {
-  const hal = await Promise.all(foto.map(async (f, i) => ({
-    jpeg: new Uint8Array(await f.blob.arrayBuffer()), w: f.w, h: f.h,
-    catatan: `${kat.nama} - ${nama.trim().toUpperCase() || 'KONSUMEN'} - ${i + 1}/${foto.length}`,
-  })));
-  const bytes = buatPdfFoto(hal, `${kat.nama} ${nama}`);
-  return new File([bytes.buffer as ArrayBuffer], namaFile(kat.nama, nama), { type: 'application/pdf' });
+// Satu kategori bisa jadi beberapa PDF kalau totalnya lebih dari 10 MB (foto tidak dikecilkan)
+async function pdfKategori(kat: { nama: string }, foto: Foto[], nama: string): Promise<File[]> {
+  const jpeg = await Promise.all(foto.map(async (f) => new Uint8Array(await f.blob.arrayBuffer())));
+  const grup = bagiPdf(jpeg.map((x) => x.length));
+  return grup.map((idx, g) => {
+    const hal = idx.map((i) => ({ jpeg: jpeg[i], w: foto[i].w, h: foto[i].h, catatan: `${kat.nama} - ${nama.trim().toUpperCase() || 'KONSUMEN'} - ${i + 1}/${foto.length}` }));
+    const bagian = grup.length > 1 ? ` (${g + 1} dari ${grup.length})` : '';
+    const bytes = buatPdfFoto(hal, `${kat.nama} ${nama}${bagian}`);
+    return new File([bytes.buffer as ArrayBuffer], namaFile(kat.nama, nama, bagian), { type: 'application/pdf' });
+  });
 }
 async function kirimFile(files: File[]) {
   if (navigator.canShare?.({ files })) {
@@ -167,7 +170,7 @@ export default function PdfSurvey() {
     setPesan('');
     try {
       const files: File[] = [];
-      for (const [i, k] of kats.entries()) { setSibuk(`Membuat PDF ${i + 1}/${kats.length}: ${k.nama}…`); files.push(await pdfKategori(k, perKat(k.k), info.nama)); }
+      for (const [i, k] of kats.entries()) { setSibuk(`Membuat PDF ${i + 1}/${kats.length}: ${k.nama}…`); files.push(...(await pdfKategori(k, perKat(k.k), info.nama))); }
       setSibuk('');
       await kirimFile(files);
       setPesan(`${files.length} PDF siap: ${files.map((f) => `${f.name} (${mb(f.size)})`).join(', ')}`);
