@@ -110,8 +110,8 @@ function info(c: Ctx): Info {
     dibuat, tingkat: cek.tingkat,
   };
 }
-type Total = { amount: Sales | null; unit: Sales | null };
-function totalBrand(c: Ctx, b: BrandId): Total {
+export type Total = { amount: Sales | null; unit: Sales | null };
+export function totalBrand(c: Ctx, b: BrandId): Total {
   const blok = (t: string) => (c.data.blok || []).find((x) => x.s === 'cabang' && x.t.toLowerCase() === t)?.r
     .find((r) => brandBaris(r[0]) === b);
   const dari = (r: unknown[] | undefined): Sales | null => {
