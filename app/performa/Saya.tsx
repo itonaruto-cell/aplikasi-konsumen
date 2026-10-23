@@ -11,9 +11,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport, onProyeksi }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void; onReport?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void; onReport?: () => void; onProyeksi?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -35,6 +35,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
       { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
     ]],
     ['Laporan & performa', [
+      { judul: 'Proyeksi sales', sub: 'Tercapai + bahan vs target & bulan lalu', ico: ico('up'), on: onProyeksi },
       { judul: 'Laporan bergambar', sub: 'Achievement, aktivitas & follow up, siap unduh', ico: ico('chart'), on: onLaporan },
       { judul: 'Papan juara', sub: 'Peringkat amount, unit, visit, dan maintain', ico: ico('trophy'), on: onJuara },
       { judul: 'Insentif', sub: 'Hasil hitungan HO dan simulasi bulan ini', ico: ico('value'), on: onInsentif },
