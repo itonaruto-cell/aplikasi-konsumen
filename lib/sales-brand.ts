@@ -97,11 +97,21 @@ const barisTotal = (b: Blok | undefined): Sales | null => {
 // di daftar orang dan di tabel blok.
 export function isiPosisiKosong(data: Performa): Performa {
   let ubah = false;
+  // Angka bulan ini di baris posisi kosong biasanya 0 (rumus sheet mencari nama posisi). Kalau rekap tarikan sales
+  // punya tepat satu nama yang cocok, pakai unit & amount brand posisi itu dari rekap tarikan.
+  const rekap = (data.salesBrand?.orang || []).filter((x) => x && x.nama);
+  const isiDariRekap = (s: Sales | undefined, v: number | undefined): Sales | undefined => {
+    if (!s || !isNum(v) || v <= 0 || (isNum(s.ini) && s.ini > 0)) return s;
+    return { ...s, ini: v, ach: isNum(s.target) && s.target > 0 ? v / s.target : s.ach,
+      diffLalu: isNum(s.lalu) ? v - s.lalu : s.diffLalu, diffTarget: isNum(s.target) ? v - s.target : s.diffTarget };
+  };
   const orang = (data.orang || []).map((o) => {
     const n = namaPengisi(o.nama);
     if (!n) return o;
     ubah = true;
-    return { ...o, nama: n };
+    const cocok = rekap.filter((x) => samaOrang(x.nama, n));
+    const jual = cocok.length === 1 ? cocok[0][/MOTOR/i.test(o.nama) ? 'motorku' : 'mobilku'] : undefined;
+    return { ...o, nama: n, unit: isiDariRekap(o.unit, Number(jual?.unit)), amount: isiDariRekap(o.amount, Number(jual?.amount)) };
   });
   const blok = data.blok?.map((b) => {
     if (!b.r.some((r) => namaPengisi(r[0]))) return b;
