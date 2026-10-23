@@ -133,7 +133,8 @@ function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: str
   return out.join('\n');
 }
 
-export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null; akun: Akun }) {
+// Semua akun (owner & tim) melihat proyeksi lengkap: cabang, brand, per orang, dan simulasi.
+export default function ProyeksiPage({ c, me }: { c: Ctx; me: Orang | null; akun?: Akun }) {
   const [bahan, setBahan] = useState<Bahan[] | null>(null);
   const [err, setErr] = useState('');
   const [mode, setMode] = useState<Mode>('maksimal');
@@ -141,11 +142,10 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
   const [simId, setSimId] = useState('');
   const [tamb, setTamb] = useState<Record<Jenis, Angka>>({ mobil: NOL, motor: NOL });
   const ubahTamb = (k: Jenis, f: keyof Angka, v: number) => setTamb((x) => ({ ...x, [k]: { ...x[k], [f]: v } }));
-  const isOwner = akun.role === 'owner';
 
   useEffect(() => {
     let hidup = true;
-    fetch('/api/bahan', { cache: 'no-store' }).then(async (r) => {
+    fetch('/api/bahan?untuk=proyeksi', { cache: 'no-store' }).then(async (r) => {
       const j = await r.json().catch(() => null);
       if (!hidup) return;
       if (r.ok && Array.isArray(j?.list)) setBahan(j.list); else { setErr(j?.error || 'Bahan gagal dimuat.'); setBahan([]); }
@@ -163,7 +163,7 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
       if (b.kendaraan === 'mobil') return 'mobilku';
       const o = pemilik(b); return o ? brandOf(o) : '';
     };
-    const orang = c.sales.filter((o) => !posisiKosong(o.nama) && (isOwner || o === me))
+    const orang = c.sales.filter((o) => !posisiKosong(o.nama))
       .map((o) => ({ o, p: hitungProyeksi(o, aktif.filter((b) => samaNama(o.nama, b.nama))) }))
       .sort((a, b) => b.p[mode].amount - a.p[mode].amount);
     const brand = (['mobilku', 'motorku'] as const).map((b) => ({ b, p: hitungProyeksi(totalBrand(c, b), aktif.filter((x) => brandBahan(x) === b)) }));
@@ -175,20 +175,20 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
       return [o.nama, { mobil: nilai(milik.filter((b) => brandBahan(b) === 'mobilku')), motor: nilai(milik.filter((b) => brandBahan(b) === 'motorku')) }] as const;
     }));
     return { cabang: hitungProyeksi(c.data.cabangTotal || {}, aktif), brand, orang, bahanOrang, tanpaPemilik, nAktif: aktif.length };
-  }, [bahan, c, me, isOwner, mode]);
+  }, [bahan, c, mode]);
 
   // Simulasi per PIC: tambahan mobil & motor dipisah. Owner juga bisa tanpa PIC (langsung ke brand & cabang).
   const opsi: { id: string; judul: string; p: Proyeksi | null }[] = data ? [
     ...data.orang.map((x) => ({ id: x.o.nama, judul: shortName(x.o.nama), p: x.p })),
-    ...(isOwner ? [{ id: 'tanpa-pic', judul: 'Tanpa PIC (langsung brand & cabang)', p: null }] : []),
+    { id: 'tanpa-pic', judul: 'Tanpa PIC (langsung brand & cabang)', p: null },
   ] : [];
-  const pilih = opsi.find((o) => o.id === simId) ?? opsi[0];
+  const pilih = opsi.find((o) => o.id === simId) ?? opsi.find((o) => !!me && o.id === me.nama) ?? opsi[0];
   const adaTamb = !!(tamb.mobil.amount || tamb.mobil.unit || tamb.motor.amount || tamb.motor.unit);
   const total = plus(tamb.mobil, tamb.motor);
   const sim = pilih && data ? {
     pic: pilih.p ? { judul: pilih.judul, now: pilih.p[mode], after: plus(pilih.p[mode], total), target: pilih.p.target } : null,
-    brand: isOwner ? JENIS.map((j) => { const p = data.brand.find((x) => x.b === j.brand)!.p; return { j, now: p[mode], after: plus(p[mode], tamb[j.k]), target: p.target }; }) : [],
-    cabang: isOwner ? { now: data.cabang[mode], after: plus(data.cabang[mode], total), target: data.cabang.target } : null,
+    brand: JENIS.map((j) => { const p = data.brand.find((x) => x.b === j.brand)!.p; return { j, now: p[mode], after: plus(p[mode], tamb[j.k]), target: p.target }; }),
+    cabang: { now: data.cabang[mode], after: plus(data.cabang[mode], total), target: data.cabang.target },
     bahan: pilih.p ? data.bahanOrang.get(pilih.id) ?? null : null,
   } : null;
   const satu = (a: Angka) => `${rp(a.amount)} (${nf.format(a.unit)} unit)`;
@@ -196,9 +196,7 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
 
   const salin = async () => {
     if (!data) return;
-    const baris = isOwner
-      ? [{ judul: 'CABANG', p: data.cabang }, ...data.brand.map((x) => ({ judul: x.b === 'mobilku' ? 'MOBILKU' : 'MOTORKU', p: x.p })), ...data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }))]
-      : data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }));
+    const baris = [{ judul: 'CABANG', p: data.cabang }, ...data.brand.map((x) => ({ judul: x.b === 'mobilku' ? 'MOBILKU' : 'MOTORKU', p: x.p })), ...data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }))];
     let t = teksWa(baris, mode, c.data.cabang || 'Kendal', c.today);
     if (sim && adaTamb) {
       const hasil = (judul: string, x: { after: Angka; target: Angka | null }) =>
@@ -234,11 +232,10 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
       {err && <p className="mt-3 text-[13px] text-red-700 dark:text-red-300">{err}</p>}
       {!data ? <p className="mt-4 text-[13px] text-neutral-500">Memuat bahan…</p> : (
         <div className="mt-4 space-y-3">
-          {isOwner && <Kartu judul="Cabang" sub={`${data.nAktif} bahan aktif`} p={data.cabang} mode={mode} gelap />}
-          {isOwner && data.brand.map((x) => <Kartu key={x.b} judul={x.b === 'mobilku' ? 'Mobilku' : 'Motorku'} p={x.p} mode={mode} />)}
-          {data.orang.length > 0 && <p className="pt-2 text-[15px] font-bold">{isOwner ? 'Per orang' : 'Proyeksi kamu'}</p>}
-          {data.orang.map((x) => <Kartu key={x.o.nama} judul={shortName(x.o.nama)} sub={`${x.p.proses.unit + x.p.survey.unit} bahan`} p={x.p} mode={mode} />)}
-          {!isOwner && !data.orang.length && <p className="text-[14px] text-neutral-500">Akun ini belum tertaut ke nama di pantauan, jadi proyeksi pribadi belum bisa dihitung.</p>}
+          <Kartu judul="Cabang" sub={`${data.nAktif} bahan aktif`} p={data.cabang} mode={mode} gelap />
+          {data.brand.map((x) => <Kartu key={x.b} judul={x.b === 'mobilku' ? 'Mobilku' : 'Motorku'} p={x.p} mode={mode} />)}
+          {data.orang.length > 0 && <p className="pt-2 text-[15px] font-bold">Per orang</p>}
+          {data.orang.map((x) => <Kartu key={x.o.nama} judul={`${shortName(x.o.nama)}${x.o === me ? ' (kamu)' : ''}`} sub={`${x.p.proses.unit + x.p.survey.unit} bahan`} p={x.p} mode={mode} />)}
           {sim && (
             <section className="rounded-3xl border border-dashed border-neutral-400 p-4 dark:border-neutral-600">
               <h3 className="text-[16px] font-bold">Simulasi estimasi</h3>
@@ -282,7 +279,7 @@ export default function ProyeksiPage({ c, me, akun }: { c: Ctx; me: Orang | null
               )}
             </section>
           )}
-          {isOwner && data.tanpaPemilik > 0 &&<p className="text-[12px] text-neutral-500">{data.tanpaPemilik} bahan dibuat oleh akun yang tidak ada di pantauan dan belum diisi jenis kendaraan; ikut di total cabang, tidak masuk per brand.</p>}
+          {data.tanpaPemilik > 0 &&<p className="text-[12px] text-neutral-500">{data.tanpaPemilik} bahan dibuat oleh akun yang tidak ada di pantauan dan belum diisi jenis kendaraan; ikut di total cabang, tidak masuk per brand.</p>}
           <button onClick={salin} className="min-h-12 w-full rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white">Salin ringkasan untuk WA</button>
           {pesan && <p role="status" className="text-[13px] text-neutral-600 dark:text-neutral-400">{pesan}</p>}
         </div>
