@@ -82,6 +82,36 @@ const barisTotal = (b: Blok | undefined): Sales | null => {
   return { lalu: n(r[2]), ini: r[3] as number, target: n(r[4]), ach: n(r[5]), diffLalu: n(r[6]), diffTarget: n(r[7]) };
 };
 
+/* ---------- Kolom "bulan lalu" per orang ---------- */
+// Mulai Oktober kolom bulan lalu per PIC juga kosong / 0. Diisi dari salesLalu.orang (tabel per PIC di file
+// pantauan bulan lalu, kolom bulan itu). Angka yang sudah ada (bukan 0) tidak diubah.
+export function isiLaluOrang(data: Performa): Performa {
+  const daftar = data.salesLalu?.orang;
+  if (!daftar?.length || !data.orang?.length) return data;
+  // Nama satu kata (mis. "RIZAL") hanya dipakai kalau tepat satu orang di pantauan memuat kata itu
+  const UMUM = /^(MUHAMMAD|MUHAMAD|MOHAMMAD|MOH|MOCH|M|AHMAD|NUR|SITI|DWI|TRI|EKA|CMO|MAO|MOBILKU|MOTORKU|MOBIL|MOTOR)$/;
+  const satuKata = (d: string, o: string) => {
+    const w = key(d);
+    if (!w || w.includes(' ') || w.length < 3 || UMUM.test(w)) return false;
+    const punya = (n: string) => key(n).split(' ').includes(w);
+    return punya(o) && data.orang.filter((x) => punya(x.nama)).length === 1;
+  };
+  let ubah = false;
+  const orang = data.orang.map((o) => {
+    const x = daftar.find((d) => samaNama(d.nama, o.nama)) || daftar.find((d) => satuKata(d.nama, o.nama));
+    if (!x) return o;
+    let baru = o;
+    for (const w of ['unit', 'amount'] as const) {
+      const s = baru[w], v = x[w];
+      if (!s || !isNum(v) || (isNum(s.lalu) && s.lalu !== 0)) continue;
+      baru = { ...baru, [w]: { ...s, lalu: v, diffLalu: isNum(s.ini) ? s.ini - v : s.diffLalu } };
+      ubah = true;
+    }
+    return baru;
+  });
+  return ubah ? { ...data, orang } : data;
+}
+
 /* ---------- Kolom "bulan lalu" di tabel per brand ---------- */
 // Mulai Oktober kolom bulan lalu di tabel per brand bernilai 0. Diisi dari salesLalu (file pantauan bulan lalu,
 // dikirim Apps Script); kalau tidak ada, Mobilku/Motorku dari jumlah bulan lalu orang di tabel per PIC.
@@ -132,7 +162,7 @@ export function totalCabangPerBrand(data: Performa): Performa {
 }
 
 // Dipakai saat menyimpan dan membaca data pantauan (aman dipanggil berulang)
-export const rapikanPerforma = (data: Performa): Performa => pisahSukarela(totalCabangPerBrand(isiBulanLalu(data)));
+export const rapikanPerforma = (data: Performa): Performa => pisahSukarela(totalCabangPerBrand(isiBulanLalu(isiLaluOrang(data))));
 
 /* ---------- Rincian pencairan Motorku per nama (untuk tab Motorku & laporan) ---------- */
 export type RincianMotor = { nama: string; unit: number; amount: number; sukarela: boolean };

@@ -68,6 +68,10 @@ export function periksaData(data: Performa | null | undefined, now = new Date())
     out.push({ id: 'lalu', judul: 'Sales bulan lalu', tingkat: 'waspada',
       isi: 'Angka bulan lalu per brand tidak terbaca dari file pantauan bulan lalu.',
       saran: 'Pastikan file pantauan bulan lalu (nama sama, beda bulan) ada di Drive dan bisa dibuka akun Apps Script.' });
+  } else if (!data.salesLalu.orang?.length) {
+    out.push({ id: 'lalu-orang', judul: 'Sales bulan lalu per orang', tingkat: 'waspada',
+      isi: `Angka bulan lalu per brand terbaca dari "${data.salesLalu.sumber || 'file bulan lalu'}", tapi per orang belum.`,
+      saran: 'Perbarui file Tarikan di Apps Script dengan versi terbaru, lalu jalankan kirimPerformaLengkap sekali.' });
   }
 
   // 4. Isi sheet: sel kosong (rumus rusak), persen tidak wajar
