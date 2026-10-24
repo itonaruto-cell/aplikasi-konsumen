@@ -305,9 +305,9 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
         )}
 
         {page === 'cari' && cari ? cari(reloadKey) : page === 'aktivitas' && aktivitas ? aktivitas(reloadKey)
-          : page === 'bahan' ? <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={() => go('insentif')} />
+          : page === 'bahan' ? <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFoto={() => { setLapAwal('bahan'); go('laporan'); }} />
           : page === 'insentif' ? <Insentif c={c} me={me} akun={akun} reloadKey={reloadKey} onBahan={() => go('bahan')} />
-          : page === 'plan' ? <Plan c={c} me={me} akun={akun} tim={tim} staf={staf} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} />
+          : page === 'plan' ? <Plan c={c} me={me} akun={akun} tim={tim} staf={staf} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFotoBahan={() => { setLapAwal('bahan'); go('laporan'); }} />
           : page === 'inject' ? <InjectP3 akun={akun} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} />
           : loading && !data ? (
           <div className="space-y-3 px-4 pt-4">

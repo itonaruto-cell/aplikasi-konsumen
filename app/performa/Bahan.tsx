@@ -253,8 +253,8 @@ function BahanCard({ b, onClick }: { b: Bahan; onClick: () => void }) {
 }
 
 /* ---------- Halaman ---------- */
-export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsentif }: {
-  akun: Akun; me: Orang | null; tim?: string[]; reloadKey?: number; onInsentif: () => void;
+export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsentif, onFoto }: {
+  akun: Akun; me: Orang | null; tim?: string[]; reloadKey?: number; onInsentif: () => void; onFoto?: () => void;
 }) {
   const { list, loading, err, reload } = useBahan(reloadKey);
   const isOwner = akun.role === 'owner' || akun.role === 'spv';   // owner & SPV melihat semua bahan
@@ -295,7 +295,10 @@ export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsen
         </div>
         <p className="text-[32px] font-bold leading-none tracking-tight">{rp(total)}</p>
         {aktif.length > 0 && (
-          <p className="text-[13px] text-white/75">{perTahap('survey').length} belum disurvey · {perTahap('proses').length} sedang diproses</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[13px] text-white/75">{perTahap('survey').length} belum disurvey · {perTahap('proses').length} sedang diproses</p>
+            {onFoto && <button onClick={onFoto} className="min-h-9 shrink-0 rounded-full bg-white/15 px-3 text-[12px] font-bold">Foto laporan</button>}
+          </div>
         )}
         <button onClick={onInsentif} className="flex min-h-11 items-center justify-between gap-2 border-t border-white/15 pt-2.5 text-left text-[13px]">
           <span>Kalau semua cair, lihat simulasi insentif</span>

@@ -507,8 +507,8 @@ function PilihHari({ tgl, hariIni, onChange }: { tgl: string; hariIni: string; o
 }
 
 /* ---------- Halaman ---------- */
-export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDAL', reloadKey = 0, onInsentif }: {
-  c: Ctx | null; me: Orang | null; akun: Akun; tim?: string[]; staf?: Staf[]; cabang?: string; reloadKey?: number; onInsentif: () => void;
+export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDAL', reloadKey = 0, onInsentif, onFotoBahan }: {
+  c: Ctx | null; me: Orang | null; akun: Akun; tim?: string[]; staf?: Staf[]; cabang?: string; reloadKey?: number; onInsentif: () => void; onFotoBahan?: () => void;
 }) {
   const isOwner = akun.role === 'owner' || akun.role === 'spv';   // owner & SPV melihat plan tim
   const hariIni = todayJkt();
@@ -616,7 +616,7 @@ export default function Plan({ c, me, akun, tim = [], staf = [], cabang = 'KENDA
       {tab !== 'bahan' && <PilihHari tgl={tgl} hariIni={hariIni} onChange={setTgl} />}
 
       {tab === 'bahan' ? (
-        <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={onInsentif} />
+        <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={onInsentif} onFoto={onFotoBahan} />
       ) : err ? galat : loading && !list.length ? muat : tab === 'saya' ? (
         <>
           <section className="mx-4 mt-2 flex flex-col gap-2.5 rounded-[22px] bg-neutral-900 p-[18px] text-white dark:ring-1 dark:ring-neutral-800">
