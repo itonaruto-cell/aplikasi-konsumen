@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import type { Blok, KonsumenFull, Orang, Pengumuman, Performa, Sales } from '../../lib/performa-types';
 import { brandOf, cekData, hariKerjaSisa, isNum, namaBulan, pace, type CekData, type Ctx } from '../../lib/performa-calc';
-import { brandBaris, rincianMotor } from '../../lib/sales-brand';
+import { brandBaris, labelLalu, rincianMotor, rpLalu } from '../../lib/sales-brand';
 import { posisiKosong } from '../../lib/kesehatan-data';
 import { angka, nama, rp, type Push } from './ui';
 import {
@@ -62,7 +62,7 @@ function Legend({ items }: { items: [string, string][] }) {
 const C_GO = 'bg-[#1FA463]', C_PEN = 'bg-[#F2A33A]', C_REJ = 'bg-[#E5484D]', C_CAN = 'bg-neutral-400', C_BAN = 'bg-[#6C8CD5]';
 
 /* ---------- Kartu utama ---------- */
-function Hero({ title, amount, unit, today, b, lama }: { title: string; amount: Sales | null; unit: Sales | null; today: string; b?: BrandId; lama?: string }) {
+function Hero({ title, amount, unit, today, b, lama, lbl }: { title: string; amount: Sales | null; unit: Sales | null; today: string; b?: BrandId; lama?: string; lbl: { sama: string; penuh: string } }) {
   // lama = nama bulan data kalau yang tampil masih data bulan lalu: sisa hari & kejar per hari tidak berlaku
   const pa = lama ? null : pace(amount?.ini, amount?.target, today), pu = lama ? null : pace(unit?.ini, unit?.target, today);
   const hari = hariKerjaSisa(today);
@@ -85,12 +85,17 @@ function Hero({ title, amount, unit, today, b, lama }: { title: string; amount: 
             <Line v={s?.ach} color={isNum(s?.ach) && (s!.ach as number) >= 0.5 ? 'bg-[#F5C451]' : 'bg-[#FF8A8A]'} track="bg-white/20" />
             <span className="truncate text-xs text-white/70">{s ? (money ? `${rp(s.ini)} / ${rp(s.target).replace('Rp ', '')}` : `${angka(s.ini)} / ${angka(s.target)} unit`) : '–'}</span>
             {/* Bulan lalu: sekadar informasi, jadi dibuat redup */}
-            {s && isNum(bulanLalu(s)) && (
+            {s && isNum(bulanLalu(s)) && bulanLalu(s) !== s.laluPenuh && (
               <span className="truncate text-xs text-white/55">
-                Bln lalu {money ? rp(bulanLalu(s)) : `${angka(bulanLalu(s))} unit`}
+                {isNum(s.laluPenuh) ? `${lbl.sama}:` : 'Bln lalu'} {money ? rpLalu(bulanLalu(s)!) : `${angka(bulanLalu(s))} unit`}
                 {isNum(s.diffLalu) && s.diffLalu !== 0 && (
                   <span className={`ml-1 ${s.diffLalu < 0 ? 'text-[#FFB4B4]' : 'text-[#9FE3BF]'}`} aria-label={s.diffLalu < 0 ? 'bulan ini masih di bawah bulan lalu' : 'bulan ini sudah di atas bulan lalu'}>{s.diffLalu < 0 ? '▼' : '▲'}</span>
                 )}
+              </span>
+            )}
+            {s && isNum(s.laluPenuh) && (
+              <span className="truncate text-xs text-white/55">
+                {lbl.penuh}: {money ? rpLalu(s.laluPenuh) : `${angka(s.laluPenuh)} unit`}
               </span>
             )}
           </div>
@@ -111,6 +116,7 @@ function PicList({ c, push, filter }: { c: Ctx; push: Push; filter: 'semua' | Br
   const rows = c.sales.filter((o) => filter === 'semua' || brandOf(o) === filter)
     .sort((a, b) => (b.amount?.ach ?? -1) - (a.amount?.ach ?? -1));
   const MEDAL = ['bg-[#F5C451]', 'bg-[#BFC3C9]', 'bg-[#D9A37A]'];
+  const lblPic = labelLalu(c.data.updated);
   if (!rows.length) return <Kosong art={filter === 'mobilku' ? 'mobil' : 'motor'} title="Belum ada data sales" />;
   return (
     <ul className="border-t border-neutral-200 dark:border-neutral-800">
@@ -142,10 +148,17 @@ function PicList({ c, push, filter }: { c: Ctx; push: Push; filter: 'semua' | Br
                         <b className="text-neutral-900 dark:text-white">{pct(s?.ach)}</b>
                       </span>
                       <Line v={s?.ach} className="h-[5px]" color={pctTone(s?.ach)} />
-                      <span className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">
-                        Bln lalu {isNum(bulanLalu(s)) ? (k === 'amount' ? rp(bulanLalu(s)).replace('Rp ', '') : angka(bulanLalu(s))) : '–'}
-                        {isNum(s?.diffLalu) && <> (<DiffTxt v={s?.diffLalu} money={k === 'amount'} />)</>}
-                      </span>
+                      {(!isNum(s?.laluPenuh) || bulanLalu(s) !== s?.laluPenuh) && (
+                        <span className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">
+                          Bln lalu {isNum(s?.laluPenuh) ? `${lblPic.sama} ` : ''}{isNum(bulanLalu(s)) ? (k === 'amount' ? rp(bulanLalu(s)).replace('Rp ', '') : angka(bulanLalu(s))) : '–'}
+                          {isNum(s?.diffLalu) && <> (<DiffTxt v={s?.diffLalu} money={k === 'amount'} />)</>}
+                        </span>
+                      )}
+                      {isNum(s?.laluPenuh) && (
+                        <span className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">
+                          Bln lalu {lblPic.penuh} {k === 'amount' ? rp(s.laluPenuh).replace('Rp ', '') : angka(s.laluPenuh)}
+                        </span>
+                      )}
                     </span>
                   ))}
                 </span>
@@ -163,7 +176,7 @@ function brandTotals(c: Ctx) {
   const acc = findBlok(c.data, 'cabang', 'Sales account per brand'), amt = findBlok(c.data, 'cabang', 'Sales amount per brand');
   const fromBlok = (bl: Blok | undefined, key: string) => {
     const r = bl?.r.find((x) => brandBaris(x[0]) === key);
-    return r ? { ini: num(r[3]), target: num(r[4]), ach: num(r[5]), diffLalu: num(r[6]) } : null;
+    return r ? { ini: num(r[3]), target: num(r[4]), ach: num(r[5]), diffLalu: num(r[6]), lalu: num(r[2]), laluPenuh: num(r[8]) } : null;
   };
   const sum = (b: BrandId, w: 'unit' | 'amount') => {
     const list = c.sales.filter((o) => brandOf(o) === b).map((o) => o[w]).filter(Boolean) as Sales[];
@@ -345,7 +358,7 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
   return (
     <>
       <Hero title={`${B.label.toUpperCase()} · ${bulan.toUpperCase()}`}
-        amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} lama={lama} />
+        amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} lama={lama} lbl={labelLalu(c.data.updated)} />
       {extra}
       {b === 'motorku' && <RincianMotor c={c} />}
 
@@ -589,7 +602,7 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
             <Sapa teks={<><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {cek.bedaBulan ? `Angka ${namaBulan(c.today)} belum masuk ke aplikasi.` : sapa}</>} />
             {/* Achievement dulu: cabang, lalu Mobilku & Motorku */}
             <Hero title={`${nama(data.cabang).toUpperCase()} · ${bulan.toUpperCase()}`}
-              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} />
+              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} lbl={labelLalu(c.data.updated)} />
             <BrandCards c={c} goBrand={go} />
             <PengumumanList list={pengumuman} brand="semua" isOwner={isOwner} onChanged={onPengumuman} />
             <NotifPrompt nama={me?.nama || ''} />

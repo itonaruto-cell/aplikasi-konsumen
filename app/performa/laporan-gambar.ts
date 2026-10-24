@@ -4,7 +4,7 @@ import type { Orang, Sales } from '../../lib/performa-types';
 import type { LaporanFU } from '../../lib/prospek-types';
 import { brandOf, cekData, hariKerjaSisa, namaBulan, pace, targetMingguan, type Ctx } from '../../lib/performa-calc';
 import { posisiKosong } from '../../lib/kesehatan-data';
-import { brandBaris, rincianMotor } from '../../lib/sales-brand';
+import { brandBaris, labelLalu, rincianMotor, rpLalu } from '../../lib/sales-brand';
 import type { Proyeksi } from '../../lib/proyeksi';
 import type { DataProyeksi, Mode } from './proyeksi-data';
 
@@ -119,7 +119,7 @@ export function totalBrand(c: Ctx, b: BrandId): Total {
   const dari = (r: unknown[] | undefined): Sales | null => {
     if (!r) return null;
     const n = (v: unknown) => (isNum(v) ? v : null);
-    return { lalu: n(r[2]), ini: n(r[3]), target: n(r[4]), ach: n(r[5]), diffLalu: n(r[6]), diffTarget: null };
+    return { lalu: n(r[2]), ini: n(r[3]), target: n(r[4]), ach: n(r[5]), diffLalu: n(r[6]), diffTarget: null, laluPenuh: n(r[8]) };
   };
   const jumlah = (w: 'unit' | 'amount'): Sales | null => {
     const l = c.sales.filter((o) => brandOf(o) === b).map((o) => o[w]).filter(Boolean) as Sales[];
@@ -452,7 +452,7 @@ const WARNA_PRO = {
   terang: { capai: '#FFFFFF', proses: '#5CC8FF', survey: '#F5C451', target: '#FF7A7A', track: 'rgba(255,255,255,0.18)' },
   biasa: { capai: '#121212', proses: '#0EA5E9', survey: '#F5C451', target: '#E5484D', track: '#ECE9E3' },
 };
-const KOTAK_PRO = 490, BARIS_PRO = 132, LEGENDA_PRO = 70;
+const KOTAK_PRO = 524, BARIS_PRO = 132, LEGENDA_PRO = 70;
 type JnPro = 'amount' | 'unit';
 const fPro = (j: JnPro, v: number) => (j === 'amount' ? rp(Math.abs(v)) : `${angka(Math.abs(v))} unit`);
 const persen = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '–');
@@ -470,7 +470,7 @@ function batangPro(g: G, x: number, y: number, w: number, h: number, p: Proyeksi
   if (t > 0) { g.fillStyle = k.target; g.fillRect(x + w * fr(t) - 2, y - 6, 4, h + 12); }
 }
 
-function kolomPro(g: G, x: number, y: number, w: number, j: JnPro, p: Proyeksi, mode: Mode, terang: boolean) {
+function kolomPro(g: G, x: number, y: number, w: number, j: JnPro, p: Proyeksi, mode: Mode, terang: boolean, lbl: { sama: string; penuh: string }) {
   const pro = p[mode][j], t = p.target?.[j] ?? 0, l = p.lalu?.[j] ?? null;
   const muted = terang ? 'rgba(255,255,255,0.7)' : C.muted, ink = terang ? '#fff' : C.ink;
   const redup = terang ? 'rgba(255,255,255,0.35)' : '#B5B0A8';
@@ -490,13 +490,19 @@ function kolomPro(g: G, x: number, y: number, w: number, j: JnPro, p: Proyeksi, 
       ? [terang ? 'rgba(229,72,77,0.30)' : '#FDECEC', terang ? '#FFC2C2' : '#B42318', `Kurang ${fPro(j, kurang)}`]
       : [terang ? 'rgba(31,164,99,0.32)' : '#E4F5EC', terang ? '#9BE8BE' : '#0F7A45', `Lebih ${fPro(j, -kurang)}`];
   chip(g, teks, x, y + 326, { bg, color: warna, size: 21 });
-  tulis(g, l === null ? 'Bulan lalu –' : `${pro - l >= 0 ? '▲' : '▼'} ${fPro(j, pro - l)} vs bulan lalu (${fPro(j, l)})`, x, y + 410, { size: 21, color: muted, maks: w });
+  // Bulan lalu s.d. tanggal yang sama (sheet) dan sebulan penuh (file bulan lalu)
+  const lp = p.laluPenuh?.[j] ?? null;
+  const banding: [string, number][] = [];
+  if (l !== null && l !== lp) banding.push([lbl.sama, l]);
+  if (lp !== null) banding.push([lbl.penuh, lp]);
+  if (!banding.length) tulis(g, 'Bulan lalu –', x, y + 410, { size: 21, color: muted, maks: w });
+  banding.forEach(([label, v], i) => tulis(g, `${pro - v >= 0 ? '▲' : '▼'} ${fPro(j, pro - v)} vs ${label} (${j === 'amount' ? rpLalu(v) : fPro(j, v)})`, x, y + 410 + i * 32, { size: 21, color: muted, maks: w }));
 }
 
-function duaPro(g: G, x: number, y: number, w: number, p: Proyeksi, mode: Mode, terang: boolean) {
+function duaPro(g: G, x: number, y: number, w: number, p: Proyeksi, mode: Mode, terang: boolean, lbl: { sama: string; penuh: string }) {
   const kol = (w - 48) / 2;
-  kolomPro(g, x, y, kol, 'amount', p, mode, terang);
-  kolomPro(g, x + kol + 48, y, kol, 'unit', p, mode, terang);
+  kolomPro(g, x, y, kol, 'amount', p, mode, terang, lbl);
+  kolomPro(g, x + kol + 48, y, kol, 'unit', p, mode, terang, lbl);
 }
 
 const orangPro = (d: DataProyeksi, b: 'mobilku' | 'motorku') => d.orang.filter((x) => x.brand === b);
@@ -509,6 +515,7 @@ export function gambarProyeksi(g: G, c: Ctx, d: DataProyeksi, mode: Mode, logo: 
   const inf = info(c);
   g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
   const cara = mode === 'maksimal' ? 'Tercapai + diproses + bahan survey' : 'Tercapai + sedang diproses';
+  const lbl = labelLalu(c.data.updated);
   kepala(g, logo, 'PROYEKSI SALES', inf.judulBulan, `${cara} · ${inf.sub}`, inf.tingkat);
 
   // Cabang
@@ -516,7 +523,7 @@ export function gambarProyeksi(g: G, c: Ctx, d: DataProyeksi, mode: Mode, logo: 
   kotak(g, P, y, W - P * 2, KOTAK_PRO, 32, C.card, true);
   tulis(g, 'CABANG', P + 40, y + 52, { size: 22, weight: 700, color: C.muted, spasi: 3 });
   tulis(g, `${d.nAktif} bahan aktif`, W - P - 40, y + 52, { size: 22, color: C.muted, align: 'right' });
-  duaPro(g, P + 40, y + 56, W - P * 2 - 80, d.cabang, mode, false);
+  duaPro(g, P + 40, y + 56, W - P * 2 - 80, d.cabang, mode, false, lbl);
   y += KOTAK_PRO + 40;
 
   // Mobilku & Motorku + per orang
@@ -526,7 +533,7 @@ export function gambarProyeksi(g: G, c: Ctx, d: DataProyeksi, mode: Mode, logo: 
     kotak(g, P, y, W - P * 2, h, 32, C.brand[b], true);
     tulis(g, LABEL[b], P + 40, y + 56, { size: 24, weight: 700, color: 'rgba(255,255,255,0.8)', spasi: 3 });
     tulis(g, `${list.length} orang`, W - P - 40, y + 56, { size: 22, color: 'rgba(255,255,255,0.6)', align: 'right' });
-    duaPro(g, P + 40, y + 60, W - P * 2 - 80, p, mode, true);
+    duaPro(g, P + 40, y + 60, W - P * 2 - 80, p, mode, true, lbl);
     let yy = y + KOTAK_PRO;
     list.forEach(({ o, p: po }) => {
       const pro = po[mode], t = po.target;

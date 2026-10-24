@@ -5,6 +5,8 @@
 export type Sales = {
   lalu: number | null; ini: number | null; target: number | null;
   ach: number | null; diffLalu: number | null; diffTarget: number | null;
+  // lalu = bulan lalu sampai tanggal yang sama (kolom sheet); laluPenuh = bulan lalu sebulan penuh (file bulan lalu)
+  laluPenuh?: number | null;
 };
 
 export type OrderIn = {
