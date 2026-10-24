@@ -122,8 +122,8 @@ export function isiPosisiKosong(data: Performa): Performa {
 }
 
 /* ---------- Kolom "bulan lalu" per orang ---------- */
-// Mulai Oktober kolom bulan lalu per PIC juga kosong / 0. Diisi dari salesLalu.orang (tabel per PIC di file
-// pantauan bulan lalu, kolom bulan itu). Angka yang sudah ada (bukan 0) tidak diubah.
+// Diisi dari salesLalu.orang (tabel per PIC di file pantauan bulan lalu, kolom bulan itu = sebulan penuh).
+// Kalau file bulan lalu tidak ada nama orangnya, angka sheet tetap dipakai.
 export function isiLaluOrang(data: Performa): Performa {
   const daftar = data.salesLalu?.orang;
   if (!daftar?.length || !data.orang?.length) return data;
@@ -142,7 +142,9 @@ export function isiLaluOrang(data: Performa): Performa {
     let baru = o;
     for (const w of ['unit', 'amount'] as const) {
       const s = baru[w], v = x[w];
-      if (!s || !isNum(v) || (isNum(s.lalu) && s.lalu !== 0)) continue;
+      // Angka file bulan lalu = pencapaian sebulan penuh; dipakai walaupun kolom sheet sudah berisi
+      // (kolom sheet bisa berisi bulan lalu sampai tanggal yang sama, bukan sebulan penuh)
+      if (!s || !isNum(v) || s.lalu === v) continue;
       baru = { ...baru, [w]: { ...s, lalu: v, diffLalu: isNum(s.ini) ? s.ini - v : s.diffLalu } };
       ubah = true;
     }
@@ -152,14 +154,23 @@ export function isiLaluOrang(data: Performa): Performa {
 }
 
 /* ---------- Kolom "bulan lalu" di tabel per brand ---------- */
-// Mulai Oktober kolom bulan lalu di tabel per brand bernilai 0. Diisi dari salesLalu (file pantauan bulan lalu,
-// dikirim Apps Script); kalau tidak ada, Mobilku/Motorku dari jumlah bulan lalu orang di tabel per PIC.
+// Kolom bulan lalu di tabel per brand diambil dari salesLalu (file pantauan bulan lalu = sebulan penuh, dikirim
+// Apps Script), walaupun kolom sheet sudah berisi angka. Kalau file tidak ada: angka sheet; kalau sheet 0/kosong,
+// Mobilku/Motorku dari jumlah bulan lalu orang di tabel per PIC.
 export function isiBulanLalu(data: Performa): Performa {
   if (!data.blok?.length) return data;
   const dariOrang = (b: 'mobilku' | 'motorku', w: 'unit' | 'amount') => {
     const n = (data.orang || []).filter((o) => String(o.brand ?? '').toLowerCase().includes(b === 'mobilku' ? 'mobil' : 'motor'))
       .reduce((s, o) => s + (isNum(o[w]?.lalu) ? (o[w]!.lalu as number) : 0), 0);
     return n > 0 ? n : null;
+  };
+  // Angka dari file pantauan bulan lalu (pencapaian sebulan penuh)
+  const dariFile = (k: 'mobilku' | 'motorku' | 'total', w: 'unit' | 'amount'): number | null => {
+    const v = data.salesLalu?.[k]?.[w];
+    if (isNum(v) && v > 0) return v;
+    if (k !== 'total') return null;
+    const a = dariFile('mobilku', w), b = dariFile('motorku', w);
+    return a !== null && b !== null ? a + b : null;
   };
   const sumber = (k: 'mobilku' | 'motorku' | 'total', w: 'unit' | 'amount'): number | null => {
     const v = data.salesLalu?.[k]?.[w];
@@ -175,7 +186,18 @@ export function isiBulanLalu(data: Performa): Performa {
     if (!w) return bl;
     return { ...bl, r: bl.r.map((r) => {
       const k = brandBaris(r[0]) || (/^(grand\s*)?total$/i.test(String(r[0] ?? '').trim()) ? 'total' : '');
-      if (!k || (isNum(r[2]) && r[2] !== 0)) return r;
+      if (!k) return r;
+      // File bulan lalu (sebulan penuh) diutamakan; kolom sheet bisa berisi bulan lalu sampai tanggal yang sama
+      const f = dariFile(k, w);
+      if (f !== null) {
+        if (r[2] === f) return r;
+        ubah = true;
+        const x = [...r];
+        x[2] = f;
+        if (isNum(r[3])) x[6] = (r[3] as number) - f;
+        return x;
+      }
+      if (isNum(r[2]) && r[2] !== 0) return r;
       const v = sumber(k, w);
       if (v === null) {
         // Angka 0 untuk satu brand penuh hampir pasti kolom yang belum terisi: tampilkan kosong, bukan 0
