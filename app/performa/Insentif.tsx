@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import { brandOf, keyOf, todayJkt, type Ctx } from '../../lib/performa-calc';
-import { brandBaris } from '../../lib/sales-brand';
+import { brandBaris, samaOrang } from '../../lib/sales-brand';
 import {
   JENIS_LABEL, KOSONG, butuhUntuk, denganNbq, hitung, kurangAktivitas, langkahNaik, plafon, tambah, targetBawaan,
   type Jenis, type Masukan, type Skema,
@@ -185,7 +185,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
   }, [reloadKey, coba]);
 
   /* ---------- Siapa & skema mana ---------- */
-  // Owner (SPV) dihitung lewat "Cabang", jadi tidak muncul sebagai perorangan
+  // Owner (SPV) dihitung lewat pilihan SPV (skema BMH, angka Mobilku), jadi tidak muncul sebagai perorangan
   const orang = useMemo(() => (c?.data.orang || []).filter((o) => brandOf(o) !== 'motorku' && !(isOwner && o === me)), [c, isOwner, me]);
   const [siapa, setSiapa] = useState<string>(isOwner ? CABANG : me?.nama || '');
   useEffect(() => { if (!isOwner) setSiapa(me?.nama || ''); }, [isOwner, me?.nama]);
@@ -236,14 +236,17 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
   const bahan = useBahan(reloadKey);
   const punya = useMemo(() => {
     const aktif = bahan.list.filter((b) => b.status === 'aktif');
-    // Bahan dihitung untuk PIC survey-nya (bahan lama tanpa PIC: untuk pembuatnya)
-    const list = siapa === CABANG || !siapa ? aktif : aktif.filter((b) => keyOf(b.pic || b.nama) === keyOf(siapa));
+    // SPV (BMH Mobilku): hanya bahan mobil. Label Mobil/Motor di bahan dipakai dulu; kalau kosong, ikut brand PIC / pembuatnya
+    const brandStaf = (n: string) => { const x = (c?.sales || []).find((o) => n && samaOrang(o.nama, n)); return x ? brandOf(x) : ''; };
+    const mobil = (b: (typeof aktif)[number]) => b.kendaraan === 'mobil' || (!b.kendaraan && (brandStaf(b.pic) || brandStaf(b.nama)) === 'mobilku');
+    // Perorangan: bahan dihitung untuk PIC survey-nya (bahan lama tanpa PIC: untuk pembuatnya)
+    const list = siapa === CABANG ? aktif.filter(mobil) : !siapa ? aktif : aktif.filter((b) => keyOf(b.pic || b.nama) === keyOf(siapa));
     const agg = list.filter((b) => b.agg);   // dari MA aggregator
     return {
       n: list.length, amt: list.reduce((s, b) => s + b.nominal, 0),
       nAgg: agg.length, amtAgg: agg.reduce((s, b) => s + b.nominal, 0),
     };
-  }, [bahan.list, siapa]);
+  }, [bahan.list, siapa, c]);
 
   /* ---------- Simulasi ---------- */
   // unit / jt: tambahan biasa (MAO: sales retail). unitAgg / jtAgg: tambahan dari MA aggregator (hanya MAO)
@@ -314,7 +317,8 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
 
   const { m, aktual, kini, naik, butuh } = hasil;
   const selisih = kini.total - aktual.total;
-  const label = siapa === CABANG ? 'CABANG' : siapa ? shortName(siapa).toUpperCase() : 'KAMU';
+  const namaSpv = isOwner && me ? shortName(me.nama) : '';
+  const label = siapa === CABANG ? `SPV${namaSpv ? ` ${namaSpv.toUpperCase()}` : ''}` : siapa ? shortName(siapa).toUpperCase() : 'KAMU';
   const namaBulan = new Date(bulan + '-01T00:00:00Z').toLocaleDateString('id-ID', { month: 'long', timeZone: 'UTC' }).toUpperCase();
   const mao = jenis === 'mao' || jenis === 'maoBaru';
   const kMao = jenis === 'mao' ? skema.mao : jenis === 'maoBaru' ? skema.maoBaru : undefined;
@@ -348,7 +352,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
     <div className="pb-8">
       {isOwner && (
         <div className="flex gap-2 overflow-x-auto px-4 pt-3 [scrollbar-width:none]">
-          {[{ key: CABANG, label: 'Cabang' }, ...orang.map((x) => ({ key: x.nama, label: shortName(x.nama) }))].map((p) => (
+          {[{ key: CABANG, label: namaSpv ? `${namaSpv} (SPV)` : 'SPV' }, ...orang.map((x) => ({ key: x.nama, label: shortName(x.nama) }))].map((p) => (
             <button key={p.key} onClick={() => setSiapa(p.key)} aria-pressed={siapa === p.key}
               className={`min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold ${siapa === p.key
                 ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
@@ -499,7 +503,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold">Ikutkan bahan survey</p>
             <p className="truncate text-[13px] text-neutral-500">
-              {bahan.loading ? 'Memuat…' : punya.n ? `${punya.n} bahan · ${rp(punya.amt)}${mao && punya.nAgg ? ` · ${punya.nAgg} aggregator` : ''}` : 'Belum ada bahan aktif'}
+              {bahan.loading ? 'Memuat…' : punya.n ? `${punya.n} bahan${siapa === CABANG ? ' mobil' : ''} · ${rp(punya.amt)}${mao && punya.nAgg ? ` · ${punya.nAgg} aggregator` : ''}` : siapa === CABANG ? 'Belum ada bahan mobil aktif' : 'Belum ada bahan aktif'}
             </p>
           </div>
           {punya.n > 0 ? (
