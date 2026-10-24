@@ -89,7 +89,7 @@ const barisTotal = (b: Blok | undefined): Sales | null => {
   const r = b?.r.find((x) => /^(grand\s*)?total$/i.test(String(x[0] ?? '').trim()));
   if (!r || !isNum(r[3])) return null;
   const n = (v: unknown) => (isNum(v) ? v : null);
-  return { lalu: n(r[2]), ini: r[3] as number, target: n(r[4]), ach: n(r[5]), diffLalu: n(r[6]), diffTarget: n(r[7]) };
+  return { lalu: n(r[2]), ini: r[3] as number, target: n(r[4]), ach: n(r[5]), diffLalu: n(r[6]), diffTarget: n(r[7]), laluPenuh: n(r[8]) };
 };
 
 /* ---------- Posisi kosong yang sudah ada orangnya ---------- */
@@ -122,8 +122,8 @@ export function isiPosisiKosong(data: Performa): Performa {
 }
 
 /* ---------- Kolom "bulan lalu" per orang ---------- */
-// Mulai Oktober kolom bulan lalu per PIC juga kosong / 0. Diisi dari salesLalu.orang (tabel per PIC di file
-// pantauan bulan lalu, kolom bulan itu). Angka yang sudah ada (bukan 0) tidak diubah.
+// salesLalu.orang (tabel per PIC di file pantauan bulan lalu, kolom bulan itu = sebulan penuh) → laluPenuh.
+// Kolom sheet (bulan lalu s.d. tanggal yang sama) tetap di lalu; kalau kosong / 0, diisi angka sebulan penuh.
 export function isiLaluOrang(data: Performa): Performa {
   const daftar = data.salesLalu?.orang;
   if (!daftar?.length || !data.orang?.length) return data;
@@ -142,8 +142,12 @@ export function isiLaluOrang(data: Performa): Performa {
     let baru = o;
     for (const w of ['unit', 'amount'] as const) {
       const s = baru[w], v = x[w];
-      if (!s || !isNum(v) || (isNum(s.lalu) && s.lalu !== 0)) continue;
-      baru = { ...baru, [w]: { ...s, lalu: v, diffLalu: isNum(s.ini) ? s.ini - v : s.diffLalu } };
+      if (!s || !isNum(v)) continue;
+      const kosong = !isNum(s.lalu) || s.lalu === 0;
+      if (!kosong && s.laluPenuh === v) continue;
+      baru = { ...baru, [w]: kosong
+        ? { ...s, lalu: v, laluPenuh: v, diffLalu: isNum(s.ini) ? s.ini - v : s.diffLalu }
+        : { ...s, laluPenuh: v } };
       ubah = true;
     }
     return baru;
@@ -161,6 +165,14 @@ export function isiBulanLalu(data: Performa): Performa {
       .reduce((s, o) => s + (isNum(o[w]?.lalu) ? (o[w]!.lalu as number) : 0), 0);
     return n > 0 ? n : null;
   };
+  // Angka sebulan penuh dari file pantauan bulan lalu (disimpan di kolom ke-9 baris tabel = laluPenuh)
+  const dariFile = (k: 'mobilku' | 'motorku' | 'total', w: 'unit' | 'amount'): number | null => {
+    const v = data.salesLalu?.[k]?.[w];
+    if (isNum(v) && v > 0) return v;
+    if (k !== 'total') return null;
+    const a = dariFile('mobilku', w), b = dariFile('motorku', w);
+    return a !== null && b !== null ? a + b : null;
+  };
   const sumber = (k: 'mobilku' | 'motorku' | 'total', w: 'unit' | 'amount'): number | null => {
     const v = data.salesLalu?.[k]?.[w];
     if (isNum(v) && v > 0) return v;
@@ -173,9 +185,13 @@ export function isiBulanLalu(data: Performa): Performa {
     const t = String(bl.t).toLowerCase();
     const w = bl.s === 'cabang' && t === 'sales account per brand' ? 'unit' : bl.s === 'cabang' && t === 'sales amount per brand' ? 'amount' : null;
     if (!w) return bl;
-    return { ...bl, r: bl.r.map((r) => {
-      const k = brandBaris(r[0]) || (/^(grand\s*)?total$/i.test(String(r[0] ?? '').trim()) ? 'total' : '');
-      if (!k || (isNum(r[2]) && r[2] !== 0)) return r;
+    return { ...bl, r: bl.r.map((r0) => {
+      const k = brandBaris(r0[0]) || (/^(grand\s*)?total$/i.test(String(r0[0] ?? '').trim()) ? 'total' : '');
+      if (!k) return r0;
+      const f = dariFile(k, w);
+      let r = r0;
+      if (f !== null && r[8] !== f) { r = [...r]; while (r.length < 8) r.push(null); r[8] = f; ubah = true; }
+      if (isNum(r[2]) && r[2] !== 0) return r;
       const v = sumber(k, w);
       if (v === null) {
         // Angka 0 untuk satu brand penuh hampir pasti kolom yang belum terisi: tampilkan kosong, bukan 0
@@ -212,4 +228,22 @@ export function rincianMotor(data: Performa): RincianMotor[] {
     const o = (data.orang || []).find((p) => samaNama(x.nama, p.nama));
     return { nama: x.nama, unit: x.motorku.unit, amount: x.motorku.amount, sukarela: !!o?.sukarela && brandMobil(o.brand) };
   }).sort((a, b) => b.amount - a.amount);
+}
+
+/* ---------- Keterangan bulan lalu ---------- */
+// "s.d. 23 Sep" (bulan lalu sampai tanggal yang sama dengan data) dan "Sep penuh" (sebulan penuh)
+const BLN_PENDEK = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+export function labelLalu(updated?: string | null): { sama: string; penuh: string } {
+  const d = updated && /^\d{4}-\d{2}-\d{2}/.test(updated) ? new Date(updated.slice(0, 10) + 'T00:00:00Z') : null;
+  if (!d || isNaN(d.getTime())) return { sama: 's.d. tgl sama', penuh: 'sebulan penuh' };
+  const pm = (d.getUTCMonth() + 11) % 12, py = d.getUTCMonth() === 0 ? d.getUTCFullYear() - 1 : d.getUTCFullYear();
+  const akhir = new Date(Date.UTC(py, pm + 1, 0)).getUTCDate();
+  return { sama: `s.d. ${Math.min(d.getUTCDate(), akhir)} ${BLN_PENDEK[pm]}`, penuh: `${BLN_PENDEK[pm]} penuh` };
+}
+
+// Rupiah bulan lalu: miliaran 3 desimal (Rp 1,154 M) supaya cocok dengan angka di file; di bawahnya ringkas (Rp 993,3 jt)
+export function rpLalu(v: number): string {
+  const a = Math.abs(v), t = v < 0 ? '−' : '';
+  if (a >= 1e9) return `${t}Rp ${(a / 1e9).toFixed(3).replace(/\.?0+$/, '').replace('.', ',')} M`;
+  return `${t}Rp ${new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 }).format(a)}`;
 }

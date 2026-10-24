@@ -7,6 +7,7 @@ import { hariKerjaSisa, type Ctx } from '../../lib/performa-calc';
 import type { Angka, Proyeksi } from '../../lib/proyeksi';
 import { ambilBahanProyeksi, hitungSemua, plus, type Mode } from './proyeksi-data';
 import { peranDari } from '../../lib/posisi-isi';
+import { labelLalu, rpLalu } from '../../lib/sales-brand';
 import { shortName } from './parts';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
@@ -25,10 +26,20 @@ function Baris({ label, isi, kelas = '' }: { label: string; isi: string; kelas?:
   );
 }
 
-function Kolom({ jenis, p, mode }: { jenis: 'amount' | 'unit'; p: Proyeksi; mode: Mode }) {
+type Lbl = { sama: string; penuh: string };
+// Perbandingan bulan lalu: s.d. tanggal yang sama (sheet) dan sebulan penuh (file bulan lalu), tanpa dobel kalau sama
+export function barisLalu(pro: number, lalu: number | null, penuh: number | null, lbl: Lbl): { label: string; nilai: number; selisih: number }[] {
+  const out: { label: string; nilai: number; selisih: number }[] = [];
+  if (lalu !== null && lalu !== penuh) out.push({ label: lbl.sama, nilai: lalu, selisih: pro - lalu });
+  if (penuh !== null) out.push({ label: lbl.penuh, nilai: penuh, selisih: pro - penuh });
+  return out;
+}
+
+function Kolom({ jenis, p, mode, lbl }: { jenis: 'amount' | 'unit'; p: Proyeksi; mode: Mode; lbl: Lbl }) {
   const f = jenis === 'amount' ? rp : unit;
   const pro = p[mode][jenis], t = p.target?.[jenis] ?? 0, l = p.lalu?.[jenis] ?? null;
-  const kurang = t - pro, sel = l === null ? null : pro - l;
+  const kurang = t - pro;
+  const lalu = barisLalu(pro, l, p.laluPenuh?.[jenis] ?? null, lbl);
   const lebar = Math.max(t, p.maksimal[jenis], 1);
   const w = (v: number) => `${Math.max(0, Math.min(100, (v / lebar) * 100))}%`;
   return (
@@ -50,14 +61,16 @@ function Kolom({ jenis, p, mode }: { jenis: 'amount' | 'unit'; p: Proyeksi; mode
       <p className={`mt-2 rounded-lg px-2 py-1 text-[13px] font-bold ${!t ? 'bg-neutral-100 dark:bg-neutral-900' : kurang > 0 ? 'bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300' : 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300'}`}>
         {!t ? 'Target –' : kurang > 0 ? `Kurang ${f(kurang)}` : `Lebih ${f(-kurang)} dari target`}
       </p>
-      <p className="mt-1 text-[12px] text-neutral-600 dark:text-neutral-400">
-        {sel === null ? 'Bulan lalu –' : `${sel >= 0 ? '▲' : '▼'} ${f(sel)} dibanding bulan lalu (${f(l!)})`}
-      </p>
+      {lalu.length ? lalu.map((x) => (
+        <p key={x.label} className="mt-1 text-[12px] leading-snug text-neutral-600 dark:text-neutral-400">
+          {x.selisih >= 0 ? '▲' : '▼'} {f(x.selisih)} vs bulan lalu <b className="font-semibold">{x.label}</b> ({jenis === 'amount' ? rpLalu(x.nilai) : f(x.nilai)})
+        </p>
+      )) : <p className="mt-1 text-[12px] text-neutral-600 dark:text-neutral-400">Bulan lalu –</p>}
     </div>
   );
 }
 
-function Kartu({ judul, sub, p, mode, gelap = false }: { judul: string; sub?: string; p: Proyeksi; mode: Mode; gelap?: boolean }) {
+function Kartu({ judul, sub, p, mode, lbl, gelap = false }: { judul: string; sub?: string; p: Proyeksi; mode: Mode; lbl: Lbl; gelap?: boolean }) {
   return (
     <section className={`rounded-3xl border p-4 ${gelap ? 'border-neutral-900 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-950' : 'border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950'}`}>
       <div className="flex items-baseline justify-between gap-2">
@@ -65,8 +78,8 @@ function Kartu({ judul, sub, p, mode, gelap = false }: { judul: string; sub?: st
         {sub && <span className="text-[12px] text-neutral-500">{sub}</span>}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-4">
-        <Kolom jenis="amount" p={p} mode={mode} />
-        <Kolom jenis="unit" p={p} mode={mode} />
+        <Kolom jenis="amount" p={p} mode={mode} lbl={lbl} />
+        <Kolom jenis="unit" p={p} mode={mode} lbl={lbl} />
       </div>
     </section>
   );
@@ -110,7 +123,7 @@ function SimBlok({ judul, sub, now, after, target }: { judul: string; sub: strin
 const NOL: Angka = { amount: 0, unit: 0 };
 const BRAND_SIM = [{ b: 'mobilku', label: 'Mobilku' }, { b: 'motorku', label: 'Motorku' }] as const;
 
-function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: string, today: string): string {
+function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: string, today: string, lbl: Lbl): string {
   const tgl = new Date(today + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   const satu = (a: Angka) => `${rp(a.amount)} (${nf.format(a.unit)} unit)`;
   const out = [`*PROYEKSI SALES ${cabang.toUpperCase()} · ${tgl}*`, `_${mode === 'maksimal' ? 'Tercapai + sedang diproses + bahan survey' : 'Tercapai + sedang diproses'} · sisa ${hariKerjaSisa(today)} hari kerja_`];
@@ -121,7 +134,10 @@ function teksWa(baris: { judul: string; p: Proyeksi }[], mode: Mode, cabang: str
     if (mode === 'maksimal') out.push(`+ Bahan survey ${satu(p.survey)}`);
     out.push(`= Proyeksi ${satu(pro)}${t?.amount ? ` · ${pct(pro.amount, t.amount)}` : ''}`);
     if (t) out.push(`Target ${satu(t)} → ${t.amount - pro.amount > 0 ? `kurang ${rp(t.amount - pro.amount)}` : `lebih ${rp(pro.amount - t.amount)}`}, ${t.unit - pro.unit > 0 ? `kurang ${unit(t.unit - pro.unit)}` : `lebih ${unit(pro.unit - t.unit)}`}`);
-    if (l) out.push(`Bulan lalu ${satu(l)} → ${pro.amount >= l.amount ? '+' : '−'}${rp(pro.amount - l.amount)}, ${pro.unit >= l.unit ? '+' : '−'}${unit(pro.unit - l.unit)}`);
+    const lp = p.laluPenuh;
+    const banding = (label: string, x: Angka) => out.push(`Bulan lalu ${label} ${rpLalu(x.amount)} (${nf.format(x.unit)} unit) → ${pro.amount >= x.amount ? '+' : '−'}${rp(pro.amount - x.amount)}, ${pro.unit >= x.unit ? '+' : '−'}${unit(pro.unit - x.unit)}`);
+    if (l && !(lp && lp.amount === l.amount && lp.unit === l.unit)) banding(lbl.sama, l);
+    if (lp) banding(lbl.penuh, lp);
   }
   return out.join('\n');
 }
@@ -144,6 +160,7 @@ export default function ProyeksiPage({ c, me, onFoto }: { c: Ctx; me: Orang | nu
   }, []);
 
   const data = useMemo(() => (bahan ? hitungSemua(c, bahan, mode) : null), [bahan, c, mode]);
+  const lbl = labelLalu(c.data.updated);
 
   // Simulasi: tiap PIC di brand-nya sendiri, tambahan semua PIC dijumlah ke brand lalu ke cabang
   const satu = (a: Angka) => `${rp(a.amount)} (${nf.format(a.unit)} unit)`;
@@ -169,7 +186,7 @@ export default function ProyeksiPage({ c, me, onFoto }: { c: Ctx; me: Orang | nu
   const salin = async () => {
     if (!data) return;
     const baris = [{ judul: 'CABANG', p: data.cabang }, ...data.brand.map((x) => ({ judul: x.b === 'mobilku' ? 'MOBILKU' : 'MOTORKU', p: x.p })), ...data.orang.map((x) => ({ judul: shortName(x.o.nama).toUpperCase(), p: x.p }))];
-    let t = teksWa(baris, mode, c.data.cabang || 'Kendal', c.today);
+    let t = teksWa(baris, mode, c.data.cabang || 'Kendal', c.today, lbl);
     if (sim && adaTamb) {
       const hasil = (x: { after: Angka; target: Angka | null }) =>
         `${satu(x.after)}${x.target?.amount ? ` · ${pct(x.after.amount, x.target.amount)} dari target` : ''}`;
@@ -207,10 +224,10 @@ export default function ProyeksiPage({ c, me, onFoto }: { c: Ctx; me: Orang | nu
       {err && <p className="mt-3 text-[13px] text-red-700 dark:text-red-300">{err}</p>}
       {!data ? <p className="mt-4 text-[13px] text-neutral-500">Memuat bahan…</p> : (
         <div className="mt-4 space-y-3">
-          <Kartu judul="Cabang" sub={`${data.nAktif} bahan aktif`} p={data.cabang} mode={mode} gelap />
-          {data.brand.map((x) => <Kartu key={x.b} judul={x.b === 'mobilku' ? 'Mobilku' : 'Motorku'} p={x.p} mode={mode} />)}
+          <Kartu judul="Cabang" sub={`${data.nAktif} bahan aktif`} p={data.cabang} mode={mode} lbl={lbl} gelap />
+          {data.brand.map((x) => <Kartu key={x.b} judul={x.b === 'mobilku' ? 'Mobilku' : 'Motorku'} p={x.p} mode={mode} lbl={lbl} />)}
           {data.orang.length > 0 && <p className="pt-2 text-[15px] font-bold">Per orang</p>}
-          {data.orang.map((x) => <Kartu key={x.o.nama} judul={`${shortName(x.o.nama)}${x.o === me ? ' (kamu)' : ''}`} sub={`${x.p.proses.unit + x.p.survey.unit} bahan`} p={x.p} mode={mode} />)}
+          {data.orang.map((x) => <Kartu key={x.o.nama} judul={`${shortName(x.o.nama)}${x.o === me ? ' (kamu)' : ''}`} sub={`${x.p.proses.unit + x.p.survey.unit} bahan`} p={x.p} mode={mode} lbl={lbl} />)}
           {sim && (
             <section className="rounded-3xl border border-dashed border-neutral-400 p-4 dark:border-neutral-600">
               <h3 className="text-[16px] font-bold">Simulasi estimasi</h3>
