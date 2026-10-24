@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { Ctx } from '../../lib/performa-calc';
-import { gambarAchievement, gambarAktivitas, gambarFollowUp, gambarProyeksi, pakaiFont, tinggiAchievement, tinggiAktivitas, tinggiFollowUp, tinggiProyeksi } from './laporan-gambar';
+import { gambarAchievement, gambarAktivitas, gambarBahan, gambarFollowUp, gambarProyeksi, pakaiFont, tinggiAchievement, tinggiAktivitas, tinggiBahan, tinggiFollowUp, tinggiProyeksi } from './laporan-gambar';
+import type { Bahan } from '../../lib/bahan-types';
 import { ambilBahanProyeksi, hitungSemua, type DataProyeksi, type Mode } from './proyeksi-data';
 import type { LaporanFU } from '../../lib/prospek-types';
 import { todayJkt } from '../../lib/performa-calc';
@@ -13,8 +14,8 @@ import { PillSeg } from './parts';
 // Gambar dibuat di HP dari data pantauan terakhir, bisa diunduh (PNG), dibagikan, atau dibuka layar penuh
 // supaya gampang di-screenshot.
 
-export type Jenis = 'achievement' | 'aktivitas' | 'fu' | 'proyeksi';
-const JUDUL: Record<Jenis, string> = { achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO', fu: 'Follow Up Prospek', proyeksi: 'Proyeksi Sales' };
+export type Jenis = 'achievement' | 'aktivitas' | 'fu' | 'proyeksi' | 'bahan';
+const JUDUL: Record<Jenis, string> = { achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO', fu: 'Follow Up Prospek', proyeksi: 'Proyeksi Sales', bahan: 'Bahan Survey & Proses' };
 const kemarin = (tgl: string) => { const d = new Date(tgl + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
 
 const muatGambar = (src: string) => new Promise<HTMLImageElement | null>((ok) => {
@@ -40,13 +41,21 @@ async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string, 
   }
   let pro: DataProyeksi | null = null;
   if (jenis === 'proyeksi') pro = hitungSemua(c, await ambilBahanProyeksi(), mode);
+  let bahan: Bahan[] | null = null;
+  if (jenis === 'bahan') {
+    const r = await fetch('/api/bahan', { cache: 'no-store' });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !Array.isArray(j?.list)) throw new Error(j?.error || 'Bahan survey gagal dimuat.');
+    bahan = j.list as Bahan[];
+  }
   const cv = document.createElement('canvas');
   cv.width = 1080;
-  cv.height = fu ? tinggiFollowUp(fu) : pro ? tinggiProyeksi(pro) : jenis === 'achievement' ? tinggiAchievement(c, spv) : tinggiAktivitas(c, spv);
+  cv.height = fu ? tinggiFollowUp(fu) : pro ? tinggiProyeksi(pro) : bahan ? tinggiBahan(bahan) : jenis === 'achievement' ? tinggiAchievement(c, spv) : tinggiAktivitas(c, spv);
   const g = cv.getContext('2d');
   if (!g) return null;
   if (fu) gambarFollowUp(g, fu, String(c.data.cabang || 'Kendal'), logo, (c.data.orang || []).filter((o) => o !== spv && (o.visit || o.maintain)).length);
   else if (pro) gambarProyeksi(g, c, pro, mode, logo);
+  else if (bahan) gambarBahan(g, c, bahan, logo);
   else if (jenis === 'achievement') gambarAchievement(g, c, spv, logo);
   else gambarAktivitas(g, c, spv, logo);
   return new Promise((ok) => cv.toBlob((b) => ok(b), 'image/png'));
@@ -90,7 +99,7 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
       if (urlLama.current) URL.revokeObjectURL(urlLama.current);
       urlLama.current = url;
       setGambar({ jenis, tgl, mode, url, blob });
-    }).catch((e) => { if (alive) setErr((e as Error)?.message && (jenis === 'fu' || jenis === 'proyeksi') ? (e as Error).message : 'Gambar tidak bisa dibuat. Coba muat ulang.'); });
+    }).catch((e) => { if (alive) setErr((e as Error)?.message && (jenis === 'fu' || jenis === 'proyeksi' || jenis === 'bahan') ? (e as Error).message : 'Gambar tidak bisa dibuat. Coba muat ulang.'); });
     return () => { alive = false; };
   }, [jenis, c, spv, tgl, mode]);
   useEffect(() => () => { if (urlLama.current) URL.revokeObjectURL(urlLama.current); }, []);
@@ -112,7 +121,9 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
   return (
     <div className="pb-8">
       <div className="px-4 pt-3">
-        <PillSeg value={jenis} full rapat onChange={(v) => setJenis(v)} options={[['achievement', 'Achievement'], ['aktivitas', 'Aktivitas'], ['fu', 'Follow up'], ['proyeksi', 'Proyeksi']]} />
+        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
+          <PillSeg value={jenis} rapat onChange={(v) => setJenis(v)} options={[['achievement', 'Achievement'], ['aktivitas', 'Aktivitas'], ['fu', 'Follow up'], ['proyeksi', 'Proyeksi'], ['bahan', 'Bahan']]} />
+        </div>
         {jenis === 'proyeksi' && (
           <div className="mt-2">
             <PillSeg value={mode} onChange={(v) => setMode(v)} options={[['maksimal', '+ Diproses + Bahan survey'], ['realistis', '+ Diproses saja']]} />
@@ -128,7 +139,9 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
       <p className="px-4 pt-3 text-[13px] leading-snug text-neutral-500">
         {jenis === 'achievement'
           ? 'Cabang, Mobilku, dan Motorku beserta pencapaian tiap PIC. Dibuat dari data pantauan terakhir.'
-          : jenis === 'proyeksi'
+          : jenis === 'bahan'
+            ? 'Bahan yang sedang diproses dan yang belum disurvey, per PIC survey: konsumen, nominal, kendaraan, sumber, dan step terakhir.'
+            : jenis === 'proyeksi'
             ? 'Proyeksi = tercapai + bahan yang masih berjalan (menu Bahan survey), dibanding target dan bulan lalu, per brand dan per orang.'
             : jenis === 'aktivitas'
             ? 'Visit konsumen prioritas P1–P3, maintain MA, rekrut, dan regist per orang. Dibuat dari data pantauan terakhir.'

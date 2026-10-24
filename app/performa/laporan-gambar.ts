@@ -7,6 +7,7 @@ import { posisiKosong } from '../../lib/kesehatan-data';
 import { brandBaris, labelLalu, rincianMotor, rpLalu } from '../../lib/sales-brand';
 import type { Proyeksi } from '../../lib/proyeksi';
 import type { DataProyeksi, Mode } from './proyeksi-data';
+import { tahapOf, type Bahan } from '../../lib/bahan-types';
 
 type G = CanvasRenderingContext2D;
 type BrandId = 'mobilku' | 'motorku';
@@ -564,6 +565,98 @@ export function gambarProyeksi(g: G, c: Ctx, d: DataProyeksi, mode: Mode, logo: 
     x += 46 + g.measureText(lbl).width + 36;
   });
   y += LEGENDA_PRO;
+  kaki(g, y - 20, inf.dibuat);
+  return H;
+}
+
+/* ---------- Laporan bahan (sedang diproses & belum disurvey) ---------- */
+const BHN = { judul: 110, ringkas: 300, pic: 76, item: 112, jarak: 36 };
+const WARNA_TAHAP = { proses: { tegas: '#0EA5E9', lembut: '#E0F2FE', teks: '#075985' }, survey: { tegas: '#E0A800', lembut: '#FFF4D6', teks: '#7A5200' } };
+const sumberBahan = (b: Bahan) => (b.sumber === 'Lainnya' ? b.ket || 'Lainnya' : b.sumber === 'Agent' ? [b.agg ? 'Aggregator' : 'Agent', b.ket].filter(Boolean).join(' · ') : b.sumber);
+const kunciNama = (s: string) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
+type GrupPic = { nama: string; items: Bahan[] };
+function grupPic(list: Bahan[]): GrupPic[] {
+  const m = new Map<string, GrupPic>();
+  for (const b of list) {
+    const k = kunciNama(b.pic);
+    const g = m.get(k) || { nama: b.pic ? pendek(b.pic) : '', items: [] };
+    g.items.push(b); m.set(k, g);
+  }
+  return [...m.values()].sort((a, b) => Number(!a.nama) - Number(!b.nama) || a.nama.localeCompare(b.nama))
+    .map((g) => ({ ...g, items: [...g.items].sort((a, b) => b.nominal - a.nominal || a.konsumen.localeCompare(b.konsumen)) }));
+}
+const tahapBahan = (list: Bahan[]) => {
+  const aktif = list.filter((b) => b.status === 'aktif');
+  return ([['proses', 'SEDANG DIPROSES'], ['survey', 'BELUM DISURVEY']] as const)
+    .map(([t, judul]) => ({ t, judul, isi: aktif.filter((b) => tahapOf(b) === t) }));
+};
+export function tinggiBahan(list: Bahan[]) {
+  let h = 250 + BHN.ringkas + 40;
+  for (const s of tahapBahan(list)) {
+    h += BHN.judul + (s.isi.length ? grupPic(s.isi).reduce((x, g) => x + BHN.pic + g.items.length * BHN.item, 0) : 70) + BHN.jarak;
+  }
+  return h + KAKI;
+}
+export function gambarBahan(g: G, c: Ctx, list: Bahan[], logo: HTMLImageElement | null) {
+  const H = tinggiBahan(list);
+  const inf = info(c);
+  const tahap = tahapBahan(list);
+  const jumlah = (x: Bahan[]) => x.reduce((s, b) => s + (b.nominal || 0), 0);
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  const tgl = new Date(c.today + 'T00:00:00Z').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const semua = tahap.flatMap((x) => x.isi);
+  kepala(g, logo, 'BAHAN SURVEY & PROSES', `${String(c.data.cabang || 'Kendal').toLowerCase().replace(/\b\w/g, (h) => h.toUpperCase())} · ${tgl}`,
+    `${semua.length} bahan aktif · ${rp(jumlah(semua))} · sisa ${hariKerjaSisa(c.today)} hari kerja`);
+
+  // Ringkasan dua tahap
+  let y = 250;
+  kotak(g, P, y, W - P * 2, BHN.ringkas, 32, C.card, true);
+  const kol = (W - P * 2 - 80 - 40) / 2;
+  tahap.forEach((s, i) => {
+    const x = P + 40 + i * (kol + 40), w = WARNA_TAHAP[s.t];
+    kotak(g, x, y + 36, 10, 52, 5, w.tegas);
+    tulis(g, s.judul, x + 24, y + 70, { size: 22, weight: 700, color: C.muted, spasi: 2 });
+    tulis(g, rp(jumlah(s.isi)), x, y + 150, { size: 60, weight: 700, color: C.ink, maks: kol });
+    tulis(g, `${s.isi.length} bahan`, x, y + 194, { size: 26, weight: 600, color: C.ink });
+    const mob = s.isi.filter((b) => b.kendaraan === 'mobil'), mot = s.isi.filter((b) => b.kendaraan === 'motor');
+    const lain = s.isi.length - mob.length - mot.length;
+    if (mob.length + mot.length) {
+      tulis(g, `Mobil ${mob.length} · ${rp(jumlah(mob))}`, x, y + 236, { size: 22, color: C.muted, maks: kol });
+      tulis(g, `Motor ${mot.length} · ${rp(jumlah(mot))}${lain ? ` · ${lain} belum diisi` : ''}`, x, y + 268, { size: 22, color: C.muted, maks: kol });
+    } else if (s.isi.length) tulis(g, 'Jenis kendaraan belum diisi', x, y + 236, { size: 22, color: C.muted, maks: kol });
+  });
+  y += BHN.ringkas + 40;
+
+  // Daftar per tahap, dikelompokkan per PIC survey
+  for (const s of tahap) {
+    const w = WARNA_TAHAP[s.t];
+    const grup = grupPic(s.isi);
+    const h = BHN.judul + (s.isi.length ? grup.reduce((x, gp) => x + BHN.pic + gp.items.length * BHN.item, 0) : 70);
+    kotak(g, P, y, W - P * 2, h, 32, C.card, true);
+    kotak(g, P, y, W - P * 2, 86, 32, w.lembut);
+    g.fillStyle = w.lembut; g.fillRect(P, y + 50, W - P * 2, 36);
+    tulis(g, s.judul, P + 40, y + 56, { size: 26, weight: 700, color: w.teks, spasi: 2 });
+    tulis(g, `${s.isi.length} bahan · ${rp(jumlah(s.isi))}`, W - P - 40, y + 56, { size: 24, weight: 700, color: w.teks, align: 'right' });
+    let yy = y + BHN.judul;
+    if (!s.isi.length) tulis(g, s.t === 'proses' ? 'Belum ada bahan yang sedang diproses.' : 'Tidak ada yang menunggu survey.', P + 40, yy + 30, { size: 24, color: C.muted });
+    for (const gp of grup) {
+      tulis(g, `PIC ${gp.nama || 'belum diisi'}`, P + 40, yy + 40, { size: 26, weight: 700, color: gp.nama ? C.ink : C.bad });
+      tulis(g, `${gp.items.length} bahan · ${rp(jumlah(gp.items))}`, W - P - 40, yy + 40, { size: 22, color: C.muted, align: 'right' });
+      g.fillStyle = C.line; g.fillRect(P + 40, yy + 60, W - P * 2 - 80, 2);
+      yy += BHN.pic;
+      for (const b of gp.items) {
+        kotak(g, P + 40, yy + 16, 6, BHN.item - 32, 3, w.tegas);
+        tulis(g, b.konsumen || '–', P + 64, yy + 42, { size: 28, weight: 700, color: C.ink, maks: W - P * 2 - 330 });
+        tulis(g, b.nominal ? rp(b.nominal) : 'nominal –', W - P - 40, yy + 42, { size: 28, weight: 700, color: C.ink, align: 'right' });
+        let x = P + 64;
+        if (b.kendaraan) x += chip(g, b.kendaraan === 'mobil' ? 'Mobil' : 'Motor', x, yy + 54, { bg: b.kendaraan === 'mobil' ? C.brandSoft.mobilku : C.brandSoft.motorku, color: b.kendaraan === 'mobil' ? C.brand.mobilku : C.brand.motorku, size: 16 }) + 10;
+        x += chip(g, sumberBahan(b), x, yy + 54, { bg: C.track, color: C.muted, size: 16 }) + 14;
+        tulis(g, b.step ? `Step: ${b.step}` : 'Step belum diisi', x, yy + 78, { size: 20, color: C.muted, maks: W - P - 40 - x });
+        yy += BHN.item;
+      }
+    }
+    y += h + BHN.jarak;
+  }
   kaki(g, y - 20, inf.dibuat);
   return H;
 }
