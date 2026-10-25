@@ -1,15 +1,15 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  C6, DOK_CEK, KAT_FOTO, bacaSlik, bandingBaru, namaFileBanding, rapikanBanding, saranReasonMh, saranSwot, tglPanjang,
-  type Banding, type Cek, type FotoBanding, type KatFoto,
+  C6, DOK_CEK, KAT_FOTO, bacaSlik, bandingBaru, ltv, namaFileBanding, otrTaksasi, rapikanBanding, rataMarket, saranReasonMh, saranSwot, teksWaBanding, tglPanjang,
+  type Banding, type Cek, type FotoBanding, type KatFoto, type WaBanding,
 } from '../../lib/banding-types';
 import { GAYA_BANDING, buatFormBanding, susunBanding, type FotoFile } from '../../lib/banding-xlsx';
 import PreviewLembar, { ukuranLembar } from './PreviewLembar';
 import { useOverlay } from '../overlay';
 import { TIPE_XLSX } from '../../lib/xlsx-mini';
 import { todayJkt } from '../../lib/performa-calc';
-import { FIELD } from './form';
+import { AngkaInput, FIELD } from './form';
 import { Ico } from './parts';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
@@ -194,6 +194,8 @@ function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; 
   const terakhir = useRef(b);
   terakhir.current = b;
   const set = <K extends keyof Banding>(k: K, v: Banding[K]) => { setB((x) => ({ ...x, [k]: v })); ubah.current++; setSimpan(''); };
+  const setWa = <K extends keyof WaBanding>(k: K, v: WaBanding[K]) => { setB((x) => ({ ...x, wa: { ...x.wa, [k]: v } })); ubah.current++; setSimpan(''); };
+  const [pesanWa, setPesanWa] = useState('');
 
   const kirim = useCallback(async (data: Banding): Promise<Banding | null> => {
     if (!data.nama.trim() && !data.appNo.trim()) return null;
@@ -339,6 +341,98 @@ function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; 
       <Bagian judul="SLIK / Pefindo (opsional)" sub={nSlik ? `${nSlik} fasilitas · jadi lembar kedua` : 'Tempel tabel dari Excel/Sheets'} buka={false}>
         <p className="text-[12px] text-neutral-500">Blok tabel SLIK di Excel atau Google Sheets (termasuk baris judul kolom), salin, lalu tempel di sini.</p>
         <Teks label="Tabel SLIK" value={b.slik} onChange={(v) => set('slik', v)} rows={5} placeholder="NO	BANK / PEMBERI FASILITAS KREDIT	…" />
+      </Bagian>
+
+      {/* ---------- Format banding ke BU Head lewat WhatsApp ---------- */}
+      <p className="mt-6 px-1 text-[13px] font-bold uppercase tracking-wide text-neutral-500">Banding ke BU Head (WA)</p>
+      <Bagian judul="Info & struktur pembiayaan" sub={[b.wa.merk, b.wa.otr ? `OTR ${b.wa.otr.toLocaleString('id-ID')}` : '', ltv(b.wa) && `LTV ${ltv(b.wa)}`].filter(Boolean).join(' · ') || 'Link, tipe konsumen, unit, OTR, PH, LTV, harga market'} buka={false}>
+        <Isian label="Link banding (Google Sheets)"><input value={b.wa.link} onChange={(e) => setWa('link', e.target.value.trim())} placeholder="https://docs.google.com/…" className={`${FIELD} min-h-11`} inputMode="url" /></Isian>
+        <div className="mt-3">
+          <span className="block text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">Tipe konsumen</span>
+          <div className="mt-1 flex gap-2" role="group" aria-label="Tipe konsumen">{(['NC', 'RO'] as const).map((x) => (
+            <button key={x} onClick={() => setWa('tipe', b.wa.tipe === x ? '' : x)} aria-pressed={b.wa.tipe === x}
+              className={`min-h-11 flex-1 rounded-xl text-[14px] font-bold ${b.wa.tipe === x ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-neutral-100 dark:bg-neutral-800'}`}>{x === 'NC' ? 'NC (baru)' : 'RO'}</button>
+          ))}</div>
+        </div>
+        <Isian label="Sumber order"><input value={b.wa.sumber} onChange={(e) => setWa('sumber', e.target.value)} placeholder="mis. Channel Mediator (Star Md)" className={`${FIELD} min-h-11`} /></Isian>
+        <Isian label="Merk & type"><input value={b.wa.merk} onChange={(e) => setWa('merk', e.target.value)} placeholder="Daihatsu Ayla X 1.0 AT" className={`${FIELD} min-h-11`} /></Isian>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div><Isian label="Tahun"><input value={b.wa.tahun} onChange={(e) => setWa('tahun', e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" className={`${FIELD} min-h-11`} /></Isian></div>
+          <div><Isian label="BPKB a/n"><input value={b.wa.bpkb} onChange={(e) => setWa('bpkb', e.target.value)} className={`${FIELD} min-h-11`} /></Isian></div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div><Isian label="OTR"><AngkaInput label="OTR" value={b.wa.otr} onChange={(v) => setWa('otr', v)} className="min-h-11" /></Isian></div>
+          <div><Isian label="Harga rekondisi"><AngkaInput label="Harga rekondisi" value={b.wa.rekondisi} onChange={(v) => setWa('rekondisi', v)} className="min-h-11" /></Isian></div>
+        </div>
+        <p className="mt-1 text-[13px] text-neutral-500">OTR taksasi: <b className="text-neutral-900 dark:text-white">{otrTaksasi(b.wa) ? otrTaksasi(b.wa).toLocaleString('id-ID') : '–'}</b> (OTR − rekondisi)</p>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div><Isian label="PH (pokok hutang)"><AngkaInput label="PH" value={b.wa.ph} onChange={(v) => setWa('ph', v)} className="min-h-11" /></Isian></div>
+          <div><Isian label="Pencairan"><AngkaInput label="Pencairan" value={b.wa.pencairan} onChange={(v) => setWa('pencairan', v)} className="min-h-11" /></Isian></div>
+          <div><Isian label="Angsuran"><AngkaInput label="Angsuran" value={b.wa.angsuran} onChange={(v) => setWa('angsuran', v)} className="min-h-11" /></Isian></div>
+          <div><Isian label="Tenor (bulan)"><AngkaInput label="Tenor" value={b.wa.tenor} onChange={(v) => setWa('tenor', Math.min(240, v))} className="min-h-11" /></Isian></div>
+        </div>
+        <p className="mt-1 text-[13px] text-neutral-500">LTV: <b className="text-neutral-900 dark:text-white">{ltv(b.wa) || '–'}</b> (PH ÷ OTR taksasi)</p>
+        <div className="mt-3">
+          <span className="block text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">Harga market (jika NDS)</span>
+          {b.wa.market.map((m, i) => (
+            <div key={i} className="mt-1.5 flex gap-2">
+              <input value={m.sumber} onChange={(e) => setWa('market', b.wa.market.map((x, j) => (j === i ? { ...x, sumber: e.target.value } : x)))} placeholder="OLX" aria-label={`Sumber harga market ${i + 1}`} className={`${FIELD.replace('w-full', '')} min-h-11 w-28 shrink-0`} />
+              <AngkaInput label={`Harga market ${i + 1}`} value={m.harga} onChange={(v) => setWa('market', b.wa.market.map((x, j) => (j === i ? { ...x, harga: v } : x)))} lebar="min-w-0 flex-1" className="min-h-11" />
+              <button onClick={() => setWa('market', b.wa.market.filter((_, j) => j !== i))} aria-label={`Hapus harga market ${i + 1}`} className="min-h-11 w-10 shrink-0 rounded-xl text-red-700 dark:text-red-400">✕</button>
+            </div>
+          ))}
+          <button onClick={() => setWa('market', [...b.wa.market, { sumber: b.wa.market.length ? '' : 'OLX', harga: 0 }])} className="mt-2 min-h-10 rounded-xl bg-neutral-100 px-3 text-[13px] font-semibold dark:bg-neutral-800">+ Tambah harga market</button>
+          {rataMarket(b.wa) > 0 && <p className="mt-1 text-[13px] text-neutral-500">Rata-rata: <b className="text-neutral-900 dark:text-white">{rataMarket(b.wa).toLocaleString('id-ID')}</b></p>}
+        </div>
+      </Bagian>
+
+      <Bagian judul="Reason & analisa cabang" sub={b.wa.reason ? `${b.wa.reason.split('\n').filter(Boolean).length} reason` : 'Reason singkat, klarifikasi, pekerjaan, rumah, penghasilan, DSR'} buka={false}>
+        <Isian label="Reason credit reject (singkat, satu per baris)" hint="Kosong = pakai reason reject Credit di atas.">
+          <Teks label="Reason credit reject singkat" value={b.wa.reason} onChange={(v) => setWa('reason', v)} rows={4} placeholder="Foto usaha tidak representatif&#10;Terdapat tunggakan di pinjaman lain" />
+        </Isian>
+        <Isian label="Klarifikasi reason credit reject"><Teks label="Klarifikasi reason" value={b.wa.klarifikasi} onChange={(v) => setWa('klarifikasi', v)} rows={7} placeholder="CAC TIDAK REKOMENDASI :&#10;1. … --&#10;Penjelasan…" /></Isian>
+        <Isian label="1. Pekerjaan / usaha konsumen"><Teks label="Pekerjaan atau usaha konsumen" value={b.wa.pekerjaan} onChange={(v) => setWa('pekerjaan', v)} rows={3} /></Isian>
+        <Isian label="2. Status rumah"><Teks label="Status rumah" value={b.wa.rumah} onChange={(v) => setWa('rumah', v)} rows={2} /></Isian>
+        <Isian label="3. Penghasilan"><Teks label="Penghasilan" value={b.wa.penghasilan} onChange={(v) => setWa('penghasilan', v)} rows={3} /></Isian>
+        <Isian label="4. DSR & perhitungan singkat"><Teks label="DSR dan perhitungan singkat" value={b.wa.dsr} onChange={(v) => setWa('dsr', v)} rows={4} /></Isian>
+      </Bagian>
+
+      <Bagian judul="Rek koran & SLIK" sub={`${b.wa.mutasi.filter((m) => m.bulan || m.kredit).length} bulan mutasi · ${b.wa.kol.filter((k) => k.trim()).length} kol terisi`} buka={false}>
+        <span className="block text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">5. Analisa rek koran</span>
+        {b.wa.mutasi.map((m, i) => {
+          const ubahM = (k: keyof typeof m, v: string | number) => setWa('mutasi', b.wa.mutasi.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+          return (
+            <div key={i} className="mt-2 rounded-xl bg-neutral-50 p-2.5 dark:bg-neutral-900">
+              <div className="flex items-center gap-2">
+                <input value={m.bulan} onChange={(e) => ubahM('bulan', e.target.value)} placeholder="Bulan, mis. Juli" aria-label={`Bulan mutasi ${i + 1}`} className={`${FIELD.replace('w-full', '')} min-h-10 min-w-0 flex-1`} />
+                <button onClick={() => setWa('mutasi', b.wa.mutasi.filter((_, j) => j !== i))} aria-label={`Hapus mutasi ${i + 1}`} className="min-h-10 w-10 rounded-xl text-red-700 dark:text-red-400">✕</button>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {([['awal', 'Saldo awal'], ['kredit', 'Credit'], ['debit', 'Debit'], ['akhir', 'Saldo akhir']] as const).map(([k, l]) => (
+                  <label key={k} className="block"><span className="text-[12px] text-neutral-500">{l}</span>
+                    <AngkaInput label={`${l} ${m.bulan || i + 1}`} value={m[k]} onChange={(v) => ubahM(k, v)} className="min-h-10" /></label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        <button onClick={() => setWa('mutasi', [...b.wa.mutasi, { bulan: '', awal: 0, kredit: 0, debit: 0, akhir: 0 }])} className="mt-2 min-h-10 rounded-xl bg-neutral-100 px-3 text-[13px] font-semibold dark:bg-neutral-800">+ Tambah bulan</button>
+        <span className="mt-4 block text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">6. Hasil cek SLIK</span>
+        <span className="block text-[12px] text-neutral-500">Satu fasilitas per baris: Fincoy / plafon awal / baki debet. Kosong = &quot;kosong&quot;.</span>
+        {b.wa.kol.map((k, i) => (
+          <Isian key={i} label={`Kol ${i + 1}`}><Teks label={`SLIK Kol ${i + 1}`} value={k} onChange={(v) => setWa('kol', b.wa.kol.map((x, j) => (j === i ? v : x)))} rows={i < 2 ? 3 : 2} placeholder="BTPN Syariah / 10.000.000 / 7.708.090" /></Isian>
+        ))}
+      </Bagian>
+
+      <Bagian judul="Teks WA ke BU Head" sub="Siap salin / kirim · Analisa 6C 1EP ikut otomatis" buka={false}>
+        <pre aria-label="Teks WA BU Head" className="max-h-96 overflow-auto whitespace-pre-wrap rounded-xl bg-neutral-100 p-3 text-[12.5px] leading-snug dark:bg-neutral-900">{teksWaBanding(b)}</pre>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button onClick={async () => { try { await navigator.clipboard.writeText(teksWaBanding(b)); setPesanWa('Teks tersalin. Tempel di WhatsApp BU Head.'); } catch { setPesanWa('Tidak bisa menyalin otomatis. Tekan lama teks di atas untuk menyalin.'); } }}
+            className="min-h-12 rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white">Salin teks WA</button>
+          <a href={`https://wa.me/?text=${encodeURIComponent(teksWaBanding(b))}`} target="_blank" rel="noreferrer"
+            className="flex min-h-12 items-center justify-center rounded-2xl border border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">Kirim ke WA</a>
+        </div>
+        {pesanWa && <p role="status" className="mt-2 text-[13px] text-neutral-600 dark:text-neutral-400">{pesanWa}</p>}
       </Bagian>
 
       <Bagian judul="Lembar persetujuan" sub={[b.pembuat, b.bh, b.buh].filter(Boolean).join(' · ')} buka={false}>
