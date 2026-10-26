@@ -299,14 +299,6 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
         {isianData.map((d) => kolomIsian(d))}
       </Bagian>
 
-      <Bagian judul="Teks surat (tetap dari SK)" sub="Kalimat baku, terisi otomatis dari isian" buka={false}>
-        <div className="space-y-2 text-[13px] leading-relaxed text-neutral-700 dark:text-neutral-300">
-          {susunSurat(s).map((x, i) => x.t === 'p' ? <p key={i} className={x.tebal ? 'font-bold' : ''}>{x.teks.replace(/\*\*/g, '')}</p>
-            : x.t === 'bagian' ? <p key={i} className="font-bold text-neutral-900 dark:text-white">{x.no} {x.judul}</p>
-            : x.t === 'daftar' ? <ol key={i} className="list-decimal pl-5">{x.isi.map((y, j) => <li key={j}>{y}</li>)}</ol> : null)}
-        </div>
-      </Bagian>
-
       <Bagian judul="Lampiran" sub={`${nFoto} foto`}>
         {s.lampiran.map((l, li) => {
           const tetap = li < t.lampiran.length;
