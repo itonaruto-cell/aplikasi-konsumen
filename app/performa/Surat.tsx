@@ -240,7 +240,7 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
       <Bagian judul="Kop surat" sub={`${perihalSurat(s)} · ${nomorSurat(s)}`}>
         <Isian label="Judul"><input value={s.judul} onChange={(e) => set('judul', e.target.value.toUpperCase())} className={input} /></Isian>
         <Isian label="Perihal" hint={s.perihalOtomatis ? 'Otomatis mengikuti nama konsumen. Ketik untuk mengubah sendiri.' : undefined}>
-          <input value={perihalSurat(s)} onChange={(e) => ganti((x) => ({ ...x, perihal: e.target.value.toUpperCase(), perihalOtomatis: false }))} aria-label="Perihal surat" className={input} />
+          <input value={perihalSurat(s)} onChange={(e) => ganti((x) => ({ ...x, perihal: e.target.value, perihalOtomatis: false }))} aria-label="Perihal surat" className={input} />
         </Isian>
         {!s.perihalOtomatis && <button onClick={() => ganti((x) => ({ ...x, perihal: '', perihalOtomatis: true }))} className="mt-1 min-h-10 text-[13px] font-semibold underline">Ikuti nama konsumen lagi</button>}
         <div className="mt-3 grid grid-cols-[5.5rem_1fr] gap-3">
