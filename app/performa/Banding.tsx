@@ -17,7 +17,7 @@ type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' |
 
 /* ---------- Foto: diperkecil di HP (dokumen perlu terbaca, jadi mulai 1400 px) ---------- */
 const MAKS_B64 = 175_000;
-async function kecilkan(file: File): Promise<{ mime: string; data: string }> {
+export async function kecilkan(file: File): Promise<{ mime: string; data: string }> {
   const url = URL.createObjectURL(file);
   try {
     let img: CanvasImageSource, w = 0, h = 0;
@@ -54,7 +54,7 @@ async function ambilFoto(f: FotoBanding): Promise<FotoFile | null> {
 
 /* ---------- Bagian kecil ---------- */
 const TA = `${FIELD} py-2.5 leading-relaxed`;
-function Bagian({ judul, sub, children, buka = true }: { judul: string; sub?: string; children: ReactNode; buka?: boolean }) {
+export function Bagian({ judul, sub, children, buka = true }: { judul: string; sub?: string; children: ReactNode; buka?: boolean }) {
   const [open, setOpen] = useState(buka);
   return (
     <section className="mt-3 rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
@@ -69,7 +69,7 @@ function Bagian({ judul, sub, children, buka = true }: { judul: string; sub?: st
     </section>
   );
 }
-function Isian({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Isian({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="mt-3 block first:mt-0">
       <span className="block text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">{label}</span>
@@ -78,7 +78,7 @@ function Isian({ label, children, hint }: { label: string; children: ReactNode; 
     </label>
   );
 }
-function Teks({ value, onChange, rows = 4, placeholder, label }: { value: string; onChange: (v: string) => void; rows?: number; placeholder?: string; label: string }) {
+export function Teks({ value, onChange, rows = 4, placeholder, label }: { value: string; onChange: (v: string) => void; rows?: number; placeholder?: string; label: string }) {
   return <textarea aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} rows={rows} placeholder={placeholder} className={TA} />;
 }
 function TigaPilih({ value, onChange, label }: { value: Cek; onChange: (v: Cek) => void; label: string }) {
