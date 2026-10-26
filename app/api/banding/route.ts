@@ -1,3 +1,4 @@
+import { idSah } from '../../../lib/banding-draf';
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { sesiProspek } from '../../../lib/prospek-store';
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { x, gagal } = await akses(req);
   if (gagal) return gagal;
-  const body = await req.json().catch(() => null) as { banding?: unknown } | null;
+  const body = await req.json().catch(() => null) as { banding?: unknown; baru?: boolean } | null;
   if (!body?.banding) return NextResponse.json({ error: 'Data form kosong.' }, { status: 400 });
   const b = rapikanBanding(body.banding);
   if (!b.nama.trim() && !b.appNo.trim()) return NextResponse.json({ error: 'Isi minimal nama konsumen atau App No.' }, { status: 400 });
@@ -36,6 +37,13 @@ export async function POST(req: NextRequest) {
   try {
     if (b.id) {
       const lama = (await semuaBanding()).find((y) => y.id === b.id);
+      if (!lama && body.baru && idSah(b.id)) {
+        // Form baru dengan id dari HP: simpan ulang (mis. setelah tab dimatikan Android) tidak membuat dobel
+        const baru = { ...b, dibuat: now, diubah: now, oleh };
+        if (JSON.stringify(baru).length > MAKS_JSON) return NextResponse.json({ error: 'Isi form terlalu panjang.' }, { status: 413 });
+        await tambahBanding(baru);
+        return NextResponse.json({ ok: true, banding: baru });
+      }
       if (!lama) return NextResponse.json({ error: 'Form tidak ditemukan (mungkin sudah dihapus).' }, { status: 404 });
       const baru = { ...b, dibuat: lama.dibuat, oleh: lama.oleh, diubah: now };
       if (JSON.stringify(baru).length > MAKS_JSON) return NextResponse.json({ error: 'Isi form terlalu panjang.' }, { status: 413 });
