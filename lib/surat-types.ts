@@ -25,13 +25,14 @@ type Kolom = 'peran' | 'nama' | 'jabatan' | 'status' | 'tanggal' | 'ket';
 type FormatTgl = 'panjang' | 'pendek' | 'angka';
 export type Approval = {
   kolom: [Kolom, string][]; lebar: number[]; judul?: string; fill?: string; tengah?: boolean;
+  kepalaGabung?: number; kepalaTebal?: boolean; peranTebal?: boolean;
   pembuat: { peran?: string; nama: string; jabatan: string };
   penyetuju: { peran?: string; nama: string; jabatan: string }[];
   status: string[]; tgl: FormatTgl; tglHariIni?: boolean; ketAwal?: string;
 };
 type Teks = string; // boleh berisi {kunci} / {kunci:format} dan **tebal**
 export type Blok =
-  | { t: 'kop'; baris: Teks[]; garis?: boolean; tebal?: boolean[]; besar?: boolean }
+  | { t: 'kop'; baris: Teks[]; garis?: boolean | boolean[]; tebal?: boolean[]; besar?: boolean; kiri?: boolean }
   | { t: 'info'; baris: [string, Teks][]; tebalLabel?: boolean }
   | { t: 'approval' }
   | { t: 'p'; teks: Teks; tebal?: boolean; kiri?: number; spasi?: number; tengah?: boolean }
@@ -42,7 +43,7 @@ export type Blok =
   | { t: 'lampiran'; judul?: string; nomor: boolean };
 export type TemplateSurat = {
   id: string; nama: string; ringkas: string; sk?: string;
-  font: string; fontKop?: string; sz: number; szTabel: number; kertas: 'letter' | 'a4';
+  font: string; fontKop?: string; sz: number; szTabel: number; kertas: 'letter' | 'a4'; margin?: number;
   judul: string; perihal: Teks; perihalDiKop?: boolean;
   approval: Approval; isian: IsianData[]; blok: Blok[]; lampiran: string[];
 };
@@ -113,51 +114,51 @@ export const TEMPLATE_SURAT: TemplateSurat[] = [
     lampiran: ['Hasil Pengecekan SAKPOLE kondisi saat ini'],
   },
   {
-    id: 'ubah-pot', nama: 'BA Ubah POT',
-    ringkas: 'Ganti POT karena aplikasi tidak memenuhi kriteria POT awal (mis. RO Super)',
-    font: 'Arial', sz: 20, szTabel: 20, kertas: 'letter',
-    judul: 'BERITA ACARA UBAH POT',
-    perihal: 'BA Ubah POT atas nama {nama} - KENDAL',
+    id: 'ubah-pot', nama: 'BA Copcan Ubah POT',
+    ringkas: 'Copcan ubah POT MobilKu, mis. rekomendasi turun paket',
+    font: 'Arial', sz: 20, szTabel: 20, kertas: 'a4', margin: 1440,
+    judul: 'BERITA ACARA COPCAN UBAH POT',
+    perihal: 'BA COPCAN UBAH POT MOBILKU {nama:upper}',
     approval: {
-      kolom: [['peran', ''], ['nama', 'Nama'], ['jabatan', 'Jabatan'], ['status', 'Approval'], ['tanggal', 'Tanggal']],
-      lebar: [1900, 2100, 1700, 1700, 1960], tengah: true,
-      pembuat: { peran: 'Dibuat Oleh', nama: NIKO, jabatan: 'BMH MobilKu' },
-      penyetuju: [{ peran: 'Diketahui Oleh', nama: 'M. Aji Susilo', jabatan: 'Branch Head' }],
-      status: ['Submitted', ''], tgl: 'pendek', tglHariIni: true,
+      kolom: [['peran', 'Approved By'], ['nama', ''], ['jabatan', 'Jabatan'], ['status', 'Approval Status'], ['tanggal', 'Tanggal Approve'], ['ket', 'Keterangan']],
+      lebar: [1300, 1450, 1550, 1300, 1450, 2000], kepalaGabung: 2, kepalaTebal: true, peranTebal: true,
+      pembuat: { peran: 'Dibuat Oleh', nama: NIKO, jabatan: 'Branch Marketing Head MobilKu' },
+      penyetuju: [{ peran: 'Disetujui Oleh', nama: 'M. Aji Susilo', jabatan: 'Branch Head' }],
+      status: ['Approved', 'Submitted', ''], tgl: 'panjang', tglHariIni: true,
+      ketAwal: 'Konsumen turun angsuran & pencairan dan rekomendasi turun paket',
     },
     isian: [
-      { k: 'nama', label: 'Nama Konsumen' },
+      { k: 'nama', label: 'Nama Konsumen', besar: true },
       { k: 'app', label: 'NO App', ph: 'APP0631…', besar: true },
       { k: 'alamat', label: 'Alamat KTP', jenis: 'panjang', besar: true },
       { k: 'nik', label: 'NIK KTP', ph: '3324…' },
-      { k: 'unit', label: 'Unit yang diajukan', besar: true, ph: 'TOYOTA AVANZA …' },
+      { k: 'unit', label: 'Unit yang diajukan', besar: true, ph: 'DAIHATSU AYLA …' },
       { k: 'otr', label: 'OTR', jenis: 'uang' },
-      { k: 'tenor', label: 'Tenor', ph: '35' },
+      { k: 'tenor', label: 'Tenor', ph: '48' },
       { k: 'angsuran', label: 'Angsuran', jenis: 'uang' },
-      { k: 'stnk', label: 'Nama STNK/BPKB' },
-      { k: 'tglAnalisa', label: 'Tanggal dianalisa CAC', jenis: 'tanggal', grup: 'isi' },
-      { k: 'potAwal', label: 'POT awal (sesuai aplikasi)', besar: true, grup: 'isi', awal: 'OFFERING FASILITAS DANA RO SUPER MOBILKU SPESIAL' },
-      { k: 'potSingkat', label: 'POT awal (sebutan singkat)', grup: 'isi', awal: 'RO Super MobilKu' },
-      { k: 'alasan', label: 'Alasan tidak memenuhi kriteria', jenis: 'panjang', grup: 'isi', awal: 'usia konsumen tidak sesuai ketentuan' },
-      { k: 'potBaru', label: 'POT baru', besar: true, grup: 'isi', awal: 'OFFERING FASILITAS DANA MOBILKU SPESIAL' },
+      { k: 'stnk', label: 'Nama STNK/BPKB', besar: true },
+      { k: 'alasan', label: 'Alasan copcan', jenis: 'panjang', grup: 'isi', awal: 'aplikasi rekomendasi turun paket' },
+      { k: 'potAwal', label: 'POT awal', besar: true, grup: 'isi', awal: 'OFFERING SALES AND LEASEBACK INVESTASI MOBILKU EXTRA 2' },
+      { k: 'potBaru', label: 'POT baru', besar: true, grup: 'isi', awal: 'OFFERING SALES AND LEASEBACK INVESTASI MOBILKU SPESIAL' },
     ],
     blok: [
-      { t: 'kop', baris: ['{judul}', '{nomor}'], besar: true },
+      { t: 'kop', baris: ['{judul}', '{nomor}'], garis: [true, false], kiri: true },
       { t: 'info', baris: [
-        ['Kpd Yth', 'Bpk. M. Aji Susilo - Branch Head'],
-        ['Dari', `${NIKO} - BMH MobilKu`],
-        ['Lampiran', '{lampiranDaftar}'],
-        ['Hari/Tanggal', '{tanggal:hariPendek}'],
+        ['Dari', `${NIKO} - BMH MobilKu All`],
+        ['Tanggal', '{tanggal:panjang}'],
+        ['Perihal', '**BERITA ACARA COPCAN UBAH POT MOBILKU**'],
       ] },
       { t: 'approval' },
-      { t: 'p', teks: 'Dengan ini menjelaskan bahwa adanya pengajuan pembiayaan MobilKu dengan data sebagai berikut :', spasi: 160 },
-      { t: 'data', keys: ['nama', 'app', 'alamat', 'nik', 'unit', 'otr', 'tenor', 'angsuran', 'stnk'], tebal: true, lebarLabel: 2300 },
-      { t: 'p', teks: 'Pada tanggal {tglAnalisa:pendek} aplikasi dengan {app} {potAwal} dilakukan analisa oleh CAC, setelah dilakukan analisa aplikasi tidak memenuhi keriteria untuk dilanjutkan dengan POT {potSingkat} dikarenakan {alasan}, maka diajukan BA untuk ganti POT menjadi {potBaru}', spasi: 200 },
-      { t: 'p', teks: 'Demikian kami mengajukan BA diatas dan mohon untuk dapat disetujui agar proses bisa berjalan dengan baik. Terimakasih', spasi: 200 },
+      { t: 'bagian', no: 'A.', judul: 'LATAR BELAKANG' },
+      { t: 'p', teks: 'Permohonan Copcan dikarenakan {alasan} dari {potAwal} menjadi {potBaru}', kiri: 720, spasi: 120 },
+      { t: 'bagian', no: 'B.', judul: 'TUJUAN' },
+      { t: 'p', teks: 'Berdasarkan latar belakang tersebut, kami mengajukan Copcan ubah POT dengan data berikut', kiri: 720, spasi: 200 },
+      { t: 'data', keys: ['nama', 'app', 'alamat', 'nik', 'unit', 'otr', 'tenor', 'angsuran', 'stnk'], tebal: true, kiri: 720, lebarLabel: 2100 },
+      { t: 'p', teks: 'Demikianlah Berita Acara ini kami buat, atas persetujuan dan kerjasamanya kami ucapkan terima kasih', spasi: 120 },
       { t: 'halaman' },
-      { t: 'lampiran', judul: 'Lampiran:', nomor: true },
+      { t: 'lampiran', judul: '', nomor: false },
     ],
-    lampiran: ['SK RO Super'],
+    lampiran: [''],
   },
   {
     id: 'take-over', nama: 'IM Take Over tanpa FC BPKB & Faktur',
@@ -356,9 +357,9 @@ export function noUrutBerikut(list: Surat[]): string {
 /* ---------- Susunan siap cetak (dipakai file Word & pratinjau) ---------- */
 export type SelApproval = { teks: string; rowSpan?: number; lanjut?: boolean };
 export type BlokJadi =
-  | { t: 'kop'; baris: { teks: string; tebal: boolean }[]; garis: boolean; besar: boolean }
+  | { t: 'kop'; baris: { teks: string; tebal: boolean; garis: boolean }[]; besar: boolean; kiri: boolean }
   | { t: 'info'; baris: [string, string][]; tebalLabel: boolean }
-  | { t: 'approval'; judul?: string; fill?: string; tengah: boolean; lebar: number[]; kepala: string[]; baris: SelApproval[][] }
+  | { t: 'approval'; judul?: string; fill?: string; tengah: boolean; lebar: number[]; kepala: string[]; kepalaGabung: number; kepalaTebal: boolean; peranTebal: boolean; baris: SelApproval[][] }
   | { t: 'p'; teks: string; tebal: boolean; kiri: number; spasi: number; tengah: boolean }
   | { t: 'bagian'; no: string; judul: string; kiri: number }
   | { t: 'daftar'; isi: string[]; kiri: number }
@@ -372,8 +373,9 @@ export function susunSurat(s: Surat): BlokJadi[] {
   return t.blok.map((b): BlokJadi => {
     switch (b.t) {
       case 'kop': {
-        const baris = b.baris.flatMap((x, i) => isiTeks(x, s).split('\n').map((teks) => ({ teks, tebal: b.tebal ? b.tebal[i] !== false : true })));
-        return { t: 'kop', baris, garis: !!b.garis, besar: !!b.besar };
+        const garis = (i: number) => (Array.isArray(b.garis) ? !!b.garis[i] : !!b.garis);
+        const baris = b.baris.flatMap((x, i) => isiTeks(x, s).split('\n').map((teks) => ({ teks, tebal: b.tebal ? b.tebal[i] !== false : true, garis: garis(i) })));
+        return { t: 'kop', baris, besar: !!b.besar, kiri: !!b.kiri };
       }
       case 'info': return { t: 'info', baris: b.baris.map(([l, v]) => [l, isiTeks(v, s)]), tebalLabel: !!b.tebalLabel };
       case 'approval': {
@@ -388,7 +390,7 @@ export function susunSurat(s: Surat): BlokJadi[] {
           let n = 1; while (semua[i + n]?.r.peran === r.peran) n++;
           return { teks: r.peran || '', rowSpan: n };
         }));
-        return { t: 'approval', judul: a.judul, fill: a.fill, tengah: !!a.tengah, lebar: a.lebar, kepala: a.kolom.map(([, l]) => l), baris };
+        return { t: 'approval', judul: a.judul, fill: a.fill, tengah: !!a.tengah, lebar: a.lebar, kepala: a.kolom.map(([, l]) => l), kepalaGabung: a.kepalaGabung || 1, kepalaTebal: !!a.kepalaTebal || !!a.fill || !!a.tengah, peranTebal: !!a.peranTebal, baris };
       }
       case 'p': return { t: 'p', teks: isiTeks(b.teks, s), tebal: !!b.tebal, kiri: b.kiri || 0, spasi: b.spasi ?? 0, tengah: !!b.tengah };
       case 'bagian': return { t: 'bagian', no: b.no, judul: b.judul, kiri: b.kiri ?? 0 };
