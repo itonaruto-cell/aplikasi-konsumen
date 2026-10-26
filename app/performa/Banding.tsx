@@ -11,6 +11,7 @@ import { TIPE_XLSX } from '../../lib/xlsx-mini';
 import { todayJkt } from '../../lib/performa-calc';
 import { AngkaInput, FIELD } from './form';
 import { Ico } from './parts';
+import { ambilDraf, bacaBuka, hapusDraf, idBandingBaru, lepasBuka, pilihAwal, rapikanDraf, simpanDraf, tandaiBuka } from '../../lib/banding-draf';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 
@@ -182,48 +183,90 @@ function Pratinjau({ siap, onTutup, onUnduh }: { siap: Siap; onTutup: () => void
 }
 
 /* ---------- Editor ---------- */
-function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; onTutup: () => void; onSimpan: (b: Banding) => void }) {
+function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: Banding; akun: Akun; onTutup: () => void; onSimpan: (b: Banding) => void; lembarAwal?: 'form' | 'wa' }) {
   useOverlay(true, onTutup);   // tombol kembali menutup form dulu, baru keluar dari halaman
-  const [b, setB] = useState<Banding>(awal);
-  const [simpan, setSimpan] = useState<'' | 'menyimpan' | 'tersimpan' | 'gagal'>(awal.id ? 'tersimpan' : '');
-  const [pesan, setPesan] = useState('');
+  // Isian yang belum terkirim (mis. tab dimatikan Android saat pindah ke WA) dipulihkan dari draf di HP
+  const [mulai] = useState(() => { const d = ambilDraf(awal.id); return { ...pilihAwal(awal, d), idBaru: d?.idBaru }; });
+  const [b, setB] = useState<Banding>(mulai.b);
+  const [simpan, setSimpan] = useState<'' | 'menyimpan' | 'tersimpan' | 'gagal'>(awal.id && !mulai.dariDraf ? 'tersimpan' : '');
+  const [pesan, setPesan] = useState(mulai.dariDraf ? 'Isian yang belum tersimpan dipulihkan dari HP.' : '');
   const [upload, setUpload] = useState('');
   const [unduh, setUnduh] = useState(false);
   const [pratinjau, setPratinjau] = useState<Siap | null>(null);
   const ubah = useRef(0);
+  const kotor = useRef(mulai.dariDraf);
   const terakhir = useRef(b);
   terakhir.current = b;
-  const set = <K extends keyof Banding>(k: K, v: Banding[K]) => { setB((x) => ({ ...x, [k]: v })); ubah.current++; setSimpan(''); };
-  const setWa = <K extends keyof WaBanding>(k: K, v: WaBanding[K]) => { setB((x) => ({ ...x, wa: { ...x.wa, [k]: v } })); ubah.current++; setSimpan(''); };
+  const simpanRef = useRef(simpan);
+  simpanRef.current = simpan;
+  const set = <K extends keyof Banding>(k: K, v: Banding[K]) => { setB((x) => ({ ...x, [k]: v })); ubah.current++; kotor.current = true; setSimpan(''); };
+  const setWa = <K extends keyof WaBanding>(k: K, v: WaBanding[K]) => { setB((x) => ({ ...x, wa: { ...x.wa, [k]: v } })); ubah.current++; kotor.current = true; setSimpan(''); };
   const [pesanWa, setPesanWa] = useState('');
-  const [lembar, setLembar] = useState<'form' | 'wa'>('form');
+  const [lembar, setLembar] = useState<'form' | 'wa'>(lembarAwal);
   const salinWa = async () => {
     try { await navigator.clipboard.writeText(teksWaBanding(terakhir.current)); setPesanWa('Teks tersalin. Tempel di WhatsApp BU Head.'); }
     catch { setPesanWa('Tidak bisa menyalin otomatis. Tekan lama teks di atas untuk menyalin.'); }
   };
 
-  const kirim = useCallback(async (data: Banding): Promise<Banding | null> => {
+  // Form baru langsung punya id dari HP, jadi simpan ulang tidak pernah membuat form dobel
+  const idBaru = useRef(mulai.idBaru || idBandingBaru());
+  const sudahAda = useRef(!!awal.id);
+  const antre = useRef<Promise<unknown>>(Promise.resolve());
+
+  // Draf ke HP setiap ada perubahan; dibuang setelah tersimpan di server
+  useEffect(() => {
+    if (simpan === 'tersimpan') { hapusDraf(b.id); return; }
+    if (kotor.current) simpanDraf(b.id, b, b.id ? undefined : idBaru.current);
+  }, [b, simpan]);
+  // Tandai form yang sedang terbuka + lembarnya, supaya terbuka lagi kalau halaman dimuat ulang
+  useEffect(() => { tandaiBuka(b.id, lembar); }, [b.id, lembar]);
+  useEffect(() => () => lepasBuka(), []);
+
+  const kirimSekarang = useCallback(async (keepalive: boolean): Promise<Banding | null> => {
+    const data = terakhir.current;
     if (!data.nama.trim() && !data.appNo.trim()) return null;
     setSimpan('menyimpan');
     const n = ubah.current;
+    const wasBaru = !data.id;
     try {
-      const r = await fetch('/api/banding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ banding: data }) });
+      const body = JSON.stringify({ banding: { ...data, id: data.id || idBaru.current }, baru: !sudahAda.current });
+      const r = await fetch('/api/banding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: keepalive && body.length < 60_000 });
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error || 'Gagal menyimpan.');
       const hasil = j.banding as Banding;
+      sudahAda.current = true;
+      if (wasBaru) hapusDraf('');
       setB((x) => ({ ...x, id: hasil.id, dibuat: hasil.dibuat, diubah: hasil.diubah, oleh: hasil.oleh }));
-      if (n === ubah.current) setSimpan('tersimpan'); else setSimpan('');
+      if (n === ubah.current) { kotor.current = false; setSimpan('tersimpan'); } else setSimpan('');
       onSimpan(hasil);
       return hasil;
     } catch (e) { setSimpan('gagal'); setPesan((e as Error).message); return null; }
   }, [onSimpan]);
+  // Satu per satu, supaya dua simpanan tidak saling mendahului
+  const kirim = useCallback((keepalive = false): Promise<Banding | null> => {
+    const p = antre.current.then(() => kirimSekarang(keepalive));
+    antre.current = p.catch(() => null);
+    return p;
+  }, [kirimSekarang]);
 
   // Simpan otomatis 2 detik setelah berhenti mengetik
   useEffect(() => {
     if (simpan !== '') return;
-    const t = setTimeout(() => { kirim(terakhir.current); }, 2000);
+    const t = setTimeout(() => { kirim(); }, 2000);
     return () => clearTimeout(t);
   }, [b, simpan, kirim]);
+
+  // Pindah ke WA/aplikasi lain → simpan saat itu juga (tidak menunggu 2 detik); kembali → coba lagi bila gagal
+  useEffect(() => {
+    const pergi = () => { if (simpanRef.current === '' || simpanRef.current === 'gagal') kirim(true); };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') pergi();
+      else if (simpanRef.current === 'gagal') kirim();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', pergi);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', pergi); };
+  }, [kirim]);
 
   const tambahFoto = async (kat: KatFoto, files: File[]) => {
     const baru: FotoBanding[] = [];
@@ -245,7 +288,7 @@ function Editor({ awal, akun, onTutup, onSimpan }: { awal: Banding; akun: Akun; 
   const siapkan = async (): Promise<Siap | null> => {
     setUnduh(true); setPesan('');
     try {
-      const tersimpan = (await kirim(terakhir.current)) || terakhir.current;
+      const tersimpan = (await kirim()) || terakhir.current;
       const fotos = (await Promise.all(tersimpan.foto.map(ambilFoto))).filter((x): x is FotoFile => !!x);
       if (fotos.length < tersimpan.foto.length) setPesan(`${tersimpan.foto.length - fotos.length} foto tidak bisa dimuat dan tidak ikut di Excel.`);
       return { b: tersimpan, fotos };
@@ -511,18 +554,35 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
   }, []);
   useEffect(() => { muat(); }, [muat, reloadKey]);
 
+  // Halaman dimuat ulang (mis. tab dimatikan Android saat pindah ke WA) → buka lagi form yang tadi diisi
+  const [lembarAwal, setLembarAwal] = useState<'form' | 'wa'>('form');
+  const pulih = useRef(false);
+  useEffect(() => {
+    if (pulih.current || list === null) return;
+    pulih.current = true;
+    rapikanDraf();
+    const x = bacaBuka();
+    if (!x) return;
+    const ada = x.id ? list.find((y) => y.id === x.id) : null;
+    if (x.id && !ada) { lepasBuka(); return; }
+    setLembarAwal(x.lembar === 'wa' ? 'wa' : 'form');
+    setBuka(ada || bandingDefault());
+  }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const simpanLokal = useCallback((b: Banding) => setList((l) => [b, ...(l || []).filter((x) => x.id !== b.id)]), []);
   const hapus = async (b: Banding) => {
     if (!window.confirm(`Hapus form banding ${b.nama || b.appNo}?`)) return;
     const r = await fetch(`/api/banding?id=${encodeURIComponent(b.id)}`, { method: 'DELETE' });
     if (r.ok) setList((l) => (l || []).filter((x) => x.id !== b.id));
   };
-  const baru = () => {
+  const bandingDefault = () => {
     const contoh = list?.[0];
-    setBuka(bandingBaru({ tanggal: todayJkt(), bh: contoh?.bh || '', pembuat: contoh?.pembuat || akun.perfName || akun.name || '', jabatan: contoh?.jabatan || 'BMH Mobilku', cabang: contoh?.cabang || 'KENDAL' }));
+    return bandingBaru({ tanggal: todayJkt(), bh: contoh?.bh || '', pembuat: contoh?.pembuat || akun.perfName || akun.name || '', jabatan: contoh?.jabatan || 'BMH Mobilku', cabang: contoh?.cabang || 'KENDAL' });
   };
+  const baru = () => { setLembarAwal('form'); setBuka(bandingDefault()); };
+  const bukaForm = (x: Banding) => { setLembarAwal('form'); setBuka(x); };
 
-  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} akun={akun} onTutup={() => { setBuka(null); muat(); }} onSimpan={simpanLokal} />;
+  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} akun={akun} lembarAwal={lembarAwal} onTutup={() => { lepasBuka(); setBuka(null); muat(); }} onSimpan={simpanLokal} />;
 
   return (
     <div className="px-4 pb-10 pt-4">
@@ -548,7 +608,7 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
         <ul className="mt-2 overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800">
           {list.map((b) => (
             <li key={b.id} className="flex items-center border-b border-neutral-200 last:border-0 dark:border-neutral-800">
-              <button onClick={() => setBuka(b)} className="flex min-h-16 min-w-0 flex-1 flex-col justify-center px-4 py-2 text-left active:bg-neutral-50 dark:active:bg-neutral-900">
+              <button onClick={() => bukaForm(b)} className="flex min-h-16 min-w-0 flex-1 flex-col justify-center px-4 py-2 text-left active:bg-neutral-50 dark:active:bg-neutral-900">
                 <span className="flex items-center gap-2">
                   <span className="truncate text-[15px] font-bold">{b.nama || '(tanpa nama)'}</span>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${b.status === 'selesai' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'}`}>{b.status === 'selesai' ? 'Submitted' : 'Draft'}</span>

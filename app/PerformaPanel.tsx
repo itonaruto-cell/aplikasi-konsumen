@@ -26,6 +26,7 @@ import ProspekPage from './performa/Prospek';
 import Sinkron from './performa/Sinkron';
 import TanyaSK from './performa/TanyaSK';
 import BandingPage from './performa/Banding';
+import { bacaBuka } from '../lib/banding-draf';
 import PdfSurvey from './performa/PdfSurvey';
 import ReportSurveyPage from './performa/ReportSurvey';
 import ProyeksiPage from './performa/Proyeksi';
@@ -137,6 +138,11 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     const onVis = () => { if (document.visibilityState === 'visible') cek(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+
+  // Halaman dimuat ulang saat form banding masih terbuka (Android mematikan tab di latar) → langsung ke form itu lagi
+  useEffect(() => {
+    if (bacaBuka()) { setRiwayatHal(['pantau', 'saya']); setPage('banding'); }
   }, []);
 
   // Balik ke aplikasi setelah >5 menit → muat ulang diam-diam
