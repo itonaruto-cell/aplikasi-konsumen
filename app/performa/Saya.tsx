@@ -27,14 +27,16 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
   const GRUP: [string, Item[]][] = [
     ['Kerja harian', [
       { judul: 'Database prospek', sub: 'Input, impor Google Maps, follow up dengan foto bukti', ico: ico('users'), on: onProspek },
+      { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
+      { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
       { judul: 'Tanya SK', sub: 'Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu', ico: ico('list'), on: onSK },
+    ]],
+    ['Survey & dokumen', [
       { judul: 'Report survey (6C + 1E + 1P)', sub: 'Hasil survey per unsur, salin langsung ke WA', ico: ico('list'), on: onReport },
       { judul: 'PDF berkas survey', sub: 'Foto per kategori → PDF, bagikan sekaligus ke WA', ico: ico('share'), on: onPdf },
       { judul: 'Rekap mutasi rekening', sub: 'PDF Mandiri / BCA / BRI / BNI → kredit per bulan & rata-rata, ke WA', ico: ico('chart'), on: onMutasi },
-      { judul: 'Surat IM / berita acara', sub: 'Template SK (IM SAKPOLE error, dst.) → file Word + foto lampiran', ico: ico('list'), on: onSurat },
       { judul: 'Form banding (F-761)', sub: 'Reason, analisa 6C, SWOT & foto → Excel untuk G Suite', ico: ico('edit'), on: onBanding },
-      { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
-      { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
+      { judul: 'Surat IM / berita acara', sub: 'IM SAKPOLE, Copcan ubah POT, Take Over, Tidak revisi STNK → Word', ico: ico('list'), on: onSurat },
     ]],
     ['Laporan & performa', [
       { judul: 'Proyeksi sales', sub: 'Tercapai + bahan vs target & bulan lalu', ico: ico('up'), on: onProyeksi },
