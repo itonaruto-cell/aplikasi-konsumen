@@ -65,15 +65,15 @@ function HalamanSurat({ s }: { s: Surat }) {
     <Kertas key={hi} t={t}>
       {isi.map((b, i) => {
         switch (b.t) {
-          case 'kop': return <div key={i} className="mb-3 text-center" style={{ fontFamily: t.fontKop }}>{b.baris.map((x, j) => <p key={j} className={`${x.tebal ? 'font-bold' : ''} ${b.garis ? 'underline' : ''} ${b.besar ? 'text-[12px]' : ''}`}>{x.teks}</p>)}</div>;
+          case 'kop': return <div key={i} className={`mb-3 ${b.kiri ? 'text-left' : 'text-center'}`} style={{ fontFamily: t.fontKop }}>{b.baris.map((x, j) => <p key={j} className={`${x.tebal ? 'font-bold' : ''} ${x.garis ? 'underline' : ''} ${b.besar ? 'text-[12px]' : ''}`}>{x.teks}</p>)}</div>;
           case 'info': return <table key={i} className="mb-3"><tbody>{b.baris.map(([l, v]) => <tr key={l}><td className={`w-[90px] align-top ${b.tebalLabel ? 'font-bold' : ''}`}>{l}</td><td className="w-3 align-top">:</td><td className="align-top"><Teks teks={v} /></td></tr>)}</tbody></table>;
           case 'approval': return (
             <table key={i} className="mb-3 w-full table-fixed border-collapse text-[9.5px]" style={{ fontFamily: t.fontKop }}>
               <colgroup>{b.lebar.map((w, j) => <col key={j} style={{ width: `${(w / b.lebar.reduce((x, y) => x + y, 0)) * 100}%` }} />)}</colgroup>
               <tbody>
                 {b.judul && <tr><td colSpan={b.lebar.length} className={`${td} text-center font-bold`} style={{ background: b.fill ? `#${b.fill}` : undefined }}>{b.judul}</td></tr>}
-                <tr>{b.kepala.map((x, j) => <td key={j} className={`${td} text-center ${b.fill || b.tengah ? 'font-bold' : ''}`} style={{ background: b.fill ? `#${b.fill}` : undefined }}>{x}</td>)}</tr>
-                {b.baris.map((r, j) => <tr key={j}>{r.map((c, k) => (c.lanjut ? null : <td key={k} rowSpan={c.rowSpan} className={`${td} ${b.tengah && k > 0 ? 'text-center' : ''}`}>{c.teks}</td>))}</tr>)}
+                <tr>{b.kepala.map((x, j) => (j > 0 && j < b.kepalaGabung ? null : <td key={j} colSpan={j === 0 && b.kepalaGabung > 1 ? b.kepalaGabung : undefined} className={`${td} text-center ${b.kepalaTebal ? 'font-bold' : ''}`} style={{ background: b.fill ? `#${b.fill}` : undefined }}>{x}</td>))}</tr>
+                {b.baris.map((r, j) => <tr key={j}>{r.map((c, k) => (c.lanjut ? null : <td key={k} rowSpan={c.rowSpan} className={`${td} ${b.tengah && k > 0 ? 'text-center' : ''} ${b.peranTebal && k === 0 ? 'font-bold' : ''}`}>{c.teks}</td>))}</tr>)}
               </tbody>
             </table>
           );
@@ -87,10 +87,10 @@ function HalamanSurat({ s }: { s: Surat }) {
           );
           case 'lampiran': return (
             <div key={i}>
-              <p className="font-bold">{b.judul}</p>
+              {b.judul && <p className="font-bold">{b.judul}</p>}
               {b.isi.map((l, li) => (
                 <div key={li} className={`mt-2 ${b.nomor ? 'pl-[5%]' : ''}`}>
-                  <p className="font-bold">{b.nomor ? `${li + 1}.\u00a0\u00a0${l.judul}` : `${l.judul} :`}</p>
+                  {(b.nomor || l.judul.trim()) && <p className="font-bold">{b.nomor ? `${li + 1}.\u00a0\u00a0${l.judul}` : `${l.judul} :`}</p>}
                   {l.foto.map((f) => (
                     <figure key={f.id} className="mt-2 text-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -314,7 +314,7 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
             <div key={li} className="mt-5 first:mt-0">
               <div className="flex items-center gap-2">
                 <span className="text-[14px] font-bold">{li + 1}.</span>
-                <input value={l.judul} onChange={(e) => ubahLamp(li, (x) => ({ ...x, judul: e.target.value }))} placeholder="Judul lampiran, mis. Foto STNK asli" aria-label={`Judul lampiran ${li + 1}`} className={`${input} flex-1 font-bold`} />
+                <input value={l.judul} onChange={(e) => ubahLamp(li, (x) => ({ ...x, judul: e.target.value }))} placeholder="Judul lampiran (boleh kosong)" aria-label={`Judul lampiran ${li + 1}`} className={`${input} flex-1 font-bold`} />
                 {!tetap && <button onClick={() => ganti((x) => ({ ...x, lampiran: x.lampiran.filter((_, j) => j !== li) }))} aria-label={`Hapus lampiran ${li + 1}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-red-700 dark:text-red-400"><Ico n="x" className="h-4 w-4" sw={2.2} /></button>}
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2">

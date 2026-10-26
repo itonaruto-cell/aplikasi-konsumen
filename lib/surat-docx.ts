@@ -47,7 +47,7 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
   const t = templateSurat(s.template);
   const { par, baris } = buat(t.font);
   const a4 = t.kertas === 'a4';
-  const margin = a4 ? 1134 : 1440;
+  const margin = t.margin || (a4 ? 1134 : 1440);
   const lebarTeks = (a4 ? 11906 : 12240) - 2 * margin;
   const rels: string[] = [];
   const isi: string[] = [];
@@ -65,9 +65,11 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
     const tr = (cells: string) => `<w:tr><w:trPr><w:trHeight w:val="380"/></w:trPr>${cells}</w:tr>`;
     const rows: string[] = [];
     if (b.judul) rows.push(tr(sel(b.judul, lebar.reduce((x, y) => x + y, 0), { b: true, fill: b.fill, tengah: true, span: lebar.length })));
-    rows.push(tr(b.kepala.map((l, i) => sel(l, lebar[i], { b: !!b.fill || b.tengah, fill: b.fill, tengah: true })).join('')));
+    const g = Math.max(1, b.kepalaGabung);
+    rows.push(tr([sel(b.kepala[0], lebar.slice(0, g).reduce((x, y) => x + y, 0), { b: b.kepalaTebal, fill: b.fill, tengah: true, span: g > 1 ? g : undefined }),
+      ...b.kepala.slice(g).map((l, i) => sel(l, lebar[i + g], { b: b.kepalaTebal, fill: b.fill, tengah: true }))].join('')));
     for (const r of b.baris) {
-      rows.push(tr(r.map((c, i) => sel(c.teks, lebar[i], { tengah: b.tengah && i > 0, vMerge: c.lanjut ? 'continue' : c.rowSpan && c.rowSpan > 1 ? 'restart' : undefined })).join('')));
+      rows.push(tr(r.map((c, i) => sel(c.teks, lebar[i], { b: b.peranTebal && i === 0, tengah: b.tengah && i > 0, vMerge: c.lanjut ? 'continue' : c.rowSpan && c.rowSpan > 1 ? 'restart' : undefined })).join('')));
     }
     const ind = Math.round(Math.max(0, lebar.reduce((x, y) => x + y, 0) - lebarTeks) / -2);
     isi.push(`<w:tbl><w:tblPr><w:tblW w:w="${lebar.reduce((x, y) => x + y, 0)}" w:type="dxa"/><w:tblInd w:w="${ind}" w:type="dxa"/><w:tblBorders>${garis('single')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${lebar.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${rows.join('')}</w:tbl>`);
@@ -87,7 +89,7 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
   for (const b of blok) {
     switch (b.t) {
       case 'kop':
-        b.baris.forEach((x, i) => p([{ t: x.teks, b: x.tebal, u: b.garis, sz: b.besar ? t.sz + 4 : undefined, font: t.fontKop }], { jc: 'center', after: i === b.baris.length - 1 ? 240 : 0 }));
+        b.baris.forEach((x, i) => p([{ t: x.teks, b: x.tebal, u: x.garis, sz: b.besar ? t.sz + 4 : undefined, font: t.fontKop }], { jc: b.kiri ? 'left' : 'center', after: i === b.baris.length - 1 ? 240 : 60 }));
         break;
       case 'info': {
         const tab = 1700;
@@ -106,10 +108,10 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
       case 'data': tabelData(b); break;
       case 'halaman': halamanBaru = true; break;
       case 'lampiran':
-        p([{ t: b.judul, b: true }], { after: 160, keepNext: true });
+        if (b.judul) p([{ t: b.judul, b: true }], { after: 160, keepNext: true });
         b.isi.forEach((l, li) => {
-          const judul = l.judul || `Lampiran ${li + 1}`;
-          p(b.nomor ? [{ t: `${li + 1}.`, b: true }, { t: judul, b: true, tab: true }] : [{ t: `${judul} :`, b: true }],
+          const judul = l.judul.trim();
+          if (judul || b.nomor) p(b.nomor ? [{ t: `${li + 1}.`, b: true }, { t: judul || `Lampiran ${li + 1}`, b: true, tab: true }] : [{ t: `${judul} :`, b: true }],
             { left: b.nomor ? 720 : 0, hanging: b.nomor ? 360 : 0, tabs: b.nomor ? [720] : undefined, before: li ? 240 : 0, after: 60, keepNext: true, jc: 'left' });
           for (const f of fotos.filter((x) => x.lampiran === li)) {
             nFoto++;
