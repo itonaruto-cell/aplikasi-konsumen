@@ -41,7 +41,7 @@ export const TEMPLATE_SURAT: TemplateSurat[] = [
     ringkas: 'Golive tanpa validasi STNK via aplikasi SAKPOLE (data pajak/kendaraan tidak muncul)',
     sk: 'SK No 251/SK/OPP/10-24 (Versi 03)',
     judul: 'BERITA ACARA',
-    perihal: (d) => `IM SAKPOLE ERROR A.N ${(d.nama || '').trim().toUpperCase() || '…'}`,
+    perihal: (d) => `IM Proses Golive Kondisi Validasi STNK Via Aplikasi SAKPOLE Error Konsumen Cabang Kendal an. ${(d.nama || '').trim().toUpperCase() || '…'}`,
     latar: [
       'Sesuai SK No 251/SK/OPP/10-24 (Versi 03) terkait Pengecekan Validasi STNK bahwa BMH/MS diwajibkan untuk melampirkan Hasil screenshot hasil validasi melalui aplikasi masing-masing daerah, CAC melakukan validasi hasil screenshot dan kesesuaian dengan data fotokopi STNK yang diterima, serta Tim Operation di cabang wajib melakukan pengecekan atas hasil validasi STNK.',
       'Tidak munculnya data pajak dan data kendaraan pada aplikasi SAKPOLE di salah satu aplikasi konsumen Cabang Kendal.',
@@ -116,7 +116,7 @@ export function rapikanSurat(x: unknown): Surat {
 }
 
 export const namaFileSurat = (s: Surat) =>
-  `IM ${templateSurat(s.template).nama.replace(/^IM /, '')} - ${(s.data.nama || 'tanpa nama').trim().toUpperCase()}`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  templateSurat(s.template).perihal({ ...s.data, nama: s.data.nama || 'tanpa nama' }).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Nomor urut berikutnya: terbesar di daftar + 1 (sebagai saran, tetap bisa diubah). */
 export function noUrutBerikut(list: Surat[]): string {
