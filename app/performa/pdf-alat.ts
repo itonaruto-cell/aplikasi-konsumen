@@ -70,8 +70,10 @@ type PdfLibDoc = {
   save: () => Promise<Uint8Array>;
   setTitle: (t: string) => void;
   setProducer: (t: string) => void;
+  getPages: () => { getRotation: () => { angle: number }; setRotation: (d: unknown) => void }[];
+  getPageCount: () => number;
 };
-type PdfLib = { PDFDocument: { create: () => Promise<PdfLibDoc>; load: (b: Uint8Array, o?: { ignoreEncryption?: boolean }) => Promise<PdfLibDoc> } };
+type PdfLib = { PDFDocument: { create: () => Promise<PdfLibDoc>; load: (b: Uint8Array, o?: { ignoreEncryption?: boolean }) => Promise<PdfLibDoc> }; degrees: (n: number) => unknown };
 const SUMBER_PDFLIB = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js',
   'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
@@ -131,4 +133,80 @@ export async function gabungPdf(daftar: { file: Blob & { name?: string }; passwo
   if (judul) out.setTitle(judul);
   out.setProducer('Marketing Kendal');
   return out.save();
+}
+
+/* ---------- Alat PDF umum ---------- */
+export class PdfTerkunci extends Error { constructor(nama: string) { super(`${nama} dikunci password. Buka dulu dengan "Unlock PDF".`); } }
+
+// Muat dengan pdf-lib; PDF berpassword ditolak dengan pesan yang jelas
+export async function muatPdfLib(file: Blob & { name?: string }): Promise<PdfLibDoc> {
+  const { PDFDocument } = await pdfLib();
+  try { return await PDFDocument.load(new Uint8Array(await file.arrayBuffer())); } catch (e) {
+    if (/encrypt/i.test(String((e as Error)?.message || e))) throw new PdfTerkunci(file.name || 'PDF');
+    throw new Error(`${file.name || 'PDF'} tidak bisa dibaca (rusak / bukan PDF).`);
+  }
+}
+
+// Satu halaman pdf.js → JPEG (ukuran halaman asli dalam point ikut dikembalikan)
+export async function renderJpeg(doc: PdfDoc, n: number, skala = 2, q = 0.85): Promise<{ blob: Blob; w: number; h: number; ptW: number; ptH: number }> {
+  const page = await doc.getPage(n);
+  const ukuran = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: skala });
+  const cv = document.createElement('canvas');
+  cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+  const g = cv.getContext('2d')!;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+  await page.render({ canvasContext: g, viewport: vp }).promise;
+  const blob = await new Promise<Blob | null>((ok) => cv.toBlob(ok, 'image/jpeg', q));
+  cv.width = cv.height = 0;
+  if (!blob) throw new Error('Halaman PDF gagal diubah.');
+  return { blob, w: Math.ceil(vp.width), h: Math.ceil(vp.height), ptW: ukuran.width, ptH: ukuran.height };
+}
+
+// Gambar kecil tiap halaman (untuk memilih / memutar)
+export async function thumbnail(doc: PdfDoc, n: number, lebar = 160): Promise<string> {
+  const page = await doc.getPage(n);
+  const k = lebar / page.getViewport({ scale: 1 }).width;
+  const vp = page.getViewport({ scale: k });
+  const cv = document.createElement('canvas');
+  cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+  const g = cv.getContext('2d')!;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+  await page.render({ canvasContext: g, viewport: vp }).promise;
+  return cv.toDataURL('image/jpeg', 0.7);
+}
+
+// Halaman-halaman jadi PDF baru dari gambar (dipakai kompres & buka kunci)
+export async function pdfDariRender(doc: PdfDoc, skala: number, q: number, judul = '', progres?: (s: string) => void): Promise<Uint8Array> {
+  const { PDFDocument } = await pdfLib();
+  const out = await PDFDocument.create();
+  for (let n = 1; n <= doc.numPages; n++) {
+    progres?.(`Memproses halaman ${n}/${doc.numPages}…`);
+    const r = await renderJpeg(doc, n, skala, q);
+    const img = await out.embedJpg(new Uint8Array(await r.blob.arrayBuffer()));
+    out.addPage([r.ptW, r.ptH]).drawImage(img, { x: 0, y: 0, width: r.ptW, height: r.ptH });
+  }
+  if (judul) out.setTitle(judul);
+  out.setProducer('Marketing Kendal');
+  return out.save();
+}
+
+// Ambil halaman tertentu (indeks mulai 0) jadi PDF baru
+export async function ambilHalaman(file: Blob & { name?: string }, idx: number[]): Promise<Uint8Array> {
+  const { PDFDocument } = await pdfLib();
+  const src = await muatPdfLib(file);
+  const out = await PDFDocument.create();
+  for (const p of await out.copyPages(src, idx)) out.addPage(p);
+  out.setProducer('Marketing Kendal');
+  return out.save();
+}
+
+// Putar halaman: putar[i] = derajat tambahan (kelipatan 90) untuk halaman i
+export async function putarHalaman(file: Blob & { name?: string }, putar: number[]): Promise<Uint8Array> {
+  const { degrees } = await pdfLib();
+  const doc = await muatPdfLib(file);
+  doc.getPages().forEach((pg, i) => {
+    const d = ((putar[i] || 0) % 360 + 360) % 360;
+    if (d) pg.setRotation(degrees((pg.getRotation().angle + d) % 360));
+  });
+  return doc.save();
 }
