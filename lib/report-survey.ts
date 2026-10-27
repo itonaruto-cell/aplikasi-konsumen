@@ -19,13 +19,58 @@ export type ReportSurvey = {
   brand: 'MOBILKU' | 'MOTORKU'; program: string; status: string; pekerjaan: string; alamat: string;
   unit: string; pencairan: number; tenor: number; angsuran: number;
   c6: Analisa6C; rekomendasi: string; catatan: string;
+  kapasitas: Kapasitas;
 };
+
+/* ---------- Capacity: omzet × margin + penghasilan tambahan → IIR & DSR ---------- */
+export type Penghasilan = { omzet: number; margin: number; tambahan: number; tambahanKet: string };
+export type Kapasitas = { kons: Penghasilan; pas: Penghasilan; angsLain: number; angsWom: number };
+const phKosong = (): Penghasilan => ({ omzet: 0, margin: 0, tambahan: 0, tambahanKet: '' });
+export const kapasitasKosong = (): Kapasitas => ({ kons: phKosong(), pas: phKosong(), angsLain: 0, angsWom: 0 });
+const adaPh = (p: Penghasilan) => !!(p.omzet || p.tambahan);
+export const labaOf = (p: Penghasilan) => Math.floor((p.omzet * p.margin) / 100);
+export function hitungKapasitas(r: Pick<ReportSurvey, 'kapasitas' | 'angsuran'>) {
+  const k = r.kapasitas;
+  const wom = k.angsWom || r.angsuran || 0;
+  const penghasilan = labaOf(k.kons) + k.kons.tambahan + labaOf(k.pas) + k.pas.tambahan;
+  const total = k.angsLain + wom;
+  // Dipotong (bukan dibulatkan) ke 2 desimal, sama dengan hitungan manual
+  const persen = (a: number) => (penghasilan > 0 ? Math.floor((a / penghasilan) * 10000) / 100 : null);
+  return { wom, penghasilan, total, iir: persen(wom), dsr: persen(total) };
+}
+export const fmtPersen = (v: number | null) => (v === null ? '-' : `${v.toFixed(2).replace('.', ',')}%`);
+const ribu = (n: number) => n.toLocaleString('id-ID');
+/** Baris capacity untuk teks WA / banding; kosong kalau belum ada angka. */
+export function barisKapasitas(r: Pick<ReportSurvey, 'kapasitas' | 'angsuran'>): string[] {
+  const k = r.kapasitas;
+  if (!adaPh(k.kons) && !adaPh(k.pas) && !k.angsLain && !k.angsWom) return [];
+  const h = hitungKapasitas(r);
+  const ph = (judul: string, p: Penghasilan) => adaPh(p) ? [
+    judul,
+    `Omzet : ${ribu(p.omzet)}`,
+    `Margin (${p.margin || 0}%) : ${ribu(labaOf(p))}`,
+    ...(p.tambahan || p.tambahanKet.trim() ? [`Penghasilan tambahan : ${ribu(p.tambahan)}${p.tambahanKet.trim() ? ` (${p.tambahanKet.trim()})` : ''}`] : []),
+    '',
+  ] : [];
+  return [
+    ...ph('Konsumen', k.kons), ...ph('Pasangan', k.pas),
+    `Angsuran tempat lain : ${ribu(k.angsLain)}`,
+    `Angsuran wom : ${ribu(h.wom)}`,
+    `Total angsuran : ${ribu(h.total)}`,
+    `IIR : ${fmtPersen(h.iir)}`,
+    `DSR : ${fmtPersen(h.dsr)}`,
+  ];
+}
+/** Isi capacity lengkap: hitungan + catatan bebas di bawahnya. */
+export function teksCapacity(r: ReportSurvey): string {
+  return [...barisKapasitas(r), ...(r.c6.capacity.trim() ? ['', r.c6.capacity.trim()] : [])].join('\n').trim();
+}
 
 export function reportBaru(p: Partial<ReportSurvey> = {}): ReportSurvey {
   return {
     id: '', dibuat: '', diubah: '', oleh: '', nama: '', appNo: '', tglSurvey: '', surveyor: '',
     brand: 'MOBILKU', program: '', status: '', pekerjaan: '', alamat: '',
-    unit: '', pencairan: 0, tenor: 0, angsuran: 0, c6: kosong6C(), rekomendasi: '', catatan: '', ...p,
+    unit: '', pencairan: 0, tenor: 0, angsuran: 0, c6: kosong6C(), rekomendasi: '', catatan: '', kapasitas: kapasitasKosong(), ...p,
   };
 }
 
@@ -42,7 +87,17 @@ export function rapikanReport(x: unknown): ReportSurvey {
     c6: Object.fromEntries(UNSUR.map(([k]) => [k, str(o.c6?.[k], 5000)])) as Analisa6C,
     rekomendasi: (REKOMENDASI as readonly string[]).includes(String(o.rekomendasi)) ? String(o.rekomendasi) : '',
     catatan: str(o.catatan, 5000),
+    kapasitas: rapikanKapasitas(o.kapasitas),
   };
+}
+function rapikanKapasitas(x: unknown): Kapasitas {
+  const o = (x && typeof x === 'object' ? x : {}) as Partial<Kapasitas>;
+  const num = (v: unknown) => { const n = Number(v); return isFinite(n) && n > 0 ? Math.round(n) : 0; };
+  const ph = (p: unknown): Penghasilan => {
+    const q = (p && typeof p === 'object' ? p : {}) as Partial<Penghasilan>;
+    return { omzet: num(q.omzet), margin: Math.min(100, num(q.margin)), tambahan: num(q.tambahan), tambahanKet: typeof q.tambahanKet === 'string' ? q.tambahanKet.slice(0, 100) : '' };
+  };
+  return { kons: ph(o.kons), pas: ph(o.pas), angsLain: num(o.angsLain), angsWom: num(o.angsWom) };
 }
 
 const rp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
@@ -60,7 +115,12 @@ export function teksWa(r: ReportSurvey): string {
     baris('Unit / jaminan', r.unit), baris('Pencairan', r.pencairan ? rp(r.pencairan) : ''),
     baris('Tenor', r.tenor ? `${r.tenor} bulan` : ''), baris('Angsuran', r.angsuran ? rp(r.angsuran) : ''),
   ].filter(Boolean);
-  const isi = UNSUR.filter(([k]) => r.c6[k].trim()).map(([k, label]) => {
+  const kap = barisKapasitas(r);
+  const isi = UNSUR.filter(([k]) => r.c6[k].trim() || (k === 'capacity' && kap.length)).map(([k, label]) => {
+    if (k === 'capacity' && kap.length) {
+      const cat = r.c6.capacity.split('\n').map((x) => x.trim()).filter(Boolean).map((x) => (/^[-•]/.test(x) ? x.replace(/^[-•]\s*/, '- ') : `- ${x}`));
+      return [`*${label}* :`, ...kap, ...(cat.length ? ['', ...cat] : [])].join('\n');
+    }
     const p = r.c6[k].split('\n').map((x) => x.trim()).filter(Boolean);
     return p.length === 1 ? `*${label}* : ${p[0]}` : [`*${label}* :`, ...p.map((x) => (/^[-•]/.test(x) ? x.replace(/^[-•]\s*/, '- ') : `- ${x}`))].join('\n');
   });
