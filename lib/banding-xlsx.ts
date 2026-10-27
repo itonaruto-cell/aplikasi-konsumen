@@ -147,13 +147,15 @@ export function lembarBanding(b: Banding, foto: FotoFile[]): Lembar {
   const per = Object.fromEntries(KAT_FOTO.map(([k]) => [k, foto.filter((f) => f.kat === k && f.w && f.h)])) as Record<KatFoto, FotoFile[]>;
   const tata = tataLampiran(per);
   for (let i = 0; i < tata.baris; i++) {
-    // baris keterangan: nomor + keterangan foto di baris ini
-    for (const [k] of KAT_FOTO) {
-      const t = tempat[k];
-      const teks = tata.posisi[k].map((p, n) => (p.baris === i ? `${n + 1}. ${per[k][n].ket || ''}`.trim() : '')).filter(Boolean).join('   ');
-      if (t.gab) l.gab(r, t.col, r, t.gab, teks, S.lSel); else l.set(r, t.col, teks, S.lSel);
+    // baris keterangan foto (tanpa nomor); dilewati kalau tidak ada keterangan sama sekali di baris ini
+    const ket = KAT_FOTO.map(([k]) => tata.posisi[k].map((p, n) => (p.baris === i ? (per[k][n].ket || '').trim() : '')).filter(Boolean).join('   '));
+    if (ket.some(Boolean)) {
+      KAT_FOTO.forEach(([k], j) => {
+        const t = tempat[k];
+        if (t.gab) l.gab(r, t.col, r, t.gab, ket[j], S.lSel); else l.set(r, t.col, ket[j], S.lSel);
+      });
+      l.t(r, 18); r++;
     }
-    l.t(r, 18); r++;
     for (const [k] of KAT_FOTO) {
       const t = tempat[k];
       if (t.gab) l.gab(r, t.col, r, t.gab, null, S.lSel); else l.set(r, t.col, null, S.lSel);
