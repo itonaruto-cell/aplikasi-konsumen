@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { REKOMENDASI, UNSUR, rapikanReport, reportBaru, teksWa, type ReportSurvey } from '../../lib/report-survey';
+import { REKOMENDASI, UNSUR, fmtPersen, hitungKapasitas, labaOf, rapikanReport, reportBaru, teksCapacity, teksWa, type Penghasilan, type ReportSurvey } from '../../lib/report-survey';
 import { todayJkt } from '../../lib/performa-calc';
 import { AngkaInput, FIELD } from './form';
 import { Ico } from './parts';
@@ -93,7 +93,7 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
     try {
       const res = await fetch('/api/banding', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ banding: { nama: r.nama.toUpperCase(), appNo: r.appNo, brand: r.brand, tanggal: todayJkt(), c6: r.c6 } }),
+        body: JSON.stringify({ banding: { nama: r.nama.toUpperCase(), appNo: r.appNo, brand: r.brand, tanggal: todayJkt(), c6: { ...r.c6, capacity: teksCapacity(r) } } }),
       });
       const j = await res.json().catch(() => null);
       if (!res.ok) throw new Error(j?.error || 'Form banding gagal dibuat.');
@@ -101,7 +101,8 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
     } catch (e) { setPesan((e as Error).message); }
   };
 
-  const terisi = UNSUR.filter(([k]) => r.c6[k].trim()).length;
+  const kap = hitungKapasitas(r);
+  const terisi = UNSUR.filter(([k]) => r.c6[k].trim() || (k === 'capacity' && kap.penghasilan > 0)).length;
   const status = simpan === 'menyimpan' ? 'Menyimpan…' : simpan === 'tersimpan' ? 'Tersimpan' : simpan === 'gagal' ? 'Gagal tersimpan' : r.nama || r.appNo ? 'Belum tersimpan' : 'Isi nama konsumen dulu';
   return (
     <div className="px-4 pb-40 pt-3">
@@ -134,9 +135,44 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
       </Bagian>
 
       <Bagian judul="Analisa 6C + 1E + 1P" sub={`${terisi}/8 terisi · satu poin per baris`}>
-        {UNSUR.map(([k, label, hint]) => (
+        {UNSUR.map(([k, label, hint]) => k === 'capacity' ? (
+          <div key={k} className="mt-3">
+            <p className="text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">{label}</p>
+            <p className="text-[12px] leading-snug text-neutral-500">Omzet × margin + penghasilan tambahan, lalu IIR & DSR dihitung otomatis.</p>
+            {([['kons', 'Konsumen'], ['pas', 'Pasangan (kalau ada)']] as const).map(([pk, pl]) => {
+              const p = r.kapasitas[pk];
+              const ubahP = (x: Partial<Penghasilan>) => set('kapasitas', { ...r.kapasitas, [pk]: { ...p, ...x } });
+              return (
+                <div key={pk} className="mt-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
+                  <p className="text-[13px] font-bold">{pl}</p>
+                  <div className="mt-1 grid grid-cols-[1fr_6rem] items-end gap-2">
+                    <Isian label="Omzet"><AngkaInput label={`Omzet ${pl}`} value={p.omzet} onChange={(v) => ubahP({ omzet: v })} className="min-h-11" /></Isian>
+                    <Isian label="Margin (%)"><AngkaInput label={`Margin ${pl}`} value={p.margin} placeholder="15–100" onChange={(v) => ubahP({ margin: Math.min(100, v) })} className="min-h-11" /></Isian>
+                  </div>
+                  {p.omzet > 0 && <p className="mt-1 text-[12px] text-neutral-500">Margin ({p.margin || 0}%) = <b className="text-neutral-800 dark:text-neutral-200">{labaOf(p).toLocaleString('id-ID')}</b>{p.margin > 0 && p.margin < 15 ? ' · margin biasanya 15–100%' : ''}</p>}
+                  <div className="grid grid-cols-[1fr_7rem] items-end gap-2">
+                    <Isian label="Penghasilan tambahan"><AngkaInput label={`Penghasilan tambahan ${pl}`} value={p.tambahan} onChange={(v) => ubahP({ tambahan: v })} className="min-h-11" /></Isian>
+                    <Isian label="Dari"><input value={p.tambahanKet} onChange={(e) => ubahP({ tambahanKet: e.target.value })} placeholder="sawah" aria-label={`Sumber penghasilan tambahan ${pl}`} className={`${FIELD} min-h-11`} /></Isian>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="mt-3 grid grid-cols-2 items-end gap-2">
+              <Isian label="Angsuran tempat lain"><AngkaInput label="Angsuran tempat lain" value={r.kapasitas.angsLain} onChange={(v) => set('kapasitas', { ...r.kapasitas, angsLain: v })} className="min-h-11" /></Isian>
+              <Isian label="Angsuran WOM" hint={!r.kapasitas.angsWom && r.angsuran ? 'Ikut angsuran pengajuan' : undefined}><AngkaInput label="Angsuran WOM" value={r.kapasitas.angsWom} placeholder={r.angsuran ? r.angsuran.toLocaleString('id-ID') : '0'} onChange={(v) => set('kapasitas', { ...r.kapasitas, angsWom: v })} className="min-h-11" /></Isian>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center" aria-label="Hasil capacity">
+              <div className="rounded-xl bg-neutral-100 px-2 py-2 dark:bg-neutral-900"><p className="text-[11px] text-neutral-500">Total angsuran</p><p className="text-[14px] font-bold">{kap.total.toLocaleString('id-ID')}</p></div>
+              <div className="rounded-xl bg-neutral-100 px-2 py-2 dark:bg-neutral-900"><p className="text-[11px] text-neutral-500">IIR</p><p className="text-[14px] font-bold">{fmtPersen(kap.iir)}</p></div>
+              <div className="rounded-xl bg-neutral-100 px-2 py-2 dark:bg-neutral-900"><p className="text-[11px] text-neutral-500">DSR</p><p className="text-[14px] font-bold">{fmtPersen(kap.dsr)}</p></div>
+            </div>
+            <Isian label="Catatan capacity (opsional)" hint="Mis. lama usaha, ramai tidaknya usaha, bukti mutasi/nota.">
+              <textarea aria-label="Catatan capacity" value={r.c6.capacity} onChange={(e) => set('c6', { ...r.c6, capacity: e.target.value })} rows={2} className={TA} />
+            </Isian>
+          </div>
+        ) : (
           <Isian key={k} label={label} hint={hint}>
-            <textarea aria-label={label} value={r.c6[k]} onChange={(e) => set('c6', { ...r.c6, [k]: e.target.value })} rows={k === 'capacity' || k === 'character' || k === 'eksistensi' ? 4 : 2} className={TA} />
+            <textarea aria-label={label} value={r.c6[k]} onChange={(e) => set('c6', { ...r.c6, [k]: e.target.value })} rows={k === 'character' || k === 'eksistensi' ? 4 : 2} className={TA} />
           </Isian>
         ))}
       </Bagian>
