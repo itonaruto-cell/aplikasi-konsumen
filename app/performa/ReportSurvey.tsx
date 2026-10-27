@@ -138,18 +138,30 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
         {UNSUR.map(([k, label, hint]) => k === 'capacity' ? (
           <div key={k} className="mt-3">
             <p className="text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">{label}</p>
-            <p className="text-[12px] leading-snug text-neutral-500">Omzet × margin + penghasilan tambahan, lalu IIR & DSR dihitung otomatis.</p>
+            <p className="text-[12px] leading-snug text-neutral-500">Usaha: omzet × margin. Pegawai: gaji tanpa margin. Ditambah penghasilan tambahan, lalu IIR & DSR dihitung otomatis.</p>
             {([['kons', 'Konsumen'], ['pas', 'Pasangan (kalau ada)']] as const).map(([pk, pl]) => {
               const p = r.kapasitas[pk];
               const ubahP = (x: Partial<Penghasilan>) => set('kapasitas', { ...r.kapasitas, [pk]: { ...p, ...x } });
               return (
                 <div key={pk} className="mt-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
-                  <p className="text-[13px] font-bold">{pl}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-bold">{pl}</p>
+                    <div role="group" aria-label={`Jenis penghasilan ${pl}`} className="flex gap-1">
+                      {([['usaha', 'Usaha'], ['pegawai', 'Pegawai']] as const).map(([j, jl]) => (
+                        <button key={j} onClick={() => ubahP({ jenis: j })} aria-pressed={p.jenis === j}
+                          className={`min-h-9 rounded-full px-3 text-[13px] font-semibold ${p.jenis === j ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-white dark:bg-neutral-800'}`}>{jl}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {p.jenis === 'pegawai' ? (
+                    <Isian label="Gaji (tanpa margin)"><AngkaInput label={`Gaji ${pl}`} value={p.gaji} onChange={(v) => ubahP({ gaji: v })} className="min-h-11" /></Isian>
+                  ) : (
                   <div className="mt-1 grid grid-cols-[1fr_6rem] items-end gap-2">
                     <Isian label="Omzet"><AngkaInput label={`Omzet ${pl}`} value={p.omzet} onChange={(v) => ubahP({ omzet: v })} className="min-h-11" /></Isian>
                     <Isian label="Margin (%)"><AngkaInput label={`Margin ${pl}`} value={p.margin} placeholder="15–100" onChange={(v) => ubahP({ margin: Math.min(100, v) })} className="min-h-11" /></Isian>
                   </div>
-                  {p.omzet > 0 && <p className="mt-1 text-[12px] text-neutral-500">Margin ({p.margin || 0}%) = <b className="text-neutral-800 dark:text-neutral-200">{labaOf(p).toLocaleString('id-ID')}</b>{p.margin > 0 && p.margin < 15 ? ' · margin biasanya 15–100%' : ''}</p>}
+                  )}
+                  {p.jenis !== 'pegawai' && p.omzet > 0 && <p className="mt-1 text-[12px] text-neutral-500">Margin ({p.margin || 0}%) = <b className="text-neutral-800 dark:text-neutral-200">{labaOf(p).toLocaleString('id-ID')}</b>{p.margin > 0 && p.margin < 15 ? ' · margin biasanya 15–100%' : ''}</p>}
                   <div className="grid grid-cols-[1fr_7rem] items-end gap-2">
                     <Isian label="Penghasilan tambahan"><AngkaInput label={`Penghasilan tambahan ${pl}`} value={p.tambahan} onChange={(v) => ubahP({ tambahan: v })} className="min-h-11" /></Isian>
                     <Isian label="Dari"><input value={p.tambahanKet} onChange={(e) => ubahP({ tambahanKet: e.target.value })} placeholder="sawah" aria-label={`Sumber penghasilan tambahan ${pl}`} className={`${FIELD} min-h-11`} /></Isian>
