@@ -46,7 +46,7 @@ async function db<T>(store: string, mode: IDBTransactionMode, f: (s: IDBObjectSt
 }
 
 /* ---------- Foto → JPEG ---------- */
-async function keJpeg(file: File, sisi: number, q: number): Promise<{ blob: Blob; w: number; h: number }> {
+export async function keJpeg(file: File, sisi: number, q: number): Promise<{ blob: Blob; w: number; h: number }> {
   const url = URL.createObjectURL(file);
   try {
     let img: CanvasImageSource, w = 0, h = 0;
@@ -81,7 +81,7 @@ async function pdfKategori(kat: { nama: string }, foto: Foto[], nama: string): P
     return new File([bytes.buffer as ArrayBuffer], namaFile(kat.nama, nama, bagian), { type: 'application/pdf' });
   });
 }
-async function kirimFile(files: File[]) {
+export async function kirimFile(files: File[]) {
   if (navigator.canShare?.({ files })) {
     try { await navigator.share({ files }); return; } catch (e) { if ((e as Error)?.name === 'AbortError') return; }
   }
