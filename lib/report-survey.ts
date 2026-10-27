@@ -22,13 +22,14 @@ export type ReportSurvey = {
   kapasitas: Kapasitas;
 };
 
-/* ---------- Capacity: omzet × margin + penghasilan tambahan → IIR & DSR ---------- */
-export type Penghasilan = { omzet: number; margin: number; tambahan: number; tambahanKet: string };
+/* ---------- Capacity: omzet × margin (usaha) atau gaji (pegawai) + penghasilan tambahan → IIR & DSR ---------- */
+export type Penghasilan = { jenis: 'usaha' | 'pegawai'; omzet: number; margin: number; gaji: number; tambahan: number; tambahanKet: string };
 export type Kapasitas = { kons: Penghasilan; pas: Penghasilan; angsLain: number; angsWom: number };
-const phKosong = (): Penghasilan => ({ omzet: 0, margin: 0, tambahan: 0, tambahanKet: '' });
+const phKosong = (): Penghasilan => ({ jenis: 'usaha', omzet: 0, margin: 0, gaji: 0, tambahan: 0, tambahanKet: '' });
 export const kapasitasKosong = (): Kapasitas => ({ kons: phKosong(), pas: phKosong(), angsLain: 0, angsWom: 0 });
-const adaPh = (p: Penghasilan) => !!(p.omzet || p.tambahan);
-export const labaOf = (p: Penghasilan) => Math.floor((p.omzet * p.margin) / 100);
+const adaPh = (p: Penghasilan) => !!((p.jenis === 'pegawai' ? p.gaji : p.omzet) || p.tambahan);
+// Usaha: omzet × margin. Pegawai: gaji apa adanya (tanpa margin)
+export const labaOf = (p: Penghasilan) => (p.jenis === 'pegawai' ? p.gaji : Math.floor((p.omzet * p.margin) / 100));
 export function hitungKapasitas(r: Pick<ReportSurvey, 'kapasitas' | 'angsuran'>) {
   const k = r.kapasitas;
   const wom = k.angsWom || r.angsuran || 0;
@@ -47,8 +48,7 @@ export function barisKapasitas(r: Pick<ReportSurvey, 'kapasitas' | 'angsuran'>):
   const h = hitungKapasitas(r);
   const ph = (judul: string, p: Penghasilan) => adaPh(p) ? [
     judul,
-    `Omzet : ${ribu(p.omzet)}`,
-    `Margin (${p.margin || 0}%) : ${ribu(labaOf(p))}`,
+    ...(p.jenis === 'pegawai' ? [`Gaji : ${ribu(p.gaji)}`] : [`Omzet : ${ribu(p.omzet)}`, `Margin (${p.margin || 0}%) : ${ribu(labaOf(p))}`]),
     ...(p.tambahan || p.tambahanKet.trim() ? [`Penghasilan tambahan : ${ribu(p.tambahan)}${p.tambahanKet.trim() ? ` (${p.tambahanKet.trim()})` : ''}`] : []),
     '',
   ] : [];
@@ -95,7 +95,7 @@ function rapikanKapasitas(x: unknown): Kapasitas {
   const num = (v: unknown) => { const n = Number(v); return isFinite(n) && n > 0 ? Math.round(n) : 0; };
   const ph = (p: unknown): Penghasilan => {
     const q = (p && typeof p === 'object' ? p : {}) as Partial<Penghasilan>;
-    return { omzet: num(q.omzet), margin: Math.min(100, num(q.margin)), tambahan: num(q.tambahan), tambahanKet: typeof q.tambahanKet === 'string' ? q.tambahanKet.slice(0, 100) : '' };
+    return { jenis: q.jenis === 'pegawai' ? 'pegawai' : 'usaha', omzet: num(q.omzet), margin: Math.min(100, num(q.margin)), gaji: num(q.gaji), tambahan: num(q.tambahan), tambahanKet: typeof q.tambahanKet === 'string' ? q.tambahanKet.slice(0, 100) : '' };
   };
   return { kons: ph(o.kons), pas: ph(o.pas), angsLain: num(o.angsLain), angsWom: num(o.angsWom) };
 }
