@@ -9,6 +9,7 @@ import {
 import { TIPE_DOCX, buatDocxSurat, type FotoDocx } from '../../lib/surat-docx';
 import { todayJkt } from '../../lib/performa-calc';
 import { useOverlay } from '../overlay';
+import { KUNCI_SURAT_BUKA, suratTerbuka } from '../../lib/surat-buka';
 import { FIELD } from './form';
 import { Ico } from './parts';
 import { Bagian, Isian, kecilkan } from './Banding';
@@ -16,11 +17,11 @@ import { Bagian, Isian, kecilkan } from './Banding';
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 
 /* ---------- Draf di HP & form yang sedang terbuka (supaya tidak hilang saat pindah ke WA) ---------- */
-const DRAF = 'surat-draf:', BUKA = 'surat-buka';
+const DRAF = 'surat-draf:', BUKA = KUNCI_SURAT_BUKA;
 const baca = <T,>(k: string): T | null => { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) as T : null; } catch { return null; } };
 const tulis = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* abaikan */ } };
 const buang = (k: string) => { try { localStorage.removeItem(k); } catch { /* abaikan */ } };
-export const suratTerbuka = () => { const x = baca<{ id: string; t: number }>(BUKA); return x && Date.now() - x.t < 12 * 3_600_000 ? x : null; };
+
 const idSuratBaru = () => `srt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10).padEnd(8, '0')}`;
 
 /* ---------- Foto ---------- */

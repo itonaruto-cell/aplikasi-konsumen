@@ -1,5 +1,6 @@
 'use client';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
+import { KUNCI_PERFORMA, ambilPerformaAwal, bacaCache, hapusCache, simpanCache } from '../lib/cache-hp';
 import { AktifCtx, OverlayCtx } from './overlay';
 import type { Orang, Pengumuman, Performa } from '../lib/performa-types';
 import { PengumumanForm } from './performa/Pengumuman';
@@ -9,31 +10,34 @@ import { ThemeToggle } from './theme';
 import { Sheet, type View } from './performa/ui';
 import { Confetti, Ico, vibrate } from './performa/parts';
 import Pantau from './performa/Pantau';
-import Wrapped from './performa/Wrapped';
-import Juara from './performa/Juara';
-import Rute from './performa/Rute';
+const Wrapped = lazy(() => import('./performa/Wrapped'));
+const Juara = lazy(() => import('./performa/Juara'));
+const Rute = lazy(() => import('./performa/Rute'));
 import Saya from './performa/Saya';
-import Sorotan from './performa/Sorotan';
-import BahanSurvey from './performa/Bahan';
-import Insentif from './performa/Insentif';
-import InjectP3 from './performa/Inject';
-import Plan from './performa/Plan';
+const Sorotan = lazy(() => import('./performa/Sorotan'));
+const BahanSurvey = lazy(() => import('./performa/Bahan'));
+const Insentif = lazy(() => import('./performa/Insentif'));
+const InjectP3 = lazy(() => import('./performa/Inject'));
+const Plan = lazy(() => import('./performa/Plan'));
 import Kejar from './performa/Kejar';
-import Laporan, { type Jenis as JenisLaporan } from './performa/Laporan';
+import type { Jenis as JenisLaporan } from './performa/Laporan';
+const Laporan = lazy(() => import('./performa/Laporan'));
 import { posisiKosong } from '../lib/kesehatan-data';
 import { PIC_TAMBAHAN } from '../lib/posisi-isi';
-import ProspekPage from './performa/Prospek';
-import Sinkron from './performa/Sinkron';
-import TanyaSK from './performa/TanyaSK';
-import BandingPage from './performa/Banding';
-import SuratPage, { suratTerbuka } from './performa/Surat';
-import AlatPdf from './performa/AlatPdf';
+const ProspekPage = lazy(() => import('./performa/Prospek'));
+const Sinkron = lazy(() => import('./performa/Sinkron'));
+const TanyaSK = lazy(() => import('./performa/TanyaSK'));
+const BandingPage = lazy(() => import('./performa/Banding'));
+const SuratPage = lazy(() => import('./performa/Surat'));
+import { suratTerbuka } from '../lib/surat-buka';
+const AlatPdf = lazy(() => import('./performa/AlatPdf'));
 import { bacaBuka } from '../lib/banding-draf';
-import PdfSurvey from './performa/PdfSurvey';
-import ReportSurveyPage from './performa/ReportSurvey';
-import ProyeksiPage from './performa/Proyeksi';
-import RekapMutasi from './performa/RekapMutasi';
-import Kesehatan, { PeringatanData } from './performa/Kesehatan';
+const PdfSurvey = lazy(() => import('./performa/PdfSurvey'));
+const ReportSurveyPage = lazy(() => import('./performa/ReportSurvey'));
+const ProyeksiPage = lazy(() => import('./performa/Proyeksi'));
+const RekapMutasi = lazy(() => import('./performa/RekapMutasi'));
+const Kesehatan = lazy(() => import('./performa/Kesehatan'));
+const PeringatanData = lazy(() => import('./performa/Kesehatan').then((m) => ({ default: m.PeringatanData })));
 
 // Kerangka aplikasi (gaya sosmed): Pantau (pantauan cabang / Mobilku / Motorku), Plan (plan aktivitas harian), Rute,
 // Cari (khusus owner/konsumen), Saya.
@@ -47,6 +51,29 @@ const SEEN_KEY = 'ck_story_seen';
 
 const readSeen = (): string[] => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch { return []; } };
 const storyKey = (s: Story) => `${s.o.nama}|${s.d}`;
+
+// Kerangka singkat saat bagian halaman baru pertama kali diunduh
+function MemuatHalaman() {
+  return (
+    <div aria-label="Memuat" className="space-y-3 px-4 pt-4">
+      {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 animate-pulse rounded-[20px] bg-neutral-200/70 dark:bg-neutral-800/70" />)}
+    </div>
+  );
+}
+// Setelah layar pertama tampil, bagian aplikasi lain diunduh pelan-pelan di belakang supaya pindah halaman instan
+const SIAPKAN: (() => Promise<unknown>)[] = [
+  () => import('./performa/Plan'), () => import('./performa/Bahan'), () => import('./performa/Rute'), () => import('./performa/Juara'),
+  () => import('./performa/Insentif'), () => import('./performa/Laporan'), () => import('./performa/Proyeksi'), () => import('./performa/ReportSurvey'),
+  () => import('./performa/PdfSurvey'), () => import('./performa/Banding'), () => import('./performa/Surat'), () => import('./performa/AlatPdf'),
+  () => import('./performa/Prospek'), () => import('./performa/Inject'), () => import('./performa/RekapMutasi'), () => import('./performa/TanyaSK'),
+  () => import('./performa/Sorotan'), () => import('./performa/Wrapped'), () => import('./CariKonsumen'),
+];
+function siapkanDiBelakang() {
+  const idle = (f: () => void) => ((window as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback || ((g: () => void) => setTimeout(g, 300)))(f, { timeout: 3000 });
+  let i = 0;
+  const lanjut = () => { const f = SIAPKAN[i++]; if (!f) return; f().catch(() => {}).finally(() => idle(lanjut)); };
+  idle(lanjut);
+}
 
 export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun; cari?: Slot; aktivitas?: Slot }) {
   const [data, setData] = useState<Performa | null>(null);
@@ -92,16 +119,18 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   /* ---------- Muat data ---------- */
   useEffect(() => {
     let alive = true;
+    // Pertama dibuka: tampilkan data terakhir yang tersimpan di HP dulu, sambil mengambil yang baru
+    if (reloadKey === 0) { const c = bacaCache<Performa>(KUNCI_PERFORMA, akun.email); if (c) setData((d) => d || c); }
     (async () => {
       setLoading(true); setErr('');
       try {
-        const res = await fetch('/api/performa', { cache: 'no-store' });
-        if (res.status === 401) { window.location.href = '/login'; return; }
+        const res = await ((reloadKey === 0 && ambilPerformaAwal()) || fetch('/api/performa', { cache: 'no-store' }));
+        if (res.status === 401) { hapusCache(); window.location.href = '/login'; return; }
         const json = await res.json();
         if (!alive) return;
         if (!res.ok) setErr(json?.error || 'Performa gagal dimuat.');
         else if (json?.kosong) { setKosong(true); setData(null); }
-        else { setKosong(false); setData(json as Performa); loadedAt.current = Date.now(); }
+        else { setKosong(false); setData(json as Performa); loadedAt.current = Date.now(); simpanCache(KUNCI_PERFORMA, json, akun.email); }
       } catch {
         if (alive) setErr('Koneksi bermasalah. Periksa internet lalu coba lagi.');
       } finally {
@@ -109,7 +138,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       }
     })();
     return () => { alive = false; };
-  }, [reloadKey]);
+  }, [reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const reload = () => setReloadKey((k) => k + 1);
 
   // Pengumuman owner
@@ -168,6 +197,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
   /* ---------- Hitungan ---------- */
   const c = useMemo(() => (data ? buildCtx(data) : null), [data]);
+  const disiapkan = useRef(false);
+  useEffect(() => { if (data && !disiapkan.current) { disiapkan.current = true; window.setTimeout(siapkanDiBelakang, 1500); } }, [data]);
   const me: Orang | null = useMemo(() => (data ? findMe(data, akun.perfName, akun.name, akun.email) : null), [data, akun.perfName, akun.name, akun.email]);
   const storyList = useMemo(() => (c ? stories(c, brand, me) : []), [c, brand, me]);
   // Owner adalah SPV: tidak ikut ditagih plan, bukan pilihan PIC survey, dan tidak punya hitungan insentif perorangan
@@ -395,7 +426,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
         {hidup.map((k) => (
           <div key={k} hidden={k !== page} data-halaman={k} data-aktif={k === page ? '' : undefined} ref={(el) => { wadah.current[k] = el; }}>
-            <AktifCtx.Provider value={k === page}>{halaman(k)}</AktifCtx.Provider>
+            <AktifCtx.Provider value={k === page}><Suspense fallback={<MemuatHalaman />}>{halaman(k)}</Suspense></AktifCtx.Provider>
           </div>
         ))}
       </div>
@@ -446,7 +477,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
         </div>
       )}
 
-      {wrap && c && <Wrapped c={c} me={me} onClose={() => setWrap(false)} />}
+      {wrap && c && <Suspense fallback={null}><Wrapped c={c} me={me} onClose={() => setWrap(false)} /></Suspense>}
 
       {rayakan && (
         <div className="pointer-events-none fixed inset-0 z-[60]" aria-live="polite">
@@ -461,8 +492,10 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       )}
 
       {story !== null && c && storyList.length > 0 && (
-        <Sorotan list={storyList} start={Math.min(story, storyList.length - 1)} c={c} onSeen={markSeen}
-          onClose={() => setStory(null)} onProfile={(o) => { setStory(null); push({ t: 'orang', o }); }} />
+        <Suspense fallback={null}>
+          <Sorotan list={storyList} start={Math.min(story, storyList.length - 1)} c={c} onSeen={markSeen}
+            onClose={() => setStory(null)} onProfile={(o) => { setStory(null); push({ t: 'orang', o }); }} />
+        </Suspense>
       )}
     </div>
     </OverlayCtx.Provider>

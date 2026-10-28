@@ -1,17 +1,10 @@
-import { google } from 'googleapis';
+import { sheetsApi } from './sheets-api';
 
 // Tabel kecil di Google Sheets aplikasi (dibuat otomatis): PENGUMUMAN, PUSH, BAHAN_SURVEY, INJECT_P3, dan PLAN.
 // Baris 1 = judul kolom, data mulai baris 2. Jangan diubah manual kecuali menghapus baris.
 
 function sheets() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  return google.sheets({ version: 'v4', auth });
+  return sheetsApi();
 }
 
 const ready = new Set<string>();

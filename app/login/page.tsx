@@ -17,6 +17,8 @@ export default async function LoginPage({
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#1F4E78] px-6 text-white">
+      {/* Data akun & performa yang disimpan di HP dihapus saat keluar / sebelum masuk */}
+      <script dangerouslySetInnerHTML={{ __html: "try{localStorage.removeItem('mk-cache-akun');localStorage.removeItem('mk-cache-performa')}catch(e){}" }} />
       <div className="w-full max-w-sm">
         <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10">
           <img src="/icon-192.png" alt="" className="h-16 w-16 rounded-2xl" />

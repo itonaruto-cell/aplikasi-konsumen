@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { sheetsApi } from './sheets-api';
 import type { Performa, Peringkat } from './performa-types';
 import { rankSnapshot, todayJkt } from './performa-calc';
 import { rapikanPerforma } from './sales-brand';
@@ -14,14 +14,7 @@ const CACHE_MS = 60_000;
 const NOTE = 'Diisi otomatis oleh Apps Script pantauan cabang. Jangan diubah.';
 
 function sheets() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  return google.sheets({ version: 'v4', auth });
+  return sheetsApi();
 }
 
 let tabReady = false;

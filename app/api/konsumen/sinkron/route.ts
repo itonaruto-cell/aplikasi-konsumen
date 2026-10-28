@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { google } from 'googleapis';
+import { sheetsApi } from '../../../../lib/sheets-api';
 import { verifySession, SESSION_COOKIE } from '../../../../lib/session';
 import { getRole } from '../../../../lib/access';
 import { hurufKolom, rencanakan, type Grid } from '../../../../lib/sinkron-konsumen';
@@ -15,14 +15,7 @@ const SHEET1 = 'Sheet1';
 const TAB_SUMBER = /^(KA|SALES)\b|^MAPS$/i;
 
 function api() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  return google.sheets({ version: 'v4', auth });
+  return sheetsApi();
 }
 const q = (t: string) => `'${t.replace(/'/g, "''")}'`;
 

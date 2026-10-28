@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { sheetsApi } from './sheets-api';
 
 // Catatan aktivitas harian di tab "LOG_AKTIF" (dibuat otomatis kalau belum ada).
 // 1 baris = 1 orang per hari:
@@ -14,14 +14,7 @@ export type ActivityRow = {
 };
 
 function sheets() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  return google.sheets({ version: 'v4', auth });
+  return sheetsApi();
 }
 
 export function todayWIB(d = new Date()): string {

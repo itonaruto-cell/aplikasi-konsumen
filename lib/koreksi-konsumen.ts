@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { sheetsApi } from './sheets-api';
 import { appendRows, readRows, updateRowById } from './sheet-store';
 
 // Koreksi data konsumen oleh owner (kecamatan, kelurahan, maps, no HP, dan kolom lain).
@@ -97,14 +97,7 @@ export function terapkan(head: string[], rows: unknown[][], peta: PetaKoreksi): 
 
 /* ---------- Database konsumen asli (Sheet1) ---------- */
 export async function bacaDatabase(): Promise<{ head: string[]; rows: unknown[][] }> {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-  const res = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
+  const res = await sheetsApi().spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID, range: DATA_RANGE,
   });
   const values = (res.data.values || []) as unknown[][];

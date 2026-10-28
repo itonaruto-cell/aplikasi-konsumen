@@ -1,8 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import PerformaPanel from './PerformaPanel';
-import CariKonsumen from './CariKonsumen';
-import AktivitasTim from './AktivitasTim';
+import { KUNCI_AKUN, bacaCache, hapusCache, mulaiAmbilPerforma, simpanCache } from '../lib/cache-hp';
+
+// Dimuat terpisah saat dibuka pertama kali (tidak memperlambat pembukaan aplikasi)
+const CariKonsumen = lazy(() => import('./CariKonsumen'));
+const AktivitasTim = lazy(() => import('./AktivitasTim'));
+const Memuat = () => <p className="px-4 pt-6 text-[14px] text-neutral-500">Memuat…</p>;
 
 // Satu aplikasi untuk semua anggota. Layar pertama selalu Performa (Kabar).
 // - owner    : Performa + Cari konsumen (dengan nomor HP) + Aktivitas tim
@@ -17,15 +21,22 @@ export default function Home() {
 
   useEffect(() => {
     let alive = true;
+    // Akun terakhir langsung dipakai supaya layar tidak menunggu; tetap dicek ulang ke server
+    if (tries === 0) { mulaiAmbilPerforma(); const c = bacaCache<Akun>(KUNCI_AKUN); if (c) setMe(c); }
     (async () => {
       setError('');
       try {
         const res = await fetch('/api/me', { cache: 'no-store' });
-        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (res.status === 401) { hapusCache(); window.location.href = '/login'; return; }
         const json = await res.json();
         if (!alive) return;
-        if (!res.ok) setError(json?.error || 'Akun ini tidak bisa dipakai.');
-        else setMe(json as Akun);
+        if (!res.ok) { hapusCache(); setMe(null); setError(json?.error || 'Akun ini tidak bisa dipakai.'); }
+        else {
+          const baru = json as Akun;
+          // Akun berbeda dari simpanan (ganti akun): data performa simpanan ikut dibuang
+          setMe((lama) => { if (lama && lama.email !== baru.email) hapusCache(); return lama && JSON.stringify(lama) === JSON.stringify(baru) ? lama : baru; });
+          simpanCache(KUNCI_AKUN, baru);
+        }
       } catch {
         if (alive) setError('Koneksi bermasalah. Periksa internet lalu coba lagi.');
       }
@@ -79,7 +90,7 @@ export default function Home() {
   const canKonsumen = me.role === 'owner' || me.role === 'spv' || me.role === 'konsumen';
   return (
     <PerformaPanel me={me}
-      cari={canKonsumen ? (reloadKey) => <CariKonsumen me={me} reloadKey={reloadKey} /> : undefined}
-      aktivitas={me.role === 'owner' ? (reloadKey) => <AktivitasTim reloadKey={reloadKey} /> : undefined} />
+      cari={canKonsumen ? (reloadKey) => <Suspense fallback={<Memuat />}><CariKonsumen me={me} reloadKey={reloadKey} /></Suspense> : undefined}
+      aktivitas={me.role === 'owner' ? (reloadKey) => <Suspense fallback={<Memuat />}><AktivitasTim reloadKey={reloadKey} /></Suspense> : undefined} />
   );
 }

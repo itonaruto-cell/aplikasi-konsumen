@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { sheetsApi } from './sheets-api';
 
 // Salinan kecil foto visit (dikirim Apps Script) disimpan di tab FOTO Google Sheets aplikasi.
 // Satu baris per foto: ID Drive, jenis gambar, waktu, lalu isi base64 dipecah per 45.000 karakter (maks. 4 sel).
@@ -9,14 +9,7 @@ export const MAX_B64 = CHUNK * 4;
 export const validId = (id: string) => /^[A-Za-z0-9_-]{20,120}$/.test(id);
 
 function sheets() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  return google.sheets({ version: 'v4', auth });
+  return sheetsApi();
 }
 
 let ready = false;
