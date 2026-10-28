@@ -69,7 +69,8 @@ const API = {
     get: (o: Umum & { fields?: string; ranges?: string[]; includeGridData?: boolean }) =>
       panggil<{ sheets?: { properties?: { title?: string; sheetId?: number; index?: number; gridProperties?: { rowCount?: number; columnCount?: number } } }[] }>(
         'GET', id(o.spreadsheetId), { fields: o.fields, ranges: o.ranges, includeGridData: o.includeGridData }),
-    batchUpdate: (o: Umum & { requestBody: unknown }) => panggil<Record<string, unknown>>('POST', `${id(o.spreadsheetId)}:batchUpdate`, {}, o.requestBody),
+    batchUpdate: (o: Umum & { requestBody: unknown }) =>
+      panggil<{ replies?: { addSheet?: { properties?: { sheetId?: number; title?: string } } }[] }>('POST', `${id(o.spreadsheetId)}:batchUpdate`, {}, o.requestBody),
     values: {
       get: (o: Umum & { range: string; valueRenderOption?: string; majorDimension?: string; dateTimeRenderOption?: string }) =>
         panggil<Nilai>('GET', `${id(o.spreadsheetId)}/values/${rg(o.range)}`, { valueRenderOption: o.valueRenderOption, majorDimension: o.majorDimension, dateTimeRenderOption: o.dateTimeRenderOption }),
