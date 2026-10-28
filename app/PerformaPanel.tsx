@@ -1,6 +1,6 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
-import { OverlayCtx } from './overlay';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
+import { AktifCtx, OverlayCtx } from './overlay';
 import type { Orang, Pengumuman, Performa } from '../lib/performa-types';
 import { PengumumanForm } from './performa/Pengumuman';
 import { refreshPush } from './push-client';
@@ -59,6 +59,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const [page, setPage] = useState<Page>('pantau');
   // Halaman sebelumnya, supaya tombol kembali mundur satu halaman (mis. Form banding → Saya → Pantau)
   const [riwayatHal, setRiwayatHal] = useState<Page[]>([]);
+  const posisi = useRef<Partial<Record<Page, number>>>({});
+  const arah = useRef<'maju' | 'mundur' | 'tab' | null>(null);
   const [lapAwal, setLapAwal] = useState<JenisLaporan>('achievement');
   const brand: BrandKey = 'semua';
   const [wrap, setWrap] = useState(false);
@@ -215,8 +217,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     if (overlays.current.length) overlays.current[overlays.current.length - 1]();
     else if (story !== null) setStory(null);
     else if (stack.length) setStack((s) => s.slice(0, -1));
-    else if (riwayatHal.length) { setPage(riwayatHal[riwayatHal.length - 1]); setRiwayatHal((h) => h.slice(0, -1)); window.scrollTo({ top: 0 }); }
-    else if (page !== 'pantau') setPage('pantau');
+    else if (riwayatHal.length) { arah.current = 'mundur'; setPage(riwayatHal[riwayatHal.length - 1]); setRiwayatHal((h) => h.slice(0, -1)); }
+    else if (page !== 'pantau') { arah.current = 'mundur'; setPage('pantau'); }
   };
   useEffect(() => {
     const d = depth - prevDepth.current;
@@ -225,6 +227,8 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     fromPop.current = false;
     prevDepth.current = depth;
   }, [depth]);
+  // Posisi gulir diatur aplikasi sendiri (bawaan browser memulihkan posisi yang salah saat kembali)
+  useEffect(() => { try { window.history.scrollRestoration = 'manual'; } catch { /* abaikan */ } }, []);
   useEffect(() => {
     const onPop = () => {
       if (ignorePop.current > 0) { ignorePop.current -= 1; return; }
@@ -243,10 +247,31 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   // Dari menu bawah = mulai dari awal (kembali → Pantau); dari dalam halaman = tambah satu langkah
   const go = (p: Page) => {
     if (p === page) return;
+    posisi.current[page] = window.scrollY; arah.current = 'maju';
     setRiwayatHal((h) => [...h.filter((x) => x !== p), page].slice(-10));
-    setPage(p); window.scrollTo({ top: 0 });
+    setPage(p);
   };
-  const goNav = (p: Page) => { setRiwayatHal(p === 'pantau' ? [] : ['pantau']); setPage(p); window.scrollTo({ top: 0 }); };
+  const goNav = (p: Page) => { posisi.current = {}; arah.current = 'tab'; setRiwayatHal(p === 'pantau' ? [] : ['pantau']); setPage(p); };
+  // Tombol ← di header: lewat riwayat browser supaya sama persis dengan tombol kembali HP
+  const kembali = () => { if (depth > 0) window.history.back(); else backOne.current(); };
+
+  /* ---------- Halaman yang dibuka sebelumnya tetap hidup; posisi gulir dikembalikan; animasi geser ---------- */
+  const hidup = useMemo(() => [...new Set([...riwayatHal, page])], [riwayatHal, page]);
+  const wadah = useRef<Partial<Record<Page, HTMLDivElement | null>>>({});
+  useLayoutEffect(() => {
+    const a = arah.current;
+    arah.current = null;
+    window.scrollTo(0, a === 'mundur' ? posisi.current[page] ?? 0 : 0);
+    const el = wadah.current[page];
+    if (!el || (a !== 'maju' && a !== 'mundur')) return;
+    // Animasi CSS (ck-in-right/left, otomatis mati kalau HP minta kurangi gerakan); kelas dilepas setelah selesai
+    el.classList.remove('ck-in-right', 'ck-in-left');
+    void el.offsetWidth;
+    el.classList.add(a === 'maju' ? 'ck-in-right' : 'ck-in-left');
+    // Kelas harus dilepas: transform yang masih menempel membuat bar "fixed" di halaman ikut bergeser
+    const t = window.setTimeout(() => el.classList.remove('ck-in-right', 'ck-in-left'), 320);
+    return () => { window.clearTimeout(t); el.classList.remove('ck-in-right', 'ck-in-left'); };
+  }, [page]);
 
   /* ---------- Tarik ke bawah untuk muat ulang ---------- */
   const overlay = ovN > 0 || stack.length > 0 || story !== null || wrap;
@@ -262,6 +287,54 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const namaApp = `Marketing ${cabang.replace(/\b\w/g, (h) => h.toUpperCase())}`;
   const TITLE: Record<Page, string> = { pantau: namaApp, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3', laporan: 'Laporan', prospek: 'Database prospek', sinkron: 'Perbarui database', sk: 'Tanya SK', kesehatan: 'Kesehatan data', banding: 'Form banding', pdf: 'PDF berkas survey', report: 'Report survey', proyeksi: 'Proyeksi sales', mutasi: 'Rekap mutasi rekening', surat: 'Surat IM', alatpdf: 'Alat PDF' };
 
+  const halaman = (k: Page): ReactNode => (
+    k === 'cari' ? (cari ? cari(reloadKey) : null) : k === 'aktivitas' ? (aktivitas ? aktivitas(reloadKey) : null)
+          : k === 'bahan' ? <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFoto={() => { setLapAwal('bahan'); go('laporan'); }} />
+          : k === 'insentif' ? <Insentif c={c} me={me} akun={akun} reloadKey={reloadKey} onBahan={() => go('bahan')} />
+          : k === 'plan' ? <Plan c={c} me={me} akun={akun} tim={tim} staf={staf} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFotoBahan={() => { setLapAwal('bahan'); go('laporan'); }} />
+          : k === 'inject' ? <InjectP3 akun={akun} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} />
+          : loading && !data ? (
+          <div className="space-y-3 px-4 pt-4">
+            <div className="flex gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 w-16 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-800" />)}</div>
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-[20px] bg-neutral-200/70 dark:bg-neutral-800/70" />)}
+          </div>
+        ) : err && !data ? (
+          <div className="mx-4 mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            {err}
+            <button onClick={reload} className="mt-3 block min-h-11 rounded-full bg-red-700 px-5 font-semibold text-white">Coba lagi</button>
+          </div>
+        ) : kosong || !data || !c ? (
+          <div className="mx-4 mt-4 rounded-2xl border border-neutral-200 p-8 text-center dark:border-neutral-800">
+            <p className="font-semibold">Belum ada data performa</p>
+            <p className="mt-1 text-sm text-neutral-500">Data muncul setelah Apps Script pantauan cabang mengirim kiriman pertamanya.</p>
+          </div>
+        ) : (
+          <>
+            {k === 'pantau' && (
+              <Pantau c={c} me={me} akun={akun} push={push}
+                pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
+                openWrapped={() => setWrap(true)}
+                kejar={(cek) => <Kejar c={c} me={me} spv={spv} isOwner={akun.role === 'owner'} reloadKey={reloadKey} cek={cek} onBahan={() => go('bahan')} />} />
+            )}
+            {k === 'laporan' && <>{akun.role === 'owner' && data && <div className="px-4 pt-4"><PeringatanData data={data} onBuka={() => go('kesehatan')} /></div>}<Laporan key={lapAwal} c={c} spv={spv} awal={lapAwal} /></>}
+            {k === 'sinkron' && akun.role === 'owner' && <Sinkron />}
+            {k === 'sk' && <TanyaSK akun={akun} reloadKey={reloadKey} />}
+            {k === 'kesehatan' && akun.role === 'owner' && <Kesehatan data={data} />}
+            {k === 'pdf' && <PdfSurvey />}
+            {k === 'mutasi' && <RekapMutasi />}
+            {k === 'proyeksi' && <ProyeksiPage c={c} me={me} akun={akun} onFoto={() => { setLapAwal('proyeksi'); go('laporan'); }} />}
+            {k === 'report' && <ReportSurveyPage akun={akun} reloadKey={reloadKey} onBanding={() => go('banding')} />}
+            {k === 'banding' && <BandingPage akun={akun} reloadKey={reloadKey} />}
+            {k === 'surat' && <SuratPage akun={akun} reloadKey={reloadKey} />}
+            {k === 'alatpdf' && <AlatPdf />}
+            {k === 'prospek' && <ProspekPage akun={akun} tim={staf.map((x) => x.nama)} reloadKey={reloadKey} cabang={String(data?.cabang || 'Kendal')} />}
+            {k === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
+            {k === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
+            {k === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => { setLapAwal('achievement'); go('laporan'); }} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onReport={() => go('report')} onProyeksi={() => go('proyeksi')} onMutasi={() => go('mutasi')} onSurat={() => go('surat')} onAlatPdf={() => go('alatpdf')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
+          </>
+        )
+  );
+  const UTAMA: Page[] = ['pantau', 'plan', 'rute', 'cari', 'saya'];
   const NAV: [Page, string, string][] = [
     ['pantau', 'chart', 'Pantau'], ['plan', 'list', 'Plan'], ['rute', 'pin', 'Rute'],
     ...(cari ? [['cari', 'search', 'Cari'] as [Page, string, string]] : []),
@@ -273,7 +346,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     <div className="min-h-dvh bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50"
       style={{ fontFamily: 'var(--font-instrument), system-ui, sans-serif' }}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-      <div className="mx-auto max-w-xl pb-[calc(84px+env(safe-area-inset-bottom))]">
+      <div className="mx-auto max-w-xl overflow-x-clip pb-[calc(84px+env(safe-area-inset-bottom))]">
         {/* Header menempel di atas */}
         <header className="sticky top-0 z-30 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur dark:bg-neutral-950/95">
           <div className={`flex items-center justify-between gap-2 pl-4 pr-1.5 pt-2 ${page === 'pantau' ? '' : 'border-b border-neutral-200 pb-2 dark:border-neutral-800'}`}>
@@ -283,8 +356,15 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
                   <img src="/icon-192.png" alt="" width={30} height={30} className="h-[30px] w-[30px] shrink-0 rounded-full bg-white" />
                   <span className="truncate">{namaApp}</span>
                 </h1>
-              ) : (
+              ) : UTAMA.includes(page) ? (
                 <h1 className="truncate text-[22px] font-bold tracking-tight">{TITLE[page]}</h1>
+              ) : (
+                <div className="-ml-3 flex min-w-0 items-center">
+                  <button onClick={kembali} aria-label="Kembali" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full active:bg-neutral-100 dark:active:bg-neutral-800">
+                    <Ico n="left" className="h-6 w-6" sw={2.2} />
+                  </button>
+                  <h1 className="truncate text-[20px] font-bold tracking-tight">{TITLE[page]}</h1>
+                </div>
               )}
             </div>
             <div className="flex shrink-0 items-center">
@@ -313,51 +393,11 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
           </div>
         )}
 
-        {page === 'cari' && cari ? cari(reloadKey) : page === 'aktivitas' && aktivitas ? aktivitas(reloadKey)
-          : page === 'bahan' ? <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFoto={() => { setLapAwal('bahan'); go('laporan'); }} />
-          : page === 'insentif' ? <Insentif c={c} me={me} akun={akun} reloadKey={reloadKey} onBahan={() => go('bahan')} />
-          : page === 'plan' ? <Plan c={c} me={me} akun={akun} tim={tim} staf={staf} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFotoBahan={() => { setLapAwal('bahan'); go('laporan'); }} />
-          : page === 'inject' ? <InjectP3 akun={akun} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} />
-          : loading && !data ? (
-          <div className="space-y-3 px-4 pt-4">
-            <div className="flex gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 w-16 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-800" />)}</div>
-            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-[20px] bg-neutral-200/70 dark:bg-neutral-800/70" />)}
+        {hidup.map((k) => (
+          <div key={k} hidden={k !== page} data-halaman={k} data-aktif={k === page ? '' : undefined} ref={(el) => { wadah.current[k] = el; }}>
+            <AktifCtx.Provider value={k === page}>{halaman(k)}</AktifCtx.Provider>
           </div>
-        ) : err && !data ? (
-          <div className="mx-4 mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-            {err}
-            <button onClick={reload} className="mt-3 block min-h-11 rounded-full bg-red-700 px-5 font-semibold text-white">Coba lagi</button>
-          </div>
-        ) : kosong || !data || !c ? (
-          <div className="mx-4 mt-4 rounded-2xl border border-neutral-200 p-8 text-center dark:border-neutral-800">
-            <p className="font-semibold">Belum ada data performa</p>
-            <p className="mt-1 text-sm text-neutral-500">Data muncul setelah Apps Script pantauan cabang mengirim kiriman pertamanya.</p>
-          </div>
-        ) : (
-          <>
-            {page === 'pantau' && (
-              <Pantau c={c} me={me} akun={akun} push={push}
-                pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
-                openWrapped={() => setWrap(true)}
-                kejar={(cek) => <Kejar c={c} me={me} spv={spv} isOwner={akun.role === 'owner'} reloadKey={reloadKey} cek={cek} onBahan={() => go('bahan')} />} />
-            )}
-            {page === 'laporan' && <>{akun.role === 'owner' && data && <div className="px-4 pt-4"><PeringatanData data={data} onBuka={() => go('kesehatan')} /></div>}<Laporan key={lapAwal} c={c} spv={spv} awal={lapAwal} /></>}
-            {page === 'sinkron' && akun.role === 'owner' && <Sinkron />}
-            {page === 'sk' && <TanyaSK akun={akun} reloadKey={reloadKey} />}
-            {page === 'kesehatan' && akun.role === 'owner' && <Kesehatan data={data} />}
-            {page === 'pdf' && <PdfSurvey />}
-            {page === 'mutasi' && <RekapMutasi />}
-            {page === 'proyeksi' && <ProyeksiPage c={c} me={me} akun={akun} onFoto={() => { setLapAwal('proyeksi'); go('laporan'); }} />}
-            {page === 'report' && <ReportSurveyPage akun={akun} reloadKey={reloadKey} onBanding={() => go('banding')} />}
-            {page === 'banding' && <BandingPage akun={akun} reloadKey={reloadKey} />}
-            {page === 'surat' && <SuratPage akun={akun} reloadKey={reloadKey} />}
-            {page === 'alatpdf' && <AlatPdf />}
-            {page === 'prospek' && <ProspekPage akun={akun} tim={staf.map((x) => x.nama)} reloadKey={reloadKey} cabang={String(data?.cabang || 'Kendal')} />}
-            {page === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
-            {page === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {page === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => { setLapAwal('achievement'); go('laporan'); }} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onReport={() => go('report')} onProyeksi={() => go('proyeksi')} onMutasi={() => go('mutasi')} onSurat={() => go('surat')} onAlatPdf={() => go('alatpdf')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
-          </>
-        )}
+        ))}
       </div>
 
       {/* Navigasi bawah gaya Android */}
