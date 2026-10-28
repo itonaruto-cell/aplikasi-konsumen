@@ -11,29 +11,31 @@ export const UNSUR: [keyof Analisa6C, string, string][] = [
   ['eksistensi', 'Eksistensi (1E)', 'Dikenal di lingkungan rumah & kerja/usaha? Sudah berapa lama tinggal? Hasil cek lingkungan.'],
   ['purpose', 'Purpose (1P)', 'Tujuan dana (pendidikan, renovasi, modal usaha, pengobatan, dll.) dan bukti pendukungnya.'],
 ];
+export const PENGAJUAN = ['SLB', 'Fasdan'] as const;
 export const REKOMENDASI = ['Layak', 'Layak dengan catatan', 'Tidak layak'] as const;
 
 export type ReportSurvey = {
   id: string; dibuat: string; diubah: string; oleh: string;
   nama: string; appNo: string; tglSurvey: string; surveyor: string;
-  brand: 'MOBILKU' | 'MOTORKU'; program: string; status: string; pekerjaan: string; alamat: string;
+  brand: 'MOBILKU' | 'MOTORKU'; pengajuan: string; program: string; status: string; pekerjaan: string; alamat: string;
   unit: string; pencairan: number; tenor: number; angsuran: number;
   c6: Analisa6C; rekomendasi: string; catatan: string;
   kapasitas: Kapasitas;
 };
 
-/* ---------- Capacity: omzet × margin (usaha) atau gaji (pegawai) + penghasilan tambahan → IIR & DSR ---------- */
-export type Penghasilan = { jenis: 'usaha' | 'pegawai'; omzet: number; margin: number; gaji: number; tambahan: number; tambahanKet: string };
+/* ---------- Capacity: omzet × margin (usaha) + gaji (pegawai, tanpa margin) + penghasilan tambahan → IIR & DSR ---------- */
+export type Penghasilan = { omzet: number; margin: number; gaji: number; tambahan: number; tambahanKet: string };
 export type Kapasitas = { kons: Penghasilan; pas: Penghasilan; angsLain: number; angsWom: number };
-const phKosong = (): Penghasilan => ({ jenis: 'usaha', omzet: 0, margin: 0, gaji: 0, tambahan: 0, tambahanKet: '' });
+const phKosong = (): Penghasilan => ({ omzet: 0, margin: 0, gaji: 0, tambahan: 0, tambahanKet: '' });
 export const kapasitasKosong = (): Kapasitas => ({ kons: phKosong(), pas: phKosong(), angsLain: 0, angsWom: 0 });
-const adaPh = (p: Penghasilan) => !!((p.jenis === 'pegawai' ? p.gaji : p.omzet) || p.tambahan);
-// Usaha: omzet × margin. Pegawai: gaji apa adanya (tanpa margin)
-export const labaOf = (p: Penghasilan) => (p.jenis === 'pegawai' ? p.gaji : Math.floor((p.omzet * p.margin) / 100));
+const adaPh = (p: Penghasilan) => !!(p.omzet || p.gaji || p.tambahan);
+// Usaha: omzet × margin; gaji pegawai dihitung apa adanya (tanpa margin)
+export const labaOf = (p: Penghasilan) => Math.floor((p.omzet * p.margin) / 100);
+const totalPh = (p: Penghasilan) => labaOf(p) + p.gaji + p.tambahan;
 export function hitungKapasitas(r: Pick<ReportSurvey, 'kapasitas' | 'angsuran'>) {
   const k = r.kapasitas;
   const wom = k.angsWom || r.angsuran || 0;
-  const penghasilan = labaOf(k.kons) + k.kons.tambahan + labaOf(k.pas) + k.pas.tambahan;
+  const penghasilan = totalPh(k.kons) + totalPh(k.pas);
   const total = k.angsLain + wom;
   // Dipotong (bukan dibulatkan) ke 2 desimal, sama dengan hitungan manual
   const persen = (a: number) => (penghasilan > 0 ? Math.floor((a / penghasilan) * 10000) / 100 : null);
@@ -48,7 +50,8 @@ export function barisKapasitas(r: Pick<ReportSurvey, 'kapasitas' | 'angsuran'>):
   const h = hitungKapasitas(r);
   const ph = (judul: string, p: Penghasilan) => adaPh(p) ? [
     judul,
-    ...(p.jenis === 'pegawai' ? [`Gaji : ${ribu(p.gaji)}`] : [`Omzet : ${ribu(p.omzet)}`, `Margin (${p.margin || 0}%) : ${ribu(labaOf(p))}`]),
+    ...(p.omzet ? [`Omzet : ${ribu(p.omzet)}`, `Margin (${p.margin || 0}%) : ${ribu(labaOf(p))}`] : []),
+    ...(p.gaji ? [`Gaji : ${ribu(p.gaji)}`] : []),
     ...(p.tambahan || p.tambahanKet.trim() ? [`Penghasilan tambahan : ${ribu(p.tambahan)}${p.tambahanKet.trim() ? ` (${p.tambahanKet.trim()})` : ''}`] : []),
     '',
   ] : [];
@@ -69,7 +72,7 @@ export function teksCapacity(r: ReportSurvey): string {
 export function reportBaru(p: Partial<ReportSurvey> = {}): ReportSurvey {
   return {
     id: '', dibuat: '', diubah: '', oleh: '', nama: '', appNo: '', tglSurvey: '', surveyor: '',
-    brand: 'MOBILKU', program: '', status: '', pekerjaan: '', alamat: '',
+    brand: 'MOBILKU', pengajuan: '', program: '', status: '', pekerjaan: '', alamat: '',
     unit: '', pencairan: 0, tenor: 0, angsuran: 0, c6: kosong6C(), rekomendasi: '', catatan: '', kapasitas: kapasitasKosong(), ...p,
   };
 }
@@ -81,7 +84,7 @@ export function rapikanReport(x: unknown): ReportSurvey {
   return {
     id: str(o.id, 80), dibuat: str(o.dibuat, 40), diubah: str(o.diubah, 40), oleh: str(o.oleh, 200),
     nama: str(o.nama, 150), appNo: str(o.appNo, 60), tglSurvey: /^\d{4}-\d{2}-\d{2}$/.test(String(o.tglSurvey || '')) ? String(o.tglSurvey) : '',
-    surveyor: str(o.surveyor, 150), brand: o.brand === 'MOTORKU' ? 'MOTORKU' : 'MOBILKU', program: str(o.program, 80), status: str(o.status, 40),
+    surveyor: str(o.surveyor, 150), brand: o.brand === 'MOTORKU' ? 'MOTORKU' : 'MOBILKU', pengajuan: ['SLB', 'Fasdan'].includes(String(o.pengajuan)) ? String(o.pengajuan) : '', program: str(o.program, 80), status: str(o.status, 40),
     pekerjaan: str(o.pekerjaan, 150), alamat: str(o.alamat, 300), unit: str(o.unit, 200),
     pencairan: num(o.pencairan), tenor: num(o.tenor), angsuran: num(o.angsuran),
     c6: Object.fromEntries(UNSUR.map(([k]) => [k, str(o.c6?.[k], 5000)])) as Analisa6C,
@@ -95,7 +98,9 @@ function rapikanKapasitas(x: unknown): Kapasitas {
   const num = (v: unknown) => { const n = Number(v); return isFinite(n) && n > 0 ? Math.round(n) : 0; };
   const ph = (p: unknown): Penghasilan => {
     const q = (p && typeof p === 'object' ? p : {}) as Partial<Penghasilan>;
-    return { jenis: q.jenis === 'pegawai' ? 'pegawai' : 'usaha', omzet: num(q.omzet), margin: Math.min(100, num(q.margin)), gaji: num(q.gaji), tambahan: num(q.tambahan), tambahanKet: typeof q.tambahanKet === 'string' ? q.tambahanKet.slice(0, 100) : '' };
+    // Data lama: pilihan 'pegawai' memakai gaji saja, omzetnya diabaikan
+    const pegawai = (q as { jenis?: string }).jenis === 'pegawai';
+    return { omzet: pegawai ? 0 : num(q.omzet), margin: Math.min(100, num(q.margin)), gaji: num(q.gaji), tambahan: num(q.tambahan), tambahanKet: typeof q.tambahanKet === 'string' ? q.tambahanKet.slice(0, 100) : '' };
   };
   return { kons: ph(o.kons), pas: ph(o.pas), angsLain: num(o.angsLain), angsWom: num(o.angsWom) };
 }
@@ -108,7 +113,7 @@ export function teksWa(r: ReportSurvey): string {
   const baris = (label: string, v: string) => (v.trim() ? `${label} : ${v.trim()}` : '');
   const ident = [
     baris('Nama', r.nama.toUpperCase()), baris('App No', r.appNo), baris('Tgl survey', tgl(r.tglSurvey)), baris('Surveyor', r.surveyor),
-    baris('Produk', [r.brand === 'MOTORKU' ? 'MotorKu' : 'MobilKu', r.program].filter(Boolean).join(' – ')), baris('Status', r.status),
+    baris('Produk', [r.brand === 'MOTORKU' ? 'MotorKu' : 'MobilKu', r.pengajuan, r.program].filter(Boolean).join(' – ')), baris('Status', r.status),
     baris('Pekerjaan', r.pekerjaan), baris('Alamat', r.alamat),
   ].filter(Boolean);
   const aju = [
