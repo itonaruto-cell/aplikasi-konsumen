@@ -7,6 +7,7 @@ import { ambilHalaman, bukaPdf, gabungPdf, muatPdfLib, PdfTerkunci, pdfDariRende
 import { keJpeg, kirimFile } from './PdfSurvey';
 import { FIELD } from './form';
 import { Ico } from './parts';
+import { useOverlay } from '../overlay';
 
 type Alat = 'jpg2pdf' | 'gabung' | 'pdf2jpg' | 'pisah' | 'putar' | 'kompres' | 'buka';
 const ALAT: { k: Alat; judul: string; sub: string; ikon: string; warna: string }[] = [
@@ -394,6 +395,7 @@ function BukaPassword() {
 /* ---------- Halaman ---------- */
 export default function AlatPdf() {
   const [alat, setAlat] = useState<Alat | null>(null);
+  useOverlay(alat !== null, () => setAlat(null));   // tombol kembali: dari alat → daftar alat dulu
   const a = ALAT.find((x) => x.k === alat);
   if (a) return (
     <div className="px-4 pb-10 pt-3">

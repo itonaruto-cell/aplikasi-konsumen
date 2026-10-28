@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { REKOMENDASI, UNSUR, fmtPersen, hitungKapasitas, labaOf, rapikanReport, reportBaru, teksCapacity, teksWa, type Penghasilan, type ReportSurvey } from '../../lib/report-survey';
+import { PENGAJUAN, REKOMENDASI, UNSUR, fmtPersen, hitungKapasitas, labaOf, rapikanReport, reportBaru, teksCapacity, teksWa, type Penghasilan, type ReportSurvey } from '../../lib/report-survey';
 import { todayJkt } from '../../lib/performa-calc';
 import { AngkaInput, FIELD } from './form';
 import { Ico } from './parts';
@@ -119,6 +119,7 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
         </div>
         <Isian label="Surveyor"><input value={r.surveyor} onChange={(e) => set('surveyor', e.target.value)} className={`${FIELD} min-h-11`} /></Isian>
         <Isian grup label="Brand"><Pilih label="Brand" opsi={['MOBILKU', 'MOTORKU']} value={r.brand} onChange={(v) => set('brand', (v || r.brand) as ReportSurvey['brand'])} /></Isian>
+        <Isian grup label="Pengajuan"><Pilih label="Pengajuan" opsi={PENGAJUAN} value={r.pengajuan} onChange={(v) => set('pengajuan', v)} /></Isian>
         <Isian grup label="Program"><Pilih label="Program" opsi={PROGRAM} value={r.program} onChange={(v) => set('program', v)} /></Isian>
         <Isian grup label="Status konsumen"><Pilih label="Status konsumen" opsi={STATUS} value={r.status} onChange={(v) => set('status', v)} /></Isian>
         <Isian label="Pekerjaan / usaha"><input value={r.pekerjaan} onChange={(e) => set('pekerjaan', e.target.value)} placeholder="mis. Wiraswasta warung makan" className={`${FIELD} min-h-11`} /></Isian>
@@ -138,30 +139,19 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
         {UNSUR.map(([k, label, hint]) => k === 'capacity' ? (
           <div key={k} className="mt-3">
             <p className="text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">{label}</p>
-            <p className="text-[12px] leading-snug text-neutral-500">Usaha: omzet × margin. Pegawai: gaji tanpa margin. Ditambah penghasilan tambahan, lalu IIR & DSR dihitung otomatis.</p>
+            <p className="text-[12px] leading-snug text-neutral-500">Isi omzet × margin kalau usaha, gaji kalau pegawai (tanpa margin), atau keduanya. Ditambah penghasilan tambahan, lalu IIR & DSR dihitung otomatis.</p>
             {([['kons', 'Konsumen'], ['pas', 'Pasangan (kalau ada)']] as const).map(([pk, pl]) => {
               const p = r.kapasitas[pk];
               const ubahP = (x: Partial<Penghasilan>) => set('kapasitas', { ...r.kapasitas, [pk]: { ...p, ...x } });
               return (
                 <div key={pk} className="mt-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-bold">{pl}</p>
-                    <div role="group" aria-label={`Jenis penghasilan ${pl}`} className="flex gap-1">
-                      {([['usaha', 'Usaha'], ['pegawai', 'Pegawai']] as const).map(([j, jl]) => (
-                        <button key={j} onClick={() => ubahP({ jenis: j })} aria-pressed={p.jenis === j}
-                          className={`min-h-9 rounded-full px-3 text-[13px] font-semibold ${p.jenis === j ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-white dark:bg-neutral-800'}`}>{jl}</button>
-                      ))}
-                    </div>
-                  </div>
-                  {p.jenis === 'pegawai' ? (
-                    <Isian label="Gaji (tanpa margin)"><AngkaInput label={`Gaji ${pl}`} value={p.gaji} onChange={(v) => ubahP({ gaji: v })} className="min-h-11" /></Isian>
-                  ) : (
+                  <p className="text-[13px] font-bold">{pl}</p>
                   <div className="mt-1 grid grid-cols-[1fr_6rem] items-end gap-2">
-                    <Isian label="Omzet"><AngkaInput label={`Omzet ${pl}`} value={p.omzet} onChange={(v) => ubahP({ omzet: v })} className="min-h-11" /></Isian>
+                    <Isian label="Omzet usaha"><AngkaInput label={`Omzet ${pl}`} value={p.omzet} onChange={(v) => ubahP({ omzet: v })} className="min-h-11" /></Isian>
                     <Isian label="Margin (%)"><AngkaInput label={`Margin ${pl}`} value={p.margin} placeholder="15–100" onChange={(v) => ubahP({ margin: Math.min(100, v) })} className="min-h-11" /></Isian>
                   </div>
-                  )}
-                  {p.jenis !== 'pegawai' && p.omzet > 0 && <p className="mt-1 text-[12px] text-neutral-500">Margin ({p.margin || 0}%) = <b className="text-neutral-800 dark:text-neutral-200">{labaOf(p).toLocaleString('id-ID')}</b>{p.margin > 0 && p.margin < 15 ? ' · margin biasanya 15–100%' : ''}</p>}
+                  {p.omzet > 0 && <p className="mt-1 text-[12px] text-neutral-500">Margin ({p.margin || 0}%) = <b className="text-neutral-800 dark:text-neutral-200">{labaOf(p).toLocaleString('id-ID')}</b>{p.margin > 0 && p.margin < 15 ? ' · margin biasanya 15–100%' : ''}</p>}
+                  <Isian label="Gaji (pegawai, tanpa margin)"><AngkaInput label={`Gaji ${pl}`} value={p.gaji} onChange={(v) => ubahP({ gaji: v })} className="min-h-11" /></Isian>
                   <div className="grid grid-cols-[1fr_7rem] items-end gap-2">
                     <Isian label="Penghasilan tambahan"><AngkaInput label={`Penghasilan tambahan ${pl}`} value={p.tambahan} onChange={(v) => ubahP({ tambahan: v })} className="min-h-11" /></Isian>
                     <Isian label="Dari"><input value={p.tambahanKet} onChange={(e) => ubahP({ tambahanKet: e.target.value })} placeholder="sawah" aria-label={`Sumber penghasilan tambahan ${pl}`} className={`${FIELD} min-h-11`} /></Isian>

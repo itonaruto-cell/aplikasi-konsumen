@@ -24,7 +24,7 @@ export const KATEGORI_PDF: { k: string; nama: string; isi: string }[] = [
 ];
 
 type Foto = { id: string; kat: string; blob: Blob; w: number; h: number; urut: number };
-type Info = { nama: string; kualitas: 'normal' | 'hemat' };
+type Info = { nama: string; kualitas: 'normal' | 'hemat'; namaFile?: Record<string, string> };
 
 /* ---------- Penyimpanan di HP (IndexedDB) ---------- */
 const DB = 'mk-pdf-survey';
@@ -67,18 +67,20 @@ export async function keJpeg(file: File, sisi: number, q: number): Promise<{ blo
   } finally { URL.revokeObjectURL(url); }
 }
 
-const namaFile = (kat: string, nama: string, bagian = '') => `${kat}${nama.trim() ? ` - ${nama.trim().toUpperCase()}` : ''}${bagian}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
+const namaBawaan = (kat: string, nama: string) => `${kat}${nama.trim() ? ` - ${nama.trim().toUpperCase()}` : ''}`;
+// Nama file: buatan sendiri kalau diisi, kalau tidak "KATEGORI - NAMA KONSUMEN"
+const namaFile = (kat: string, nama: string, bagian = '', sendiri = '') => `${(sendiri.trim() || namaBawaan(kat, nama)).replace(/\.pdf$/i, '')}${bagian}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
 const mb = (n: number) => `${(n / 1_048_576).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
 
 // Satu kategori bisa jadi beberapa PDF kalau totalnya lebih dari 10 MB (foto tidak dikecilkan)
-async function pdfKategori(kat: { nama: string }, foto: Foto[], nama: string): Promise<File[]> {
+async function pdfKategori(kat: { nama: string }, foto: Foto[], nama: string, sendiri = ''): Promise<File[]> {
   const jpeg = await Promise.all(foto.map(async (f) => new Uint8Array(await f.blob.arrayBuffer())));
   const grup = bagiPdf(jpeg.map((x) => x.length));
   return grup.map((idx, g) => {
     const hal = idx.map((i) => ({ jpeg: jpeg[i], w: foto[i].w, h: foto[i].h, catatan: `${kat.nama} - ${nama.trim().toUpperCase() || 'KONSUMEN'} - ${i + 1}/${foto.length}` }));
     const bagian = grup.length > 1 ? ` (${g + 1} dari ${grup.length})` : '';
     const bytes = buatPdfFoto(hal, `${kat.nama} ${nama}${bagian}`);
-    return new File([bytes.buffer as ArrayBuffer], namaFile(kat.nama, nama, bagian), { type: 'application/pdf' });
+    return new File([bytes.buffer as ArrayBuffer], namaFile(kat.nama, nama, bagian, sendiri), { type: 'application/pdf' });
   });
 }
 export async function kirimFile(files: File[]) {
@@ -135,7 +137,7 @@ export default function PdfSurvey() {
       try {
         const [list, inf] = await Promise.all([db<Foto[]>('foto', 'readonly', (s) => s.getAll()), db<Info>('info', 'readonly', (s) => s.get('info'))]);
         setFoto((list || []).sort((a, b) => a.urut - b.urut));
-        if (inf) setInfo({ nama: inf.nama || '', kualitas: inf.kualitas === 'hemat' ? 'hemat' : 'normal' });
+        if (inf) setInfo({ nama: inf.nama || '', kualitas: inf.kualitas === 'hemat' ? 'hemat' : 'normal', namaFile: inf.namaFile && typeof inf.namaFile === 'object' ? inf.namaFile : {} });
       } catch { setFoto([]); setPesan('Penyimpanan di HP tidak tersedia. Foto tetap bisa dijadikan PDF, tapi hilang kalau aplikasi ditutup.'); }
     })();
   }, []);
@@ -164,7 +166,7 @@ export default function PdfSurvey() {
   const mulaiBaru = async () => {
     if (!window.confirm('Hapus semua foto & nama konsumen di halaman ini untuk survey baru?')) return;
     await db('foto', 'readwrite', (s) => s.clear()).catch(() => {});
-    setFoto([]); simpanInfo({ ...info, nama: '' }); setPesan('');
+    setFoto([]); simpanInfo({ ...info, nama: '', namaFile: {} }); setPesan('');
   };
 
   const perKat = (k: string) => (foto || []).filter((f) => f.kat === k);
@@ -174,7 +176,7 @@ export default function PdfSurvey() {
     setPesan('');
     try {
       const files: File[] = [];
-      for (const [i, k] of kats.entries()) { setSibuk(`Membuat PDF ${i + 1}/${kats.length}: ${k.nama}…`); files.push(...(await pdfKategori(k, perKat(k.k), info.nama))); }
+      for (const [i, k] of kats.entries()) { setSibuk(`Membuat PDF ${i + 1}/${kats.length}: ${k.nama}…`); files.push(...(await pdfKategori(k, perKat(k.k), info.nama, info.namaFile?.[k.k] || ''))); }
       setSibuk('');
       await kirimFile(files);
       setPesan(`${files.length} PDF siap: ${files.map((f) => `${f.name} (${mb(f.size)})`).join(', ')}`);
@@ -210,7 +212,7 @@ export default function PdfSurvey() {
                 <span className={`flex h-9 min-w-9 items-center justify-center rounded-xl px-2 text-[14px] font-bold ${l.length ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800'}`}>{l.length}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-bold">{k.nama}</span>
-                  <span className="block truncate text-[12px] text-neutral-500">{k.isi}</span>
+                  <span className="block truncate text-[12px] text-neutral-500">{info.namaFile?.[k.k]?.trim() ? `📄 ${info.namaFile[k.k].trim()}` : k.isi}</span>
                 </span>
                 <Ico n="down" className={`h-4 w-4 shrink-0 text-neutral-400 transition ${open ? 'rotate-180' : ''}`} sw={2} />
               </button>
@@ -224,6 +226,11 @@ export default function PdfSurvey() {
                       ))}
                     </div>
                   )}
+                  <label className="mt-2 block">
+                    <span className="block text-[12px] font-semibold text-neutral-500">Nama file PDF (opsional)</span>
+                    <input value={info.namaFile?.[k.k] || ''} onChange={(e) => simpanInfo({ ...info, namaFile: { ...(info.namaFile || {}), [k.k]: e.target.value } })}
+                      placeholder={namaBawaan(k.nama, info.nama)} aria-label={`Nama file PDF ${k.nama}`} className={`${FIELD} mt-1 min-h-11`} />
+                  </label>
                   <div className="mt-2 flex gap-2">
                     {([['Galeri', false], ['Kamera', true]] as const).map(([lbl, cam]) => (
                       <label key={lbl} className={`inline-flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-xl border border-neutral-300 text-[14px] font-semibold dark:border-neutral-700 ${sibuk ? 'pointer-events-none opacity-50' : ''}`}>
