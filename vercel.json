@@ -1,6 +1,15 @@
 {
+  "regions": [
+    "sin1"
+  ],
   "crons": [
-    { "path": "/api/cron/cek-data", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/pengingat-fu", "schedule": "0 8 * * 1-6" }
+    {
+      "path": "/api/cron/cek-data",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/pengingat-fu",
+      "schedule": "0 8 * * 1-6"
+    }
   ]
 }

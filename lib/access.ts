@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { sheetsApi } from './sheets-api';
 
 // Siapa boleh masuk & perannya.
 // - OWNER_EMAIL (Environment Variable di Vercel): selalu owner, pisahkan dengan koma kalau lebih dari satu.
@@ -22,14 +22,7 @@ let cache: { at: number; map: Map<string, Role>; names: Map<string, string> } | 
 const CACHE_MS = 60_000;
 
 function sheetsClient() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-  return google.sheets({ version: 'v4', auth });
+  return sheetsApi();
 }
 
 async function loadAccessSheet(): Promise<{ map: Map<string, Role>; names: Map<string, string> }> {

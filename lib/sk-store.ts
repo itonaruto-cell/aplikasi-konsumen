@@ -3,7 +3,7 @@
 //  SK_TEKS   : isi teks yang sudah dipotong per bagian, untuk pencarian & jawaban
 //  SK_BERKAS : file PDF asli (base64, dipecah per 45.000 karakter, satu potongan per baris)
 // Isi SK tidak disimpan di repo (repo publik); hanya owner yang bisa memperbarui lewat aplikasi.
-import { google } from 'googleapis';
+import { sheetsApi } from './sheets-api';
 import { buatIndeks, type PotonganSK } from './sk-cari';
 
 export const TAB_DOK = 'SK_DOK', TAB_TEKS = 'SK_TEKS', TAB_BERKAS = 'SK_BERKAS';
@@ -16,14 +16,7 @@ export type DokSK = { dok: string; judul: string; keterangan: string; namaFile: 
 export const validDok = (d: unknown): d is string => typeof d === 'string' && /^[a-z0-9_-]{2,30}$/.test(d);
 
 function sheets() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  return google.sheets({ version: 'v4', auth });
+  return sheetsApi();
 }
 const sid = () => process.env.GOOGLE_SHEET_ID;
 
