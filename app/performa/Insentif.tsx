@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { BonusBookingMandiri } from './CairList';
 import type { Orang } from '../../lib/performa-types';
 import { brandOf, keyOf, todayJkt, type Ctx } from '../../lib/performa-calc';
 import { brandBaris, samaOrang } from '../../lib/sales-brand';
@@ -148,6 +149,7 @@ export default function Insentif(p: Props) {
   return (
     <>
       <InsentifDariHO reloadKey={p.reloadKey} />
+      <BonusBookingMandiri orang={p.c?.data.orang || []} me={p.me} semua={p.akun.role === 'owner' || p.akun.role === 'spv'} />
       <Simulasi {...p} />
     </>
   );
@@ -578,7 +580,7 @@ function Simulasi({ c, me, akun, reloadKey = 0, onBahan }: {
         {mao
           ? 'Di bawah batas minimal performa, insentif MAO belum keluar. Performa dihitung dari semua sales (retail + aggregator); insentif pencari order dan extra hanya dari sales retail. Unit tambahan dihitung ikut disurvey, dan saran di atas memakai unit retail.'
           : jenis === 'cmo'
-            ? 'Unit tambahan dihitung ikut disurvey. Tunjangan CMO mengikuti visit + OI dan tidak bergantung pada sales. Bonus Booking Mandiri belum termasuk.'
+            ? 'Unit tambahan dihitung ikut disurvey. Tunjangan CMO mengikuti visit + OI dan tidak bergantung pada sales. Bonus Booking Mandiri dihitung terpisah di atas.'
             : 'Bonus tengah bulan mengikuti sales tanggal 1–15 dan tidak ikut berubah di simulasi.'}
         {' '}Koreksi angka hanya tersimpan di HP ini.
       </p>

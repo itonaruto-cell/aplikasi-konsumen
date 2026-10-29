@@ -2,6 +2,7 @@
 export type CairItem = {
   nama: string; kontrak: string; cust: string; app: string; cmo: string; unit: string;
   pokok: number; tgl: string; brand: 'mobilku' | 'motorku' | ''; sumber: string;
+  offering?: string; tenor?: number;
 };
 export type DataCair = { ada: boolean; sumber?: string; dikirim?: string; list: CairItem[]; adaSumber?: boolean; kolom?: Record<string, string>; error?: string };
 
