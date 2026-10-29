@@ -2,6 +2,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { FotoVisit } from './parts';
 import { BahanOi, OiDetail } from './BahanOi';
+import { CairList, CairDetail } from './CairList';
+import type { CairItem } from '../../lib/cair-types';
 import type { KonsumenFull, MaFull, Orang, Performa, RekrutRegist, Sales, VisitRow } from '../../lib/performa-types';
 import { targetMingguan, todayJkt } from '../../lib/performa-calc';
 
@@ -139,6 +141,8 @@ export type View =
   | { t: 'ma'; m: MaFull }
   | { t: 'k'; k: KonsumenFull; pic?: string }
   | { t: 'oi'; nama?: string }
+  | { t: 'cair'; brand?: 'mobilku' | 'motorku'; sumber?: string }
+  | { t: 'cairRow'; it: CairItem }
   | { t: 'oiRow'; h: string[]; r: string[]; judul: string };
 export type Push = (v: View) => void;
 
@@ -543,6 +547,15 @@ export function Sheet({ stack, data, rankOf, push, pop, close }: {
                 <p className="text-lg font-semibold">Bahan OI</p>
                 <p className="mb-1 text-sm text-neutral-500">{view.nama ? nama(view.nama) : 'Data order in cabang'} · ketuk untuk detail</p>
                 <BahanOi nama={view.nama} push={push} />
+              </>)}
+              {view.t === 'cair' && (<>
+                <p className="text-lg font-semibold">Konsumen cair bulan ini</p>
+                <p className="mb-3 text-sm text-neutral-500">{[view.brand === 'motorku' ? 'Motorku' : view.brand === 'mobilku' ? 'Mobilku' : 'Cabang', view.sumber].filter(Boolean).join(' · ')} · dari tarikan sales</p>
+                <CairList brand={view.brand} sumber0={view.sumber} orang={data.orang} push={push} />
+              </>)}
+              {view.t === 'cairRow' && (<>
+                <p className="mb-2 text-lg font-semibold">{view.it.nama || view.it.kontrak}</p>
+                <CairDetail it={view.it} />
               </>)}
               {view.t === 'oiRow' && (<>
                 <p className="mb-2 text-lg font-semibold">{view.judul}</p>

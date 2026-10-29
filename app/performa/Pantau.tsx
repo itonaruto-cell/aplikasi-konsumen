@@ -62,12 +62,13 @@ function Legend({ items }: { items: [string, string][] }) {
 const C_GO = 'bg-[#1FA463]', C_PEN = 'bg-[#F2A33A]', C_REJ = 'bg-[#E5484D]', C_CAN = 'bg-neutral-400', C_BAN = 'bg-[#6C8CD5]';
 
 /* ---------- Kartu utama ---------- */
-function Hero({ title, amount, unit, today, b, lama, lbl }: { title: string; amount: Sales | null; unit: Sales | null; today: string; b?: BrandId; lama?: string; lbl: { sama: string; penuh: string } }) {
+function Hero({ title, amount, unit, today, b, lama, lbl, onCair }: { title: string; amount: Sales | null; unit: Sales | null; today: string; b?: BrandId; lama?: string; lbl: { sama: string; penuh: string }; onCair?: () => void }) {
   // lama = nama bulan data kalau yang tampil masih data bulan lalu: sisa hari & kejar per hari tidak berlaku
   const pa = lama ? null : pace(amount?.ini, amount?.target, today), pu = lama ? null : pace(unit?.ini, unit?.target, today);
   const hari = hariKerjaSisa(today);
   return (
-    <section className={`relative mx-4 mt-3 overflow-hidden rounded-[22px] p-[18px] text-white ${b ? BRAND[b].grad : 'bg-neutral-900 dark:ring-1 dark:ring-neutral-800'}`}>
+    <section onClick={onCair} role={onCair ? 'button' : undefined} aria-label={onCair ? `${title}: lihat konsumen cair bulan ini` : undefined}
+      className={`relative mx-4 mt-3 overflow-hidden rounded-[22px] p-[18px] text-white ${onCair ? 'cursor-pointer active:opacity-95' : ''} ${b ? BRAND[b].grad : 'bg-neutral-900 dark:ring-1 dark:ring-neutral-800'}`}>
       {b && <span className="pointer-events-none absolute -right-8 top-2 text-white/15"><BrandArt b={b} className="h-24 w-48" /></span>}
       <div className="relative flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-[13px] font-bold tracking-wide text-white/80">{b && <BrandIcon b={b} />}{title}</span>
@@ -106,6 +107,11 @@ function Hero({ title, amount, unit, today, b, lama, lbl }: { title: string; amo
           <span className="flex-1">{pa ? (pa.tercapai ? <b className="text-[#9FE3BF]">Amount tercapai</b> : <>Kejar <b>{rp(pa.kurang)}</b> · ±{rp(pa.perHari).replace('Rp ', '')}/hari</>) : ''}</span>
           <span className="flex-1 text-right">{pu ? (pu.tercapai ? <b className="text-[#9FE3BF]">Unit tercapai</b> : <>Kejar <b>{Math.ceil(pu.kurang)} unit</b> · ±{(Math.ceil(pu.perHari * 10) / 10).toLocaleString('id-ID')}/hari</>) : ''}</span>
         </div>
+      )}
+      {onCair && (
+        <span className="relative mt-3 flex items-center justify-between rounded-xl bg-white/15 px-3 py-2 text-[13px] font-semibold">
+          Konsumen cair bulan ini<span aria-hidden="true">›</span>
+        </span>
       )}
     </section>
   );
@@ -363,7 +369,8 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
   return (
     <>
       <Hero title={`${B.label.toUpperCase()} · ${bulan.toUpperCase()}`}
-        amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} lama={lama} lbl={labelLalu(c.data.updated)} />
+        amount={tot.amount as Sales | null} unit={tot.unit as Sales | null} today={c.today} b={b} lama={lama} lbl={labelLalu(c.data.updated)}
+        onCair={() => push({ t: 'cair', brand: b })} />
       {extra}
       {b === 'motorku' && <RincianMotor c={c} />}
 
@@ -427,14 +434,15 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
       )}
 
       {channels.length > 0 && (
-        <Sec title="Sales per channel" right="unit · amount">
+        <Sec title="Sales per channel" right="ketuk untuk konsumen">
           <div className="border-t border-neutral-200 dark:border-neutral-800">
             {channels.map((x) => (
-              <div key={x.n} className="flex flex-col gap-1.5 border-b border-neutral-200 px-4 py-2.5 dark:border-neutral-800">
+              <button key={x.n} onClick={() => push({ t: 'cair', brand: b, sumber: x.n })} aria-label={`${x.n}: lihat konsumen cair`}
+                className="flex w-full flex-col gap-1.5 border-b border-neutral-200 px-4 py-2.5 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
                 <span className="flex justify-between gap-2 text-sm"><span className="font-semibold">{x.n}</span><span><b>{angka(x.u)}</b><span className="text-neutral-500">/{angka(x.tu)} unit</span> · <b>{pct(x.au)}</b></span></span>
                 <Line v={x.au} className="h-[5px]" color={B.line} />
-                <span className="text-xs text-neutral-500">Amount {isNum(x.amt) ? rp(x.amt) : '–'}{isNum(x.am) ? ` · ${pct(x.am)} target` : ''}</span>
-              </div>
+                <span className="flex justify-between text-xs text-neutral-500"><span>Amount {isNum(x.amt) ? rp(x.amt) : '–'}{isNum(x.am) ? ` · ${pct(x.am)} target` : ''}</span><span>konsumen ›</span></span>
+              </button>
             ))}
           </div>
         </Sec>
@@ -607,7 +615,8 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
             <Sapa teks={<><b>{salam}{panggil ? `, ${panggil}` : ''}!</b> {cek.bedaBulan ? `Angka ${namaBulan(c.today)} belum masuk ke aplikasi.` : sapa}</>} />
             {/* Achievement dulu: cabang, lalu Mobilku & Motorku */}
             <Hero title={`${nama(data.cabang).toUpperCase()} · ${bulan.toUpperCase()}`}
-              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} lbl={labelLalu(c.data.updated)} />
+              amount={data.cabangTotal?.amount || null} unit={data.cabangTotal?.unit || null} today={c.today} lama={lama} lbl={labelLalu(c.data.updated)}
+              onCair={() => push({ t: 'cair' })} />
             <BrandCards c={c} goBrand={go} />
             <PengumumanList list={pengumuman} brand="semua" isOwner={isOwner} onChanged={onPengumuman} />
             <NotifPrompt nama={me?.nama || ''} />
