@@ -125,8 +125,10 @@ export function kolomCair(h: string[], r: string[][] = []) {
     kec: cariKolom(h, [/^KECAMATAN$/]),
     kel: cariKolom(h, [/^KELURAHAN$/, /^DESA$/]),
     produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/, /^BRAND$/]),
-    sumber: kolomTeks(h, r, [/^(SUMBER|SOURCE|CHANNEL|CHANEL|JALUR|ASAL)( (ORDER|DATA|APLIKASI|APP|KONSUMEN))?$/, /^(TIPE|JENIS|KATEGORI) (ORDER|SUMBER|CHANNEL)$/,
-      /^(ORDER|DATA) (SOURCE|SUMBER|CHANNEL)$/, /SUMBER|SOURCE|CHANNEL|CHANEL/, /^RETAIL/, /AGGREGATOR|AGREGATOR/]),
+    offering: cariKolom(h, [/^PRODU(K|CT) ?OFFERING$/, /OFFERING/]),
+    soa: kolomTeks(h, r, [/^SOA$/, /^(NAMA |NAME )?SOA( NAME| NAMA| DESC)?$/, /^SOA\b/, /\bSOA$/, /SOURCE OF APP/]),
+    sumber: kolomTeks(h, r, [/^(?!.*SOA)(SUMBER|SOURCE|CHANNEL|CHANEL|JALUR|ASAL)( (ORDER|DATA|APLIKASI|APP|KONSUMEN))?$/, /^(TIPE|JENIS|KATEGORI) (ORDER|SUMBER|CHANNEL)$/,
+      /^(ORDER|DATA) (SOURCE|SUMBER|CHANNEL)$/, /^(?!.*SOA)(?!SOURCE OF APP).*(SUMBER|SOURCE|CHANNEL|CHANEL)/, /^RETAIL/, /AGGREGATOR|AGREGATOR/]),
   };
 }
 
@@ -222,8 +224,17 @@ export function daftarCair(t: Tabel | null): CairItem[] {
       nama: nama.toUpperCase(), kontrak, cust: sel(b, k.cust), app: sel(b, k.app), cmo: sel(b, k.cmo),
       unit: sel(b, k.unit) || sel(b, k.tipe), pokok: angka(sel(b, k.pokok)), tgl: sel(b, k.tgl),
       brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
-      sumber: rapikanSumber(sel(b, k.sumber)),
+      sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), sel(b, k.soa)),
     });
   }
   return out;
+}
+
+// Sumber order: dari kolom sumber/channel, kalau kosong dari produk offering.
+// Order retail yang SOA-nya perusahaan (PT / CV) = Aggregator.
+export function sumberOrder(sumber: string, offering: string, soa: string): string {
+  let x = rapikanSumber(sumber) || rapikanSumber(offering);
+  const soaPT = /^(PT|CV)\b|\b(PT|CV)\.?\s/i.test(soa.trim());
+  if (soaPT && (!x || x === 'Retail' || /RETAIL/i.test(offering))) x = 'Aggregator';
+  return x;
 }
