@@ -125,7 +125,8 @@ export function kolomCair(h: string[], r: string[][] = []) {
     kec: cariKolom(h, [/^KECAMATAN$/]),
     kel: cariKolom(h, [/^KELURAHAN$/, /^DESA$/]),
     produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/, /^BRAND$/]),
-    offering: cariKolom(h, [/^PRODU(K|CT) ?OFFERING$/, /OFFERING/]),
+    offering: cariKolom(h, [/^PRODU(K|CT) ?OFFERING( TYPE| NAME| NAMA)?$/, /OFFERING/, /^POT$/]),
+    tenor: cariKolom(h, [/^TENOR$/, /^TENOR\b/, /TENOR/, /JANGKA WAKTU/]),
     soa: kolomTeks(h, r, [/^SOA$/, /^(NAMA |NAME )?SOA( NAME| NAMA| DESC)?$/, /^SOA\b/, /\bSOA$/, /SOURCE OF APP/]),
     sumber: kolomTeks(h, r, [/^(?!.*SOA)(SUMBER|SOURCE|CHANNEL|CHANEL|JALUR|ASAL)( (ORDER|DATA|APLIKASI|APP|KONSUMEN))?$/, /^(TIPE|JENIS|KATEGORI) (ORDER|SUMBER|CHANNEL)$/,
       /^(ORDER|DATA) (SOURCE|SUMBER|CHANNEL)$/, /^(?!.*SOA)(?!SOURCE OF APP).*(SUMBER|SOURCE|CHANNEL|CHANEL)/, /^RETAIL/, /AGGREGATOR|AGREGATOR/]),
@@ -225,6 +226,7 @@ export function daftarCair(t: Tabel | null): CairItem[] {
       unit: sel(b, k.unit) || sel(b, k.tipe), pokok: angka(sel(b, k.pokok)), tgl: sel(b, k.tgl),
       brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
       sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), sel(b, k.soa)),
+      offering: sel(b, k.offering), tenor: Math.round(angka(sel(b, k.tenor))) || 0,
     });
   }
   return out;

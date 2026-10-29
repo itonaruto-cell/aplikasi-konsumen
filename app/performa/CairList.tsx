@@ -4,6 +4,7 @@ import { SearchBox, Chev, rp, type Push } from './ui';
 import { brandOf, keyOf } from '../../lib/performa-calc';
 import { kunciSumber, type CairItem, type DataCair } from '../../lib/cair-types';
 import type { Orang } from '../../lib/performa-types';
+import { feeBookingMandiri } from '../../lib/fee-bm';
 
 // Konsumen yang sudah cair bulan ini (tab tarikan sales), per brand, bisa difilter per channel/sumber order & CMO.
 
@@ -22,6 +23,7 @@ export function ambilCair(paksa = false): Promise<DataCair> {
   return p;
 }
 
+const rpPenuh = (n: number) => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
 const kataNama = (s: string) => keyOf(s).split(' ').filter(Boolean);
 // Brand dari tab tarikan; kalau kosong, dari brand CMO-nya di pantauan
 export function brandItem(it: CairItem, orang: Orang[]): 'mobilku' | 'motorku' | '' {
@@ -112,7 +114,7 @@ export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 
       )}
       {d.kolom && (
         <p className="mt-3 text-[11px] leading-snug text-neutral-400">
-          Dari tab {d.sumber}. Kolom terbaca: {Object.entries({ nama: 'nama', kontrak: 'no kontrak', cust: 'no cust', cmo: 'CMO', unit: 'unit', sumber: 'sumber', offering: 'produk offering', soa: 'SOA', tgl: 'tanggal', pokok: 'pokok' })
+          Dari tab {d.sumber}. Kolom terbaca: {Object.entries({ nama: 'nama', kontrak: 'no kontrak', cust: 'no cust', cmo: 'CMO', unit: 'unit', sumber: 'sumber', offering: 'produk offering', soa: 'SOA', tenor: 'tenor', tgl: 'tanggal', pokok: 'pokok' })
             .map(([k, l]) => `${l} = ${d.kolom![k] || '–'}`).join(' · ')}
         </p>
       )}
@@ -122,7 +124,12 @@ export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 
 
 export function CairDetail({ it }: { it: CairItem }) {
   const baris: [string, string][] = [['No kontrak', it.kontrak], ['No cust', it.cust], ['No app', it.app], ['CMO', it.cmo], ['Unit', it.unit],
-    ['Pokok hutang', it.pokok ? rp(it.pokok) : ''], ['Tanggal cair', it.tgl], ['Sumber order', it.sumber], ['Brand', it.brand === 'motorku' ? 'Motorku' : it.brand === 'mobilku' ? 'Mobilku' : '']];
+    ['Pokok hutang', it.pokok ? rp(it.pokok) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Sumber order', it.sumber],
+    ['Brand', it.brand === 'motorku' ? 'Motorku' : it.brand === 'mobilku' ? 'Mobilku' : '']];
+  if (it.sumber === 'Booking Mandiri' && it.brand !== 'motorku') {
+    const f = feeBookingMandiri(it);
+    baris.push(['Fee Booking Mandiri', f.persen === null ? `– (${f.dasar})` : `${f.persen.toLocaleString('id-ID')}% = ${rpPenuh(f.nominal)} · ${f.dasar}`]);
+  }
   return (
     <dl className="divide-y divide-neutral-200 dark:divide-neutral-800">
       {baris.filter(([, v]) => v).map(([l, v]) => (
@@ -132,5 +139,61 @@ export function CairDetail({ it }: { it: CairItem }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+/* ---------- Bonus Booking Mandiri bulan ini (perkiraan dari tarikan sales, fee SGM Mobilku) ---------- */
+export function BonusBookingMandiri({ orang, me, semua }: { orang: Orang[]; me: Orang | null; semua: boolean }) {
+  const [d, setD] = useState<DataCair | null>(null);
+  const [buka, setBuka] = useState('');
+  useEffect(() => { ambilCair().then(setD); }, []);
+  const kelompok = useMemo(() => {
+    const bm = (d?.list || []).filter((it) => it.sumber === 'Booking Mandiri' && brandItem(it, orang) !== 'motorku');
+    const aku = me ? kataNama(me.nama) : [];
+    const milikku = (it: CairItem) => { const k = kataNama(it.cmo); return !!aku.length && !!k.length && (k.join(' ') === aku.join(' ') || (k[0].length >= 3 && k[0] === aku[0])); };
+    const m = new Map<string, { cmo: string; items: { it: CairItem; f: ReturnType<typeof feeBookingMandiri> }[] }>();
+    bm.filter((it) => semua || milikku(it)).forEach((it) => {
+      const key = keyOf(it.cmo) || '(TANPA CMO)';
+      if (!m.has(key)) m.set(key, { cmo: it.cmo || '(tanpa CMO)', items: [] });
+      m.get(key)!.items.push({ it, f: feeBookingMandiri(it) });
+    });
+    return [...m.values()].map((g) => ({ ...g, total: g.items.reduce((s, x) => s + x.f.nominal, 0), kurang: g.items.some((x) => x.f.persen === null) }))
+      .sort((a, b) => b.total - a.total);
+  }, [d, orang, me, semua]);
+  if (!d?.ada || !kelompok.length) return null;
+  return (
+    <section className="pt-3">
+      <div className="px-4 pb-2">
+        <h2 className="text-[17px] font-bold tracking-tight">Bonus Booking Mandiri bulan ini</h2>
+        <p className="text-[13px] text-neutral-500">Perkiraan · fee SGM Mobilku × pokok hutang, dari tarikan sales</p>
+      </div>
+      <div className="mx-4 overflow-hidden rounded-[20px] border border-neutral-200 dark:border-neutral-800">
+        {kelompok.map((g) => (
+          <div key={g.cmo} className="border-b border-neutral-200 last:border-0 dark:border-neutral-800">
+            <button onClick={() => setBuka(buka === g.cmo ? '' : g.cmo)} aria-expanded={buka === g.cmo}
+              className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-neutral-50 dark:active:bg-neutral-900">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-bold">{g.cmo}</span>
+                <span className="block text-[13px] text-neutral-500">{g.items.length} konsumen{g.kurang ? ' · ada yang fee-nya belum terbaca' : ''}</span>
+              </span>
+              <span className="shrink-0 text-[17px] font-bold">{rpPenuh(g.total)}</span>
+            </button>
+            {buka === g.cmo && (
+              <ul className="border-t border-neutral-100 px-4 pb-2 dark:border-neutral-800">
+                {g.items.map(({ it, f }, i) => (
+                  <li key={i} className="flex items-start justify-between gap-3 py-2 text-[13px]">
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{it.nama}</span>
+                      <span className="block text-neutral-500">{rpPenuh(it.pokok)} · {f.dasar}</span>
+                    </span>
+                    <span className="shrink-0 text-right">{f.persen === null ? '–' : <><b>{rpPenuh(f.nominal)}</b><span className="block text-neutral-500">{f.persen.toLocaleString('id-ID')}%</span></>}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
