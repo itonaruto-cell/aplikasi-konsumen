@@ -1,7 +1,7 @@
 // Excel F-761 Form Analisa Banding Branch Head, susunan mengikuti template kantor (kolom B–H, judul biru muda,
 // checklist dokumen, analisa 6C+1EP, SWOT, reason, lampiran foto 3 kolom, lembar persetujuan, lembar SLIK).
 import { Lembar, buatXlsxLembar, kolomPx, type Gaya } from './xlsx-lembar';
-import { DOK_CEK, KAT_FOTO, bacaSlik, teks6C, teksSwot, tglPanjang, type Banding, type Cek, type KatFoto } from './banding-types';
+import { KAT_FOTO, daftarDok, bacaSlik, teks6C, teksSwot, tglPanjang, type Banding, type Cek, type KatFoto } from './banding-types';
 
 export type FotoFile = { kat: KatFoto; ket: string; data: Uint8Array; ext: 'jpeg' | 'png'; w: number; h: number; src?: string };
 
@@ -118,8 +118,8 @@ export function lembarBanding(b: Banding, foto: FotoFile[]): Lembar {
   l.gab(r, C, r, D, 'Dokumen*', S.kTabel).set(r, E, 'Dokumen Yang Diupload Saat Banding', S.kTabel).set(r, F, 'Valid', S.kTabel).set(r, G, 'Tidak Valid', S.kTabel).t(r, 24); r++;
   const grupLabel: Record<KatFoto, string> = { mandatory: 'Dokumen Mandatory', ots: 'Dokumen & PIC OTS', tambahan: 'Dokumen Tambahan ' };
   for (const [kat] of KAT_FOTO) {
-    const isi: [string, Cek][] = DOK_CEK.filter((d) => d.grup === kat).map((d) => [d.label, b.dok[d.k] || '']);
-    if (kat === 'tambahan') isi.push([b.dokLain, b.dokLain ? b.dokLainCek : '']);
+    const isi: [string, Cek][] = daftarDok(b).filter((d) => d.grup === kat && d.label.trim()).map((d) => [d.label, d.cek]);
+    if (!isi.length) isi.push(['', '']);
     l.gab(r, C, r + isi.length - 1, D, grupLabel[kat], S.grup);
     for (const [label, c] of isi) { l.set(r, E, label, S.sel).set(r, F, c === 'valid', S.cek).set(r, G, c === 'tidak', S.cek).t(r, 18); r++; }
   }

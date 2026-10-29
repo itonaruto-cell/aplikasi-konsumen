@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  C6, DOK_CEK, KAT_FOTO, bacaSlik, bandingBaru, ltv, namaFileBanding, otrTaksasi, rapikanBanding, rataMarket, saranReasonMh, saranSwot, teksWaBanding, tglPanjang,
+  C6, KAT_FOTO, daftarDok, type DokItem, bacaSlik, bandingBaru, ltv, namaFileBanding, otrTaksasi, rapikanBanding, rataMarket, saranReasonMh, saranSwot, teksWaBanding, tglPanjang,
   type Banding, type Cek, type FotoBanding, type KatFoto, type WaBanding,
 } from '../../lib/banding-types';
 import { GAYA_BANDING, buatFormBanding, susunBanding, type FotoFile } from '../../lib/banding-xlsx';
@@ -303,7 +303,9 @@ function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: 
 
 
   const nSlik = Math.max(0, bacaSlik(b.slik).length - 1);
-  const isiCek = DOK_CEK.filter((d) => b.dok[d.k]).length;
+  const dokList = daftarDok(b);
+  const isiCek = dokList.filter((d) => d.cek).length;
+  const ubahDok = (list: DokItem[]) => set('dokList', list);
   const status = simpan === 'menyimpan' ? 'Menyimpan…' : simpan === 'tersimpan' ? 'Tersimpan' : simpan === 'gagal' ? 'Gagal tersimpan' : b.nama || b.appNo ? 'Belum tersimpan' : 'Isi nama konsumen dulu';
 
   return (
@@ -342,22 +344,26 @@ function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: 
           <Isian label="Reason reject Credit Dept Head (kalau ada)"><Teks label="Reason reject CDH" value={b.rejectCdh} onChange={(v) => set('rejectCdh', v)} rows={3} /></Isian>
         </Bagian>
 
-        <Bagian judul="Checklist dokumen" sub={`${isiCek}/${DOK_CEK.length} dicek · dokumen yang diupload saat banding`} buka={false}>
+        <Bagian judul="Checklist dokumen" sub={`${isiCek}/${dokList.length} dicek · nama dokumen bisa diubah`} buka={false}>
           {KAT_FOTO.map(([kat, label]) => (
             <div key={kat} className="mt-3 first:mt-0">
               <p className="text-[12px] font-bold uppercase tracking-wide text-neutral-500">{label}</p>
-              {DOK_CEK.filter((d) => d.grup === kat).map((d) => (
-                <div key={d.k} className="flex min-h-12 items-center gap-2 border-b border-neutral-100 dark:border-neutral-900">
-                  <span className="min-w-0 flex-1 text-[13px]">{d.label}</span>
-                  <TigaPilih label={d.label} value={b.dok[d.k] || ''} onChange={(v) => set('dok', { ...b.dok, [d.k]: v })} />
+              {dokList.filter((d) => d.grup === kat).map((d) => (
+                <div key={d.id} className="border-b border-neutral-100 py-2 dark:border-neutral-900">
+                  <div className="flex items-start gap-1">
+                    <textarea value={d.label} rows={1} onChange={(e) => ubahDok(dokList.map((x) => (x.id === d.id ? { ...x, label: e.target.value.toUpperCase().replace(/\n/g, ' ') } : x)))}
+                      placeholder="Nama dokumen" aria-label={`Nama dokumen ${d.label}`}
+                      className="min-h-9 min-w-0 flex-1 resize-none rounded-lg bg-neutral-100 px-2 py-1.5 text-[13px] leading-snug outline-none [field-sizing:content] focus:ring-2 focus:ring-neutral-400 dark:bg-neutral-900" />
+                    <button onClick={() => ubahDok(dokList.filter((x) => x.id !== d.id))} aria-label={`Hapus ${d.label || 'dokumen'}`}
+                      className="flex h-9 w-8 shrink-0 items-center justify-center text-lg text-neutral-400 active:text-red-600">×</button>
+                  </div>
+                  <div className="mt-1.5 flex justify-end pr-9">
+                    <TigaPilih label={d.label} value={d.cek} onChange={(v) => ubahDok(dokList.map((x) => (x.id === d.id ? { ...x, cek: v } : x)))} />
+                  </div>
                 </div>
               ))}
-              {kat === 'tambahan' && (
-                <div className="flex min-h-12 items-center gap-2">
-                  <input value={b.dokLain} onChange={(e) => set('dokLain', e.target.value.toUpperCase())} placeholder="Dokumen lain (opsional)" aria-label="Dokumen tambahan lain" className="min-h-9 min-w-0 flex-1 rounded-lg bg-neutral-100 px-2 text-[13px] outline-none dark:bg-neutral-900" />
-                  <TigaPilih label="Dokumen lain" value={b.dokLainCek} onChange={(v) => set('dokLainCek', v)} />
-                </div>
-              )}
+              <button onClick={() => ubahDok([...dokList, { id: `d${Date.now().toString(36)}`, label: '', grup: kat, cek: '' }])}
+                className="mt-1.5 min-h-10 rounded-lg px-1 text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">+ Tambah dokumen</button>
             </div>
           ))}
         </Bagian>
