@@ -3,6 +3,7 @@ export type CairItem = {
   nama: string; kontrak: string; cust: string; app: string; cmo: string; unit: string;
   pokok: number; tgl: string; brand: 'mobilku' | 'motorku' | ''; sumber: string;
   offering?: string; tenor?: number; flag?: string;
+  ekstra?: { angsuran: string; tahun: string; nopol: string; ltv: string };
 };
 export type DataCair = { ada: boolean; sumber?: string; dikirim?: string; list: CairItem[]; adaSumber?: boolean; kolom?: Record<string, string>; semuaKolom?: string[]; error?: string };
 
@@ -32,3 +33,21 @@ export function rapikanFlag(v: string): string {
   return u.toLowerCase().replace(/\b\w/g, (h) => h.toUpperCase());
 }
 export const kunciFlag = (v: string) => rapikanFlag(v).toUpperCase();
+
+// Angka dari teks tampilan sheet: 35.200.000 / 35,200,000 / 35.200.000,00 / 35,200,000.00 / Rp 35.200.000
+export function angka(v: string): number {
+  let x = String(v || '').replace(/[^0-9,.-]/g, '');
+  if (!x) return 0;
+  const titik = x.lastIndexOf('.'), koma = x.lastIndexOf(',');
+  if (titik >= 0 && koma >= 0) {
+    // pemisah desimal = yang paling belakang
+    x = titik > koma ? x.replace(/,/g, '') : x.replace(/\./g, '').replace(',', '.');
+  } else if (koma >= 0) {
+    // hanya koma: ribuan kalau polanya 1,234,567; selain itu desimal (72,92)
+    x = /^-?\d{1,3}(,\d{3})+$/.test(x) ? x.replace(/,/g, '') : x.replace(',', '.');
+  } else if (titik >= 0) {
+    x = /^-?\d{1,3}(\.\d{3})+$/.test(x) ? x.replace(/\./g, '') : x;
+  }
+  const n = Number(x);
+  return isFinite(n) ? n : 0;
+}

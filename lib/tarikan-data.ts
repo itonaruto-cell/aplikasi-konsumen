@@ -1,5 +1,5 @@
 import { sheetsApi } from './sheets-api';
-import { rapikanFlag, rapikanSumber, type CairItem } from './cair-types';
+import { angka, rapikanFlag, rapikanSumber, type CairItem } from './cair-types';
 
 // Data mentah dari file pantauan, dikirim Apps Script (kirimDataTarikan) tiap 30 menit:
 // - CAIR    : baris tab tarikan sales bulan berjalan (konsumen yang sudah cair) → ikut tampil di Cari konsumen
@@ -170,7 +170,7 @@ function kolomCairJudul(h: string[], r: string[][] = []) {
   };
 }
 
-const angka = (v: string) => Number(v.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+const ribuan = (n: number) => Math.round(n).toLocaleString('id-ID');
 export const kunciKontrak = (v: string) => v.replace(/\D/g, '');
 
 // Baris Cari konsumen dari tab CAIR. Nama kolom mengikuti judul di Sheet1 (kalau ada), supaya filter & tampilan sama.
@@ -212,7 +212,7 @@ export function barisCair(t: Tabel | null, headSheet1: string[], sudahAda: Set<s
     if (sel(b, k.kel)) r[J.kel] = sel(b, k.kel);
     if (sel(b, k.cmo)) r['CMO'] = sel(b, k.cmo);
     if (sel(b, k.tgl)) r['TGL CAIR'] = sel(b, k.tgl);
-    if (pokok) r['POKOK HUTANG'] = String(pokok);
+    if (pokok) r['POKOK HUTANG'] = 'Rp ' + ribuan(pokok);
     // Kolom tambahan secukupnya (angsuran, tenor, tahun, nopol, LTV, merk, HP, sumber, offering), judul mengikuti Sheet1
     for (const [kunciJ, v] of Object.entries(ekstraCair(t.h, b, k, headSheet1))) if (!(kunciJ in r)) r[kunciJ] = v;
     r.__CAIR = '1'; r.__CAIR_INFO = JSON.stringify({ tgl: sel(b, k.tgl), cmo: sel(b, k.cmo) });
@@ -264,8 +264,10 @@ function gabungUnit(h: string[], b: string[], iUnit: number): string {
   const hn = h.map(N);
   let iTipe = hn.findIndex((x) => /RINCI/.test(x) && /TIPE|TYPE/.test(x));
   if (iTipe < 0) iTipe = hn.findIndex((x) => /^(TYPE|TIPE|MODEL)( UNIT| MOBIL| MOTOR| KENDARAAN)?$/.test(x) && !/^(MOBIL|MOTOR)$/i.test((b[hn.indexOf(x)] || '').trim()));
-  const tipe = iTipe >= 0 ? (b[iTipe] || '').trim() : '';
-  return [v, tipe].filter(Boolean).join(' ');
+  let tipe = iTipe >= 0 ? (b[iTipe] || '').trim() : '';
+  // TIPE RINCI sering sudah diawali merk ("TOYOTA AGYA ..."): jangan dobel
+  if (v && tipe.toUpperCase().startsWith(v.toUpperCase())) tipe = tipe.slice(v.length).trim();
+  return [v, tipe].filter(Boolean).join(' ').replace(/\b(\w+) \1\b/gi, '$1');
 }
 
 // Semua isi baris tarikan (judul asli) per kunci no kontrak / cust no, untuk melengkapi konsumen yang sudah ada di Sheet1
@@ -331,6 +333,7 @@ export function daftarCair(t: Tabel | null): CairItem[] {
       brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
       sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), semuaSoa.map((i) => sel(b, i)).join(' | ')),
       offering: sel(b, k.offering), tenor: Math.round(angka(sel(b, k.tenor))) || 0, flag: rapikanFlag(sel(b, k.flag)),
+      ekstra: (() => { const e = ekstraCair(t.h, b, k, []); return { angsuran: e.ANGSURAN || '', tahun: e['TAHUN UNIT'] || '', nopol: e.NOPOL || '', ltv: e.LTV || '' }; })(),
     });
   }
   return out;

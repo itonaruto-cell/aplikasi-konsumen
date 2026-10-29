@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SearchBox, Chev, rp, type Push } from './ui';
 import { brandOf, keyOf } from '../../lib/performa-calc';
-import { kunciFlag, kunciSumber, type CairItem, type DataCair } from '../../lib/cair-types';
+import { angka, kunciFlag, kunciSumber, type CairItem, type DataCair } from '../../lib/cair-types';
 import type { Orang } from '../../lib/performa-types';
 import { feeBookingMandiri } from '../../lib/fee-bm';
 
@@ -102,7 +102,7 @@ export function CairList({ brand, sumber0, flag, orang, push }: { brand?: 'mobil
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-semibold">{it.nama || it.kontrak}</span>
-                    {it.flag && it.flag !== 'Normal' && <span className="shrink-0 rounded-full bg-blue-50 px-2 py-px text-[11px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">{it.flag}</span>}
+                    {it.flag && <span className={`shrink-0 rounded-full px-2 py-px text-[11px] font-bold ${it.flag === 'Normal' ? 'bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300'}`}>{it.flag}</span>}
                     {it.sumber && <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-px text-[11px] font-bold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{it.sumber}</span>}
                   </span>
                   <span className="block truncate text-[12px] text-neutral-500">{[it.cmo, it.unit, it.tgl].filter(Boolean).join(' · ')}</span>
@@ -120,7 +120,8 @@ export function CairList({ brand, sumber0, flag, orang, push }: { brand?: 'mobil
 
 export function CairDetail({ it }: { it: CairItem }) {
   const baris: [string, string][] = [['No kontrak', it.kontrak], ['No cust', it.cust], ['No app', it.app], ['CMO', it.cmo], ['Unit', it.unit],
-    ['Pokok hutang', it.pokok ? rp(it.pokok) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
+    ['Pokok hutang', it.pokok ? rpPenuh(it.pokok) : ''], ['Angsuran', it.ekstra?.angsuran ? rpPenuh(angka(it.ekstra.angsuran)) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''],
+    ['Tahun unit', it.ekstra?.tahun || ''], ['Nopol', it.ekstra?.nopol || ''], ['LTV', it.ekstra?.ltv ? `${it.ekstra.ltv.replace(/%$/, '')}%` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
     ['Brand', it.brand === 'motorku' ? 'Motorku' : it.brand === 'mobilku' ? 'Mobilku' : '']];
   if (it.sumber === 'Booking Mandiri' && it.brand !== 'motorku') {
     const f = feeBookingMandiri(it);
