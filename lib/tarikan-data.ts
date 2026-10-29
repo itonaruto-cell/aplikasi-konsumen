@@ -115,7 +115,7 @@ function kolomTeks(h: string[], r: string[][], pola: RegExp[], bukanJenis = fals
   return -1;
 }
 // Pencarian kolom dari isinya, kalau judulnya tidak dikenali
-const MERK = /\b(TOYOTA|HONDA|DAIHATSU|SUZUKI|MITSUBISHI|NISSAN|DATSUN|ISUZU|WULING|HYUNDAI|MAZDA|KIA|CHEVROLET|FORD|BMW|MERCEDES|YAMAHA|KAWASAKI|TVS|VESPA|PIAGGIO|CHERY|DFSK|MG|HINO|AVANZA|XENIA|BRIO|JAZZ|BEAT|VARIO|NMAX|SCOOPY|MIO|ERTIGA|SIGRA|CALYA|AYLA|AGYA|INNOVA|RUSH|TERIOS|XPANDER|LIVINA|GRAN ?MAX|L300|CARRY)\b/;
+const MERK = /\b(TOYOTA|HONDA|DAIHATSU|SUZUKI|MITSUBISHI|NISSAN|DATSUN|ISUZU|WULING|HYUNDAI|MAZDA|KIA|CHEVROLET|FORD|BMW|MERCEDES|YAMAHA|KAWASAKI|TVS|VESPA|PIAGGIO|CHERY|DFSK|MG|HINO|AVANZA|XENIA|BRIO|JAZZ|BEAT|VARIO|NMAX|SCOOPY|MIO|ERTIGA|SIGRA|CALYA|AYLA|AGYA|INNOVA|RUSH|TERIOS|XPANDER|LIVINA|GRAN ?MAX|L300|CARRY|FORTUNER|PAJERO|HRV|HR-V|CRV|CR-V|MOBILIO|BRV|BR-V|YARIS|VIOS|ALTIS|CAMRY|ALPHARD|VELOZ|RAIZE|ROCKY|TERIOS|LUXIO|APV|ERTIGA|SWIFT|IGNIS|BALENO|XL7|S-PRESSO|KONA|CRETA|STARGAZER|CONFERO|ALMAZ|CORTEZ|AIR ?EV|PANTHER|ELF|TRAGA|COLT|CANTER|FUSO|DUTRO|DYNA|HILUX|TRITON|NAVARA|D-MAX|PCX|ADV|CBR|KLX|AEROX|LEXI|FREEGO|GENIO|SUPRA|REVO|SONIC|SATRIA|NEX|ADDRESS|FAZZIO|XMAX|R15|VIXION|GRAND ?NEW|ALL ?NEW|NEW)\b/;
 const PERUSAHAAN = /^(PT|CV)\b\.?\s*\S|\s(PT|CV)\.?$/;
 const TANGGAL = /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$|^\d{4}-\d{2}-\d{2}|^\d{1,2}[ -](JAN|FEB|MAR|APR|MEI|MAY|JUN|JUL|AGU|AUG|SEP|OKT|OCT|NOV|DES|DEC)/i;
 function kolomIsi(h: string[], r: string[][], cocok: RegExp, minimal: number, kecuali: number[] = [], judulDulu?: RegExp): number {
@@ -134,7 +134,12 @@ export function kolomCair(h: string[], r: string[][] = []) {
   const k = kolomCairJudul(h, r);
   if (r.length) {
     const jangan = [k.nama, k.cmo, k.kontrak, k.cust];
-    if (k.unit < 0) k.unit = kolomIsi(h, r, MERK, 0.5, jangan);
+    // Kolom unit dari judul tapi isinya bukan kendaraan (mis. jumlah unit): cari dari isinya
+    const isiUnit = k.unit >= 0 ? r.map((b) => (b[k.unit] || '').toUpperCase()).filter(Boolean) : [];
+    if (k.unit < 0 || (isiUnit.length && isiUnit.filter((v) => MERK.test(v) || /[A-Z]{3,}.*\d|\d.*[A-Z]{3,}/.test(v)).length < isiUnit.length * 0.3)) {
+      const j = kolomIsi(h, r, MERK, 0.3, jangan);
+      if (j >= 0) k.unit = j;
+    }
     if (k.tgl < 0) k.tgl = kolomIsi(h, r, TANGGAL, 0.5, jangan, /TGL|TANGGAL|DATE|GO ?LIVE|CAIR|AGREEMENT/);
     if (k.soa < 0) k.soa = kolomIsi(h, r, PERUSAHAAN, 0.05, jangan, /SO[AR]|SOURCE|SUMBER|AGEN|SUPPLIER|DEALER|MITRA|REFERRAL|REF/);
   }
@@ -148,7 +153,8 @@ function kolomCairJudul(h: string[], r: string[][] = []) {
     app: cariKolom(h, [/^NO ?APP(LIKASI)?$/, /^APP(LICATION)? ?(NO|ID)$/]),
     cmo: kolomTeks(h, r, [/^NAMA CMO$/, /^CMO$/, /^NAMA CMO\b/, /^(NAMA )?SALES$/, /^PIC$/]),
     tipe: cariKolom(h, [/^TIPE KENDARAAN$/, /JENIS KENDARAAN/, /TIPE KENDARAAN/]),
-    unit: kolomTeks(h, r, [/^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)$/], true),
+    unit: kolomTeks(h, r, [/^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)$/,
+      /(TYPE|TIPE|MODEL|VARIAN|VARIANT)/, /(ASSET|ASET|OBJEK|OBJECT|KENDARAAN|UNIT|MOBIL|MOTOR) ?(DESC|DESKRIPSI|DESCRIPTION|NAME|NAMA|DETAIL)?/, /DESKRIPSI|DESCRIPTION/], true),
     pokok: cariKolom(h, [/^POKOK HTG$/, /POKOK HTG/, /POKOK HUTANG/, /^AMM?OUNT$/, /^PENCAIRAN$/]),
     tgl: cariKolom(h, [/TGL.*(GOLIVE|GO LIVE|CAIR|KONTRAK|AGREEMENT)/, /TANGGAL.*(GOLIVE|GO LIVE|CAIR|KONTRAK)/, /(GOLIVE|GO LIVE) DATE/, /AGREEMENT DATE/, /^TGL$/, /^TANGGAL$/]),
     kec: cariKolom(h, [/^KECAMATAN$/]),
