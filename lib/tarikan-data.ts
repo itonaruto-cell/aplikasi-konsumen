@@ -79,10 +79,18 @@ export function cariKolom(h: string[], pola: RegExp[]): number {
   for (const p of pola) { const i = hn.findIndex((x) => p.test(x)); if (i >= 0) return i; }
   return -1;
 }
+// Kolom nama konsumen: judul yang umum dulu, lalu judul apa saja yang mengandung NAMA/NAME/CUSTOMER/KONSUMEN
+// asal bukan nama orang kantor (CMO, sales, SPV, agent, dealer, dst.) atau nomor/tanggal.
+const BUKAN_KONSUMEN = /CMO|SALES|PIC|SPV|MAO|\bMA\b|AGEN|DEALER|SHOWROOM|IBU|PASANGAN|SURVEY|\bBH\b|\bMH\b|KOLEKTOR|COLL|BPKB|STNK|KTP|^NO\b|\bNO$|NOMOR|\bID\b|TGL|TANGGAL|DATE|CABANG|BRANCH|PRODUK|PRODUCT|UNIT|ASSET|MERK|TIPE|TYPE|STATUS|KET/;
+function kolomNama(h: string[]): number {
+  const i = cariKolom(h, [/^NAMA (KONSUMEN|CUSTOMER|CUST|DEBITUR|NASABAH|PEMOHON|KONS)$/, /^(CUSTOMER|CUST|CUSTOMMER|CLIENT) ?NAME$/, /^NAMA KONSUMEN/, /^NAMA$/, /^NAME$/, /^KONSUMEN$/, /^CUSTOMER$/, /^DEBITUR$/, /^NASABAH$/]);
+  if (i >= 0) return i;
+  return h.map(N).findIndex((x) => /NAMA|NAME|CUSTOMER|CUSTOMMER|KONSUMEN|DEBITUR|NASABAH|PEMOHON/.test(x) && !BUKAN_KONSUMEN.test(x));
+}
 export function kolomCair(h: string[]) {
   return {
-    nama: cariKolom(h, [/^NAMA (KONSUMEN|CUSTOMER|CUST|DEBITUR|NASABAH|PEMOHON)$/, /^(CUSTOMER|CUST) NAME$/, /^NAMA KONSUMEN/, /^NAMA$/, /^KONSUMEN$/]),
-    kontrak: cariKolom(h, [/^NO ?KONTRAK$/, /^(NO )?AGRE?E?ME?NT( NO)?$/, /^AGRMNT NO$/, /^NO PERJANJIAN$/, /KONTRAK/]),
+    nama: kolomNama(h),
+    kontrak: cariKolom(h, [/^NO ?KONTRAK$/, /^(NO )?AGRE?E?ME?NT( NO)?$/, /^AGRMNT NO$/, /^NO PERJANJIAN$/, /^(?!.*(TGL|TANGGAL|DATE)).*KONTRAK/]),
     cust: cariKolom(h, [/^NO ?CUST(OMER)?$/, /^(CUST|CUSTOMER) ?(NO|ID)$/, /^ID ?CUST(OMER)?$/, /^CIF$/]),
     app: cariKolom(h, [/^NO ?APP(LIKASI)?$/, /^APP(LICATION)? ?(NO|ID)$/]),
     cmo: cariKolom(h, [/^NAMA CMO$/, /^CMO$/, /^NAMA CMO\b/, /^(NAMA )?SALES$/, /^PIC$/]),
