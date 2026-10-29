@@ -42,7 +42,7 @@ export async function GET(request) {
     const allowed = head.map((h, i) => ({ h, i })).filter(({ h }) => h && (owner || !PHONE_COLUMN.test(h)));
 
     const cairAda = petaCair(cair);
-    const cairIsi = isiCair(cair);
+    const cairIsi = isiCair(cair, head);
     const kunciDari = pembuatKunci(head);
     const result = terapkan(head, rows, peta)
       .map(({ nilai, kunci, dikoreksi }) => {
