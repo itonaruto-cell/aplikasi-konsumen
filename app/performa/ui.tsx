@@ -141,7 +141,7 @@ export type View =
   | { t: 'ma'; m: MaFull }
   | { t: 'k'; k: KonsumenFull; pic?: string }
   | { t: 'oi'; nama?: string }
-  | { t: 'cair'; brand?: 'mobilku' | 'motorku'; sumber?: string }
+  | { t: 'cair'; brand?: 'mobilku' | 'motorku'; sumber?: string; flag?: string }
   | { t: 'cairRow'; it: CairItem }
   | { t: 'oiRow'; h: string[]; r: string[]; judul: string };
 export type Push = (v: View) => void;
@@ -498,7 +498,6 @@ export function OrangDetail({ o, rank, total, data, push, hideHeader = false }: 
             <Stat label="Pending" value={angka(o.oi.pending)} />
             <Stat label="Reject" value={angka(o.oi.reject)} />
           </div>
-          <OpenRow title="Bahan OI" sub="Daftar order in atas nama ini" onClick={() => push({ t: 'oi', nama: o.nama })} />
         </section>
       )}
     </>
@@ -550,8 +549,8 @@ export function Sheet({ stack, data, rankOf, push, pop, close }: {
               </>)}
               {view.t === 'cair' && (<>
                 <p className="text-lg font-semibold">Konsumen cair bulan ini</p>
-                <p className="mb-3 text-sm text-neutral-500">{[view.brand === 'motorku' ? 'Motorku' : view.brand === 'mobilku' ? 'Mobilku' : 'Cabang', view.sumber].filter(Boolean).join(' · ')} · dari tarikan sales</p>
-                <CairList brand={view.brand} sumber0={view.sumber} orang={data.orang} push={push} />
+                <p className="mb-3 text-sm text-neutral-500">{[view.brand === 'motorku' ? 'Motorku' : view.brand === 'mobilku' ? 'Mobilku' : 'Cabang', view.sumber, view.flag && `Flag ${view.flag}`].filter(Boolean).join(' · ')} · dari tarikan sales</p>
+                <CairList brand={view.brand} sumber0={view.sumber} flag={view.flag} orang={data.orang} push={push} />
               </>)}
               {view.t === 'cairRow' && (<>
                 <p className="mb-2 text-lg font-semibold">{view.it.nama || view.it.kontrak}</p>

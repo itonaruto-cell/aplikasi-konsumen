@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SearchBox, Chev, rp, type Push } from './ui';
 import { brandOf, keyOf } from '../../lib/performa-calc';
-import { kunciSumber, type CairItem, type DataCair } from '../../lib/cair-types';
+import { kunciFlag, kunciSumber, type CairItem, type DataCair } from '../../lib/cair-types';
 import type { Orang } from '../../lib/performa-types';
 import { feeBookingMandiri } from '../../lib/fee-bm';
 
@@ -35,14 +35,15 @@ export function brandItem(it: CairItem, orang: Orang[]): 'mobilku' | 'motorku' |
   return b === 'mobilku' || b === 'motorku' ? b : '';
 }
 
-export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 'motorku'; sumber0?: string; orang: Orang[]; push: Push }) {
+export function CairList({ brand, sumber0, flag, orang, push }: { brand?: 'mobilku' | 'motorku'; sumber0?: string; flag?: string; orang: Orang[]; push: Push }) {
   const [d, setD] = useState<DataCair | null>(null);
   const [q, setQ] = useState('');
   const [sb, setSb] = useState(sumber0 ? kunciSumber(sumber0) : '');
   const [cmo, setCmo] = useState('');
   useEffect(() => { ambilCair().then(setD); }, []);
 
-  const rows = useMemo(() => (d?.list || []).filter((it) => !brand || brandItem(it, orang) === brand), [d, brand, orang]);
+  const rows = useMemo(() => (d?.list || []).filter((it) => (!brand || brandItem(it, orang) === brand) && (!flag || kunciFlag(it.flag || '') === kunciFlag(flag))), [d, brand, flag, orang]);
+  const adaFlag = useMemo(() => (d?.list || []).some((it) => it.flag), [d]);
   const hitung = (f: (it: CairItem) => string, list: CairItem[]) => {
     const m = new Map<string, number>();
     list.forEach((it) => { const v = f(it); if (v) m.set(v, (m.get(v) || 0) + 1); });
@@ -91,7 +92,7 @@ export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 
         </div>
       )}
       {tampil.length === 0 ? (
-        <p className="py-8 text-center text-sm text-neutral-500">{rows.length ? 'Tidak ada yang cocok.' : 'Belum ada konsumen cair bulan ini.'}</p>
+        <p className="py-8 text-center text-sm text-neutral-500">{rows.length ? 'Tidak ada yang cocok.' : flag && !adaFlag ? 'Kolom flag approval belum terbaca dari tab tarikan sales.' : 'Belum ada konsumen cair bulan ini.'}</p>
       ) : (
         <ul className="mt-2">
           {tampil.map((it, i) => (
@@ -101,6 +102,7 @@ export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-semibold">{it.nama || it.kontrak}</span>
+                    {it.flag && it.flag !== 'Normal' && <span className="shrink-0 rounded-full bg-blue-50 px-2 py-px text-[11px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">{it.flag}</span>}
                     {it.sumber && <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-px text-[11px] font-bold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{it.sumber}</span>}
                   </span>
                   <span className="block truncate text-[12px] text-neutral-500">{[it.cmo, it.unit, it.tgl].filter(Boolean).join(' · ')}</span>
@@ -114,7 +116,7 @@ export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 
       )}
       {d.kolom && (
         <p className="mt-3 text-[11px] leading-snug text-neutral-400">
-          Dari tab {d.sumber}. Kolom terbaca: {Object.entries({ nama: 'nama', kontrak: 'no kontrak', cust: 'no cust', cmo: 'CMO', unit: 'unit', sumber: 'sumber', offering: 'produk offering', soa: 'SOA', tenor: 'tenor', tgl: 'tanggal', pokok: 'pokok' })
+          Dari tab {d.sumber}. Kolom terbaca: {Object.entries({ nama: 'nama', kontrak: 'no kontrak', cust: 'no cust', cmo: 'CMO', unit: 'unit', sumber: 'sumber', offering: 'produk offering', soa: 'SOA', flag: 'flag', tenor: 'tenor', tgl: 'tanggal', pokok: 'pokok' })
             .map(([k, l]) => `${l} = ${d.kolom![k] || '–'}`).join(' · ')}
           {d.semuaKolom?.length ? <><br />Semua kolom tab: {d.semuaKolom.filter(Boolean).join(' · ')}</> : null}
         </p>
@@ -125,7 +127,7 @@ export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 
 
 export function CairDetail({ it }: { it: CairItem }) {
   const baris: [string, string][] = [['No kontrak', it.kontrak], ['No cust', it.cust], ['No app', it.app], ['CMO', it.cmo], ['Unit', it.unit],
-    ['Pokok hutang', it.pokok ? rp(it.pokok) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Sumber order', it.sumber],
+    ['Pokok hutang', it.pokok ? rp(it.pokok) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
     ['Brand', it.brand === 'motorku' ? 'Motorku' : it.brand === 'mobilku' ? 'Mobilku' : '']];
   if (it.sumber === 'Booking Mandiri' && it.brand !== 'motorku') {
     const f = feeBookingMandiri(it);
