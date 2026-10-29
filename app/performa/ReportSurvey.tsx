@@ -102,7 +102,7 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
   };
 
   const kap = hitungKapasitas(r);
-  const terisi = UNSUR.filter(([k]) => r.c6[k].trim() || (k === 'capacity' && kap.penghasilan > 0)).length;
+  const terisi = UNSUR.filter(([k]) => k !== 'tambahan' && (r.c6[k].trim() || (k === 'capacity' && kap.penghasilan > 0))).length;
   const status = simpan === 'menyimpan' ? 'Menyimpan…' : simpan === 'tersimpan' ? 'Tersimpan' : simpan === 'gagal' ? 'Gagal tersimpan' : r.nama || r.appNo ? 'Belum tersimpan' : 'Isi nama konsumen dulu';
   return (
     <div className="px-4 pb-40 pt-3">
@@ -252,7 +252,7 @@ export default function ReportSurveyPage({ akun, reloadKey = 0, onBanding }: { a
                   <span className="truncate text-[15px] font-bold">{r.nama || '(tanpa nama)'}</span>
                   {r.rekomendasi && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${r.rekomendasi === 'Layak' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : r.rekomendasi === 'Tidak layak' ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'}`}>{r.rekomendasi}</span>}
                 </span>
-                <span className="truncate text-[12px] text-neutral-500">{[r.brand === 'MOTORKU' ? 'MotorKu' : 'MobilKu', tglId(r.tglSurvey), r.surveyor, `${UNSUR.filter(([k]) => r.c6[k].trim()).length}/8 unsur`].filter(Boolean).join(' · ')}</span>
+                <span className="truncate text-[12px] text-neutral-500">{[r.brand === 'MOTORKU' ? 'MotorKu' : 'MobilKu', tglId(r.tglSurvey), r.surveyor, `${UNSUR.filter(([k]) => k !== 'tambahan' && r.c6[k].trim()).length}/8 unsur`].filter(Boolean).join(' · ')}</span>
               </button>
               <button onClick={() => hapus(r)} aria-label={`Hapus report ${r.nama}`} className="flex h-12 w-12 shrink-0 items-center justify-center text-neutral-400"><Ico n="x" className="h-4 w-4" sw={2} /></button>
             </li>

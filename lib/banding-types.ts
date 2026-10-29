@@ -27,8 +27,9 @@ export const C6: [keyof Analisa6C, string, string][] = [
   ['condition', 'Condition of Economy', 'Kondisi usaha / ekonomi'],
   ['eksistensi', 'Eksistensi', 'Hasil cek lingkungan tempat tinggal & unit'],
   ['purpose', 'Purpose', 'Tujuan penggunaan dana'],
+  ['tambahan', 'Tambahan', 'Info lain yang mendukung (opsional)'],
 ];
-export type Analisa6C = { character: string; capacity: string; collateral: string; capital: string; constraint: string; condition: string; eksistensi: string; purpose: string };
+export type Analisa6C = { character: string; capacity: string; collateral: string; capital: string; constraint: string; condition: string; eksistensi: string; purpose: string; tambahan: string };
 export type Swot = { s: string; w: string; o: string; t: string };
 
 export type Banding = {
@@ -65,7 +66,7 @@ export const waKosong = (): WaBanding => ({
   kol: ['', '', '', '', ''],
 });
 
-export const kosong6C = (): Analisa6C => ({ character: '', capacity: '', collateral: '', capital: '', constraint: '', condition: '', eksistensi: '', purpose: '' });
+export const kosong6C = (): Analisa6C => ({ character: '', capacity: '', collateral: '', capital: '', constraint: '', condition: '', eksistensi: '', purpose: '', tambahan: '' });
 export function bandingBaru(p: Partial<Banding> = {}): Banding {
   return {
     id: '', dibuat: '', diubah: '', oleh: '', status: 'draft',

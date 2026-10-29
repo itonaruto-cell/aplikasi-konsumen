@@ -10,6 +10,7 @@ export const UNSUR: [keyof Analisa6C, string, string][] = [
   ['constraint', 'Constraint', 'Hambatan: kesehatan, status kerja (kontrak/tetap), pinjaman lain, lingkungan tempat tinggal.'],
   ['eksistensi', 'Eksistensi (1E)', 'Dikenal di lingkungan rumah & kerja/usaha? Sudah berapa lama tinggal? Hasil cek lingkungan.'],
   ['purpose', 'Purpose (1P)', 'Tujuan dana (pendidikan, renovasi, modal usaha, pengobatan, dll.) dan bukti pendukungnya.'],
+  ['tambahan', 'Tambahan', 'Info lain yang mendukung (opsional).'],
 ];
 export const PENGAJUAN = ['SLB', 'Fasdan'] as const;
 export const REKOMENDASI = ['Layak', 'Layak dengan catatan', 'Tidak layak'] as const;

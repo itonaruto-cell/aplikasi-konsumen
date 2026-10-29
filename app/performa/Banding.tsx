@@ -362,7 +362,7 @@ function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: 
           ))}
         </Bagian>
 
-        <Bagian judul="Analisa 6C + 1EP" sub={`${C6.filter(([k]) => b.c6[k].trim()).length}/8 terisi`}>
+        <Bagian judul="Analisa 6C + 1EP" sub={`${C6.filter(([k]) => k !== 'tambahan' && b.c6[k].trim()).length}/8 terisi`}>
           {C6.map(([k, label, hint]) => (
             <Isian key={k} label={label} hint={hint}><Teks label={label} value={b.c6[k]} onChange={(v) => set('c6', { ...b.c6, [k]: v })} rows={k === 'capacity' || k === 'eksistensi' ? 4 : 2} /></Isian>
           ))}
@@ -419,7 +419,7 @@ function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: 
           <p className="mt-1 text-neutral-600 dark:text-neutral-400">
             No APP <b className="text-neutral-900 dark:text-white">{b.appNo || '–'}</b> · Nama <b className="text-neutral-900 dark:text-white">{b.nama || '–'}</b> · Cabang {b.cabang || '–'} · {b.brand === 'MOTORKU' ? 'MotorKu' : 'MobilKu'}
           </p>
-          <p className="text-neutral-600 dark:text-neutral-400">Analisa 6C 1EP: {C6.filter(([k]) => b.c6[k].trim()).length}/8 terisi{b.rejectCredit.trim() ? ' · reason reject Credit ada' : ''}</p>
+          <p className="text-neutral-600 dark:text-neutral-400">Analisa 6C 1EP: {C6.filter(([k]) => k !== 'tambahan' && b.c6[k].trim()).length}/8 terisi{b.rejectCredit.trim() ? ' · reason reject Credit ada' : ''}</p>
           <button onClick={() => { setLembar('form'); window.scrollTo(0, 0); }} className="mt-1 min-h-10 text-[13px] font-semibold underline">Ubah di Form F-761</button>
         </section>
         <Bagian judul="Info & struktur pembiayaan" sub={[b.wa.merk, b.wa.otr ? `OTR ${b.wa.otr.toLocaleString('id-ID')}` : '', ltv(b.wa) && `LTV ${ltv(b.wa)}`].filter(Boolean).join(' · ') || 'Link, tipe konsumen, unit, OTR, PH, LTV, harga market'}>
