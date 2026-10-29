@@ -1,4 +1,5 @@
 import { sheetsApi } from './sheets-api';
+import { rapikanSumber, type CairItem } from './cair-types';
 
 // Data mentah dari file pantauan, dikirim Apps Script (kirimDataTarikan) tiap 30 menit:
 // - CAIR    : baris tab tarikan sales bulan berjalan (konsumen yang sudah cair) → ikut tampil di Cari konsumen
@@ -79,28 +80,53 @@ export function cariKolom(h: string[], pola: RegExp[]): number {
   for (const p of pola) { const i = hn.findIndex((x) => p.test(x)); if (i >= 0) return i; }
   return -1;
 }
-// Kolom nama konsumen: judul yang umum dulu, lalu judul apa saja yang mengandung NAMA/NAME/CUSTOMER/KONSUMEN
-// asal bukan nama orang kantor (CMO, sales, SPV, agent, dealer, dst.) atau nomor/tanggal.
-const BUKAN_KONSUMEN = /CMO|SALES|PIC|SPV|MAO|\bMA\b|AGEN|DEALER|SHOWROOM|IBU|PASANGAN|SURVEY|\bBH\b|\bMH\b|KOLEKTOR|COLL|BPKB|STNK|KTP|^NO\b|\bNO$|NOMOR|\bID\b|TGL|TANGGAL|DATE|CABANG|BRANCH|PRODUK|PRODUCT|UNIT|ASSET|MERK|TIPE|TYPE|STATUS|KET/;
-function kolomNama(h: string[]): number {
-  const i = cariKolom(h, [/^NAMA (KONSUMEN|CUSTOMER|CUST|DEBITUR|NASABAH|PEMOHON|KONS)$/, /^(CUSTOMER|CUST|CUSTOMMER|CLIENT) ?NAME$/, /^NAMA KONSUMEN/, /^NAMA$/, /^NAME$/, /^KONSUMEN$/, /^CUSTOMER$/, /^DEBITUR$/, /^NASABAH$/]);
-  if (i >= 0) return i;
-  return h.map(N).findIndex((x) => /NAMA|NAME|CUSTOMER|CUSTOMMER|KONSUMEN|DEBITUR|NASABAH|PEMOHON/.test(x) && !BUKAN_KONSUMEN.test(x));
+// Kolom nama konsumen: judul yang umum dulu. Kalau tidak ada, dari kolom yang judulnya mirip nama, dipilih yang
+// isinya huruf dan paling beragam (nama konsumen beda tiap baris; nama wilayah/BU/cabang sama semua).
+const BUKAN_KONSUMEN = /CMO|SALES|PIC|SPV|MAO|\bMA\b|AGEN|DEALER|SHOWROOM|IBU|PASANGAN|SURVEY|\bBH\b|\bMH\b|\bBU\b|KOLEKTOR|COLL|BPKB|STNK|KTP|^NO\b|\bNO$|NOMOR|\bID\b|TGL|TANGGAL|DATE|CABANG|BRANCH|AREA|REGION|WILAYAH|KANTOR|OFFICE|PRODUK|PRODUCT|UNIT|ASSET|MERK|TIPE|TYPE|STATUS|KET|SUPPLIER|VENDOR|ASURANSI|INSURANCE|BANK|LEASING|FINANCE|PERUSAHAAN|COMPANY|USAHA|PEKERJAAN|PROFESI/;
+const hurufSaja = (v: string) => /[A-Za-z]/.test(v) && !/^[\d\s.,\-\/:]+$/.test(v);
+function ragam(r: string[][], i: number): number {
+  const isi = r.map((b) => (b[i] || '').trim()).filter(Boolean);
+  if (isi.length < 1) return 0;
+  const huruf = isi.filter(hurufSaja);
+  if (huruf.length < isi.length * 0.8) return 0;
+  return new Set(huruf.map((x) => x.toUpperCase())).size / isi.length;
 }
-export function kolomCair(h: string[]) {
+function kolomNama(h: string[], r: string[][]): number {
+  const cocok = (i: number) => i >= 0 && (r.length < 3 || ragam(r, i) >= 0.5);
+  const i = cariKolom(h, [/^NAMA (KONSUMEN|CUSTOMER|CUST|DEBITUR|NASABAH|PEMOHON|KONS)$/, /^(CUSTOMER|CUST|CUSTOMMER|CLIENT) ?NAME$/, /^NAMA KONSUMEN/, /^NAMA$/, /^NAME$/, /^KONSUMEN$/, /^CUSTOMER$/, /^DEBITUR$/, /^NASABAH$/]);
+  if (cocok(i)) return i;
+  const calon = h.map(N).map((x, j) => ({ j, x })).filter(({ x }) => /NAMA|NAME|CUSTOMER|CUSTOMMER|KONSUMEN|DEBITUR|NASABAH|PEMOHON/.test(x) && !BUKAN_KONSUMEN.test(x));
+  const terbaik = calon.map(({ j }) => ({ j, s: r.length ? ragam(r, j) : 1 })).filter((x) => x.s >= 0.5).sort((a, b) => b.s - a.s)[0];
+  return terbaik ? terbaik.j : -1;
+}
+// Kolom teks (bukan angka) pertama yang cocok, mis. TYPE UNIT harus berisi huruf, bukan nominal
+function kolomTeks(h: string[], r: string[][], pola: RegExp[]): number {
+  const hn = h.map(N);
+  for (const p of pola) {
+    for (let j = 0; j < hn.length; j++) {
+      if (!p.test(hn[j])) continue;
+      const isi = r.map((b) => (b[j] || '').trim()).filter(Boolean);
+      if (!isi.length || isi.filter(hurufSaja).length >= isi.length * 0.8) return j;
+    }
+  }
+  return -1;
+}
+export function kolomCair(h: string[], r: string[][] = []) {
   return {
-    nama: kolomNama(h),
+    nama: kolomNama(h, r),
     kontrak: cariKolom(h, [/^NO ?KONTRAK$/, /^(NO )?AGRE?E?ME?NT( NO)?$/, /^AGRMNT NO$/, /^NO PERJANJIAN$/, /^(?!.*(TGL|TANGGAL|DATE)).*KONTRAK/]),
     cust: cariKolom(h, [/^NO ?CUST(OMER)?$/, /^(CUST|CUSTOMER) ?(NO|ID)$/, /^ID ?CUST(OMER)?$/, /^CIF$/]),
     app: cariKolom(h, [/^NO ?APP(LIKASI)?$/, /^APP(LICATION)? ?(NO|ID)$/]),
-    cmo: cariKolom(h, [/^NAMA CMO$/, /^CMO$/, /^NAMA CMO\b/, /^(NAMA )?SALES$/, /^PIC$/]),
+    cmo: kolomTeks(h, r, [/^NAMA CMO$/, /^CMO$/, /^NAMA CMO\b/, /^(NAMA )?SALES$/, /^PIC$/]),
     tipe: cariKolom(h, [/^TIPE KENDARAAN$/, /JENIS KENDARAAN/, /TIPE KENDARAAN/]),
-    unit: cariKolom(h, [/^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^ASSET/, /^OBJEK/]),
+    unit: kolomTeks(h, r, [/^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)( KENDARAAN)?$/]),
     pokok: cariKolom(h, [/^POKOK HTG$/, /POKOK HTG/, /POKOK HUTANG/, /^AMM?OUNT$/, /^PENCAIRAN$/]),
     tgl: cariKolom(h, [/TGL.*(GOLIVE|GO LIVE|CAIR|KONTRAK|AGREEMENT)/, /TANGGAL.*(GOLIVE|GO LIVE|CAIR|KONTRAK)/, /(GOLIVE|GO LIVE) DATE/, /AGREEMENT DATE/, /^TGL$/, /^TANGGAL$/]),
     kec: cariKolom(h, [/^KECAMATAN$/]),
     kel: cariKolom(h, [/^KELURAHAN$/, /^DESA$/]),
-    produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/]),
+    produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/, /^BRAND$/]),
+    sumber: kolomTeks(h, r, [/^(SUMBER|SOURCE|CHANNEL|CHANEL|JALUR|ASAL)( (ORDER|DATA|APLIKASI|APP|KONSUMEN))?$/, /^(TIPE|JENIS|KATEGORI) (ORDER|SUMBER|CHANNEL)$/,
+      /^(ORDER|DATA) (SOURCE|SUMBER|CHANNEL)$/, /SUMBER|SOURCE|CHANNEL|CHANEL/, /^RETAIL/, /AGGREGATOR|AGREGATOR/]),
   };
 }
 
@@ -111,7 +137,7 @@ export const kunciKontrak = (v: string) => v.replace(/\D/g, '');
 // Konsumen yang nomor kontrak / cust no-nya sudah ada di Sheet1 tidak ditambahkan lagi.
 export function barisCair(t: Tabel | null, headSheet1: string[], sudahAda: Set<string>): Record<string, string>[] {
   if (!t || !t.r.length) return [];
-  const k = kolomCair(t.h);
+  const k = kolomCair(t.h, t.r);
   if (k.nama < 0) return [];
   const hs = headSheet1.map((x) => x.trim());
   const judul = (...pilihan: string[]) => hs.find((x) => pilihan.includes(x.toUpperCase())) || pilihan[0];
@@ -170,7 +196,7 @@ export function kunciSheet1(head: string[], rows: unknown[][]): Set<string> {
 export function petaCair(t: Tabel | null): Map<string, { tgl: string; cmo: string }> {
   const m = new Map<string, { tgl: string; cmo: string }>();
   if (!t) return m;
-  const k = kolomCair(t.h);
+  const k = kolomCair(t.h, t.r);
   for (const b of t.r) {
     const info = { tgl: k.tgl >= 0 ? b[k.tgl] || '' : '', cmo: k.cmo >= 0 ? b[k.cmo] || '' : '' };
     const kk = k.kontrak >= 0 ? kunciKontrak(b[k.kontrak] || '') : '';
@@ -179,4 +205,25 @@ export function petaCair(t: Tabel | null): Map<string, { tgl: string; cmo: strin
     if (kc) m.set(kc, info);
   }
   return m;
+}
+
+// Daftar konsumen cair untuk halaman Pantau (semua baris tab CAIR, bulan berjalan)
+export function daftarCair(t: Tabel | null): CairItem[] {
+  if (!t) return [];
+  const k = kolomCair(t.h, t.r);
+  const sel = (b: string[], i: number) => (i >= 0 ? (b[i] || '').trim() : '');
+  const out: CairItem[] = [];
+  for (const b of t.r) {
+    const nama = sel(b, k.nama), kontrak = sel(b, k.kontrak);
+    if (!nama && !kontrak) continue;
+    if (/^(GRAND )?TOTAL$/i.test(nama) || /^(GRAND )?TOTAL$/i.test(sel(b, k.cmo))) continue;
+    const jenis = N(sel(b, k.tipe) || sel(b, k.produk));
+    out.push({
+      nama: nama.toUpperCase(), kontrak, cust: sel(b, k.cust), app: sel(b, k.app), cmo: sel(b, k.cmo),
+      unit: sel(b, k.unit) || sel(b, k.tipe), pokok: angka(sel(b, k.pokok)), tgl: sel(b, k.tgl),
+      brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
+      sumber: rapikanSumber(sel(b, k.sumber)),
+    });
+  }
+  return out;
 }
