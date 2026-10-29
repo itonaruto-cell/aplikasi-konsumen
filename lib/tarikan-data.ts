@@ -1,5 +1,5 @@
 import { sheetsApi } from './sheets-api';
-import { rapikanSumber, type CairItem } from './cair-types';
+import { rapikanFlag, rapikanSumber, type CairItem } from './cair-types';
 
 // Data mentah dari file pantauan, dikirim Apps Script (kirimDataTarikan) tiap 30 menit:
 // - CAIR    : baris tab tarikan sales bulan berjalan (konsumen yang sudah cair) → ikut tampil di Cari konsumen
@@ -142,6 +142,7 @@ export function kolomCair(h: string[], r: string[][] = []) {
     }
     if (k.tgl < 0) k.tgl = kolomIsi(h, r, TANGGAL, 0.5, jangan, /TGL|TANGGAL|DATE|GO ?LIVE|CAIR|AGREEMENT/);
     if (k.soa < 0) k.soa = kolomIsi(h, r, PERUSAHAAN, 0.05, jangan, /SO[AR]|SOURCE|SUMBER|AGEN|SUPPLIER|DEALER|MITRA|REFERRAL|REF/);
+    if (k.flag < 0) k.flag = kolomIsi(h, r, /^(NORMAL|BANDING|PRE ?APP|AUTO ?APP)/, 0.5, jangan, /FLAG|APPROVAL/);
   }
   return k;
 }
@@ -160,6 +161,7 @@ function kolomCairJudul(h: string[], r: string[][] = []) {
     kec: cariKolom(h, [/^KECAMATAN$/]),
     kel: cariKolom(h, [/^KELURAHAN$/, /^DESA$/]),
     produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/, /^BRAND$/]),
+    flag: cariKolom(h, [/^FLAG( APPROVAL| APP)?$/, /FLAG/, /^(JALUR|TIPE|JENIS) APPROVAL$/]),
     offering: cariKolom(h, [/^PRODU(K|CT) ?OFFERING( TYPE| NAME| NAMA)?$/, /OFFERING/, /^POT$/]),
     tenor: cariKolom(h, [/^TENOR$/, /^TENOR\b/, /TENOR/, /JANGKA WAKTU/]),
     soa: cariKolom(h, [/^SO[AR] ?2$/, /^SO[AR]$/, /^SO[AR] ?\d$/, /^(NAMA |NAME )?SOA( NAME| NAMA| DESC)?$/, /^SOA\b/, /\bSOA\b/, /SOURCE OF APP/]),
@@ -326,7 +328,7 @@ export function daftarCair(t: Tabel | null): CairItem[] {
       unit: sel(b, k.unit) || sel(b, k.tipe), pokok: angka(sel(b, k.pokok)), tgl: sel(b, k.tgl),
       brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
       sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), semuaSoa.map((i) => sel(b, i)).join(' | ')),
-      offering: sel(b, k.offering), tenor: Math.round(angka(sel(b, k.tenor))) || 0,
+      offering: sel(b, k.offering), tenor: Math.round(angka(sel(b, k.tenor))) || 0, flag: rapikanFlag(sel(b, k.flag)),
     });
   }
   return out;

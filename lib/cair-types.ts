@@ -2,7 +2,7 @@
 export type CairItem = {
   nama: string; kontrak: string; cust: string; app: string; cmo: string; unit: string;
   pokok: number; tgl: string; brand: 'mobilku' | 'motorku' | ''; sumber: string;
-  offering?: string; tenor?: number;
+  offering?: string; tenor?: number; flag?: string;
 };
 export type DataCair = { ada: boolean; sumber?: string; dikirim?: string; list: CairItem[]; adaSumber?: boolean; kolom?: Record<string, string>; semuaKolom?: string[]; error?: string };
 
@@ -20,3 +20,15 @@ export function rapikanSumber(v: string): string {
   return u.toLowerCase().replace(/\b\w/g, (h) => h.toUpperCase());
 }
 export const kunciSumber = (v: string) => rapikanSumber(v).toUpperCase();
+
+// Flag approval: Normal / Banding / Pre App / Auto App
+export function rapikanFlag(v: string): string {
+  const u = v.toUpperCase().replace(/[_.\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!u) return '';
+  if (/BANDING|APPEAL/.test(u)) return 'Banding';
+  if (/PRE ?APP/.test(u)) return 'Pre App';
+  if (/AUTO ?APP/.test(u)) return 'Auto App';
+  if (/NORMAL|REGULER|REGULAR/.test(u)) return 'Normal';
+  return u.toLowerCase().replace(/\b\w/g, (h) => h.toUpperCase());
+}
+export const kunciFlag = (v: string) => rapikanFlag(v).toUpperCase();
