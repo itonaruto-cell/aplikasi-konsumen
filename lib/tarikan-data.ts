@@ -74,7 +74,8 @@ export async function bacaTabel(tab: string): Promise<Tabel | null> {
 }
 
 /* ---------- Konsumen cair (tab tarikan sales) → baris Cari konsumen ---------- */
-const N = (s: string) => s.toUpperCase().replace(/[_.]/g, ' ').replace(/\s+/g, ' ').trim();
+// Ejaan judul yang sering beda (COSTUMER, CUSTUMER, CUSTOMMER) diseragamkan jadi CUSTOMER
+const N = (s: string) => s.toUpperCase().replace(/[_.]/g, ' ').replace(/\bC[OU]STU?M+[EO]R\b/g, 'CUSTOMER').replace(/\s+/g, ' ').trim();
 export function cariKolom(h: string[], pola: RegExp[]): number {
   const hn = h.map(N);
   for (const p of pola) { const i = hn.findIndex((x) => p.test(x)); if (i >= 0) return i; }
@@ -127,7 +128,7 @@ export function kolomCair(h: string[], r: string[][] = []) {
     produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/, /^BRAND$/]),
     offering: cariKolom(h, [/^PRODU(K|CT) ?OFFERING( TYPE| NAME| NAMA)?$/, /OFFERING/, /^POT$/]),
     tenor: cariKolom(h, [/^TENOR$/, /^TENOR\b/, /TENOR/, /JANGKA WAKTU/]),
-    soa: kolomTeks(h, r, [/^SOA$/, /^(NAMA |NAME )?SOA( NAME| NAMA| DESC)?$/, /^SOA\b/, /\bSOA$/, /SOURCE OF APP/]),
+    soa: cariKolom(h, [/^SOA ?2$/, /^SOA$/, /^(NAMA |NAME )?SOA( NAME| NAMA| DESC)?$/, /^SOA\b/, /\bSOA\b/, /SOURCE OF APP/]),
     sumber: kolomTeks(h, r, [/^(?!.*SOA)(SUMBER|SOURCE|CHANNEL|CHANEL|JALUR|ASAL)( (ORDER|DATA|APLIKASI|APP|KONSUMEN))?$/, /^(TIPE|JENIS|KATEGORI) (ORDER|SUMBER|CHANNEL)$/,
       /^(ORDER|DATA) (SOURCE|SUMBER|CHANNEL)$/, /^(?!.*SOA)(?!SOURCE OF APP).*(SUMBER|SOURCE|CHANNEL|CHANEL)/, /^RETAIL/, /AGGREGATOR|AGREGATOR/]),
   };
@@ -215,6 +216,8 @@ export function daftarCair(t: Tabel | null): CairItem[] {
   if (!t) return [];
   const k = kolomCair(t.h, t.r);
   const sel = (b: string[], i: number) => (i >= 0 ? (b[i] || '').trim() : '');
+  // Semua kolom SOA (SOA, SOA 2, ...): kalau salah satunya perusahaan (PT/CV) → Aggregator
+  const semuaSoa = t.h.map((x, i) => (/\bSOA\b|SOURCE OF APP/.test(N(x)) ? i : -1)).filter((i) => i >= 0);
   const out: CairItem[] = [];
   for (const b of t.r) {
     const nama = sel(b, k.nama), kontrak = sel(b, k.kontrak);
@@ -225,7 +228,7 @@ export function daftarCair(t: Tabel | null): CairItem[] {
       nama: nama.toUpperCase(), kontrak, cust: sel(b, k.cust), app: sel(b, k.app), cmo: sel(b, k.cmo),
       unit: sel(b, k.unit) || sel(b, k.tipe), pokok: angka(sel(b, k.pokok)), tgl: sel(b, k.tgl),
       brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
-      sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), sel(b, k.soa)),
+      sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), semuaSoa.map((i) => sel(b, i)).join(' | ')),
       offering: sel(b, k.offering), tenor: Math.round(angka(sel(b, k.tenor))) || 0,
     });
   }
@@ -235,8 +238,10 @@ export function daftarCair(t: Tabel | null): CairItem[] {
 // Sumber order: dari kolom sumber/channel, kalau kosong dari produk offering.
 // Order retail yang SOA-nya perusahaan (PT / CV) = Aggregator.
 export function sumberOrder(sumber: string, offering: string, soa: string): string {
-  let x = rapikanSumber(sumber) || rapikanSumber(offering);
-  const soaPT = /^(PT|CV)\b|\b(PT|CV)\.?\s/i.test(soa.trim());
-  if (soaPT && (!x || x === 'Retail' || /RETAIL/i.test(offering))) x = 'Aggregator';
+  const off = offering.toUpperCase();
+  let x = rapikanSumber(sumber) || (/RETAIL/.test(off) ? 'Retail' : rapikanSumber(offering));
+  // SOA berisi nama perusahaan: "PT ...", "PT. ...", "... PT", "CV ..."
+  const soaPT = /(^|[^A-Z])(PT|CV)([^A-Z]|$)/i.test(soa);
+  if (soaPT && (!x || x === 'Retail' || /RETAIL/.test(off))) x = 'Aggregator';
   return x;
 }
