@@ -17,6 +17,14 @@ export const DOK_CEK: { k: string; label: string; grup: KatFoto }[] = [
   { k: 'proforma', label: 'FORM PROFORMA', grup: 'tambahan' },
   { k: 'usaha', label: 'FOTO USAHA REPRESENTATIF', grup: 'tambahan' },
 ];
+// Checklist yang bisa diubah per form: nama dokumen, tambah, hapus. Form lama (tanpa dokList) memakai DOK_CEK + dok + dokLain.
+export type DokItem = { id: string; label: string; grup: KatFoto; cek: Cek };
+export function daftarDok(b: Pick<Banding, 'dok' | 'dokLain' | 'dokLainCek' | 'dokList'>): DokItem[] {
+  if (Array.isArray(b.dokList)) return b.dokList;
+  const isi: DokItem[] = DOK_CEK.map((d) => ({ id: d.k, label: d.label, grup: d.grup, cek: b.dok?.[d.k] || '' }));
+  if ((b.dokLain || '').trim()) isi.push({ id: 'lain', label: b.dokLain.trim(), grup: 'tambahan', cek: b.dokLainCek || '' });
+  return isi;
+}
 
 export const C6: [keyof Analisa6C, string, string][] = [
   ['character', 'Character', 'Sikap saat survey, hasil cek lingkungan, riwayat kredit'],
@@ -37,6 +45,7 @@ export type Banding = {
   appNo: string; nama: string; brand: 'MOBILKU' | 'MOTORKU'; cabang: string; bh: string; tanggal: string; // YYYY-MM-DD
   rejectCredit: string; rejectCam: string; rejectCdh: string;
   dok: Record<string, Cek>; dokLain: string; dokLainCek: Cek;
+  dokList?: DokItem[];     // checklist yang sudah diubah (nama/jumlah dokumen); kosong = bawaan
   c6: Analisa6C; swot: Swot;
   reasonMh: string; reasonBh: string;
   pembuat: string; jabatan: string; buh: string;
@@ -92,6 +101,12 @@ export function rapikanBanding(x: unknown): Banding {
     bh: str(o.bh, 150), tanggal: /^\d{4}-\d{2}-\d{2}$/.test(String(o.tanggal || '')) ? String(o.tanggal) : '',
     rejectCredit: str(o.rejectCredit), rejectCam: str(o.rejectCam), rejectCdh: str(o.rejectCdh),
     dok: Object.fromEntries(DOK_CEK.map((d) => [d.k, cek(o.dok?.[d.k])])), dokLain: str(o.dokLain, 120), dokLainCek: cek(o.dokLainCek),
+    ...(Array.isArray(o.dokList) ? {
+      dokList: o.dokList.filter((d) => d && typeof d === 'object').slice(0, 40).map((d, i) => ({
+        id: str(d.id, 40) || `d${i}`, label: str(d.label, 150),
+        grup: (['mandatory', 'ots', 'tambahan'] as KatFoto[]).includes(d.grup) ? d.grup : 'tambahan', cek: cek(d.cek),
+      })),
+    } : {}),
     c6: Object.fromEntries(C6.map(([k]) => [k, str(o.c6?.[k], 5000)])) as Analisa6C,
     swot: { s: str(o.swot?.s, 8000), w: str(o.swot?.w, 4000), o: str(o.swot?.o, 4000), t: str(o.swot?.t, 4000) },
     reasonMh: str(o.reasonMh), reasonBh: str(o.reasonBh),
