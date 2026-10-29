@@ -549,7 +549,7 @@ export function Sheet({ stack, data, rankOf, push, pop, close }: {
               </>)}
               {view.t === 'cair' && (<>
                 <p className="text-lg font-semibold">Konsumen cair bulan ini</p>
-                <p className="mb-3 text-sm text-neutral-500">{[view.brand === 'motorku' ? 'Motorku' : view.brand === 'mobilku' ? 'Mobilku' : 'Cabang', view.sumber, view.flag && `Flag ${view.flag}`].filter(Boolean).join(' · ')} · dari tarikan sales</p>
+                <p className="mb-3 text-sm text-neutral-500">{[view.brand === 'motorku' ? 'Motorku' : view.brand === 'mobilku' ? 'Mobilku' : 'Cabang', view.sumber, view.flag && `Flag ${view.flag}`].filter(Boolean).join(' · ')}</p>
                 <CairList brand={view.brand} sumber0={view.sumber} flag={view.flag} orang={data.orang} push={push} />
               </>)}
               {view.t === 'cairRow' && (<>

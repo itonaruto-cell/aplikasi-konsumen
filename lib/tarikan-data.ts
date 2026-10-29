@@ -154,13 +154,13 @@ function kolomCairJudul(h: string[], r: string[][] = []) {
     app: cariKolom(h, [/^NO ?APP(LIKASI)?$/, /^APP(LICATION)? ?(NO|ID)$/]),
     cmo: kolomTeks(h, r, [/^NAMA CMO$/, /^CMO$/, /^NAMA CMO\b/, /^(NAMA )?SALES$/, /^PIC$/]),
     tipe: cariKolom(h, [/^TIPE KENDARAAN$/, /JENIS KENDARAAN/, /TIPE KENDARAAN/]),
-    unit: kolomTeks(h, r, [/^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)$/,
+    unit: kolomTeks(h, r, [/^(NAMA )?(MERK|MEREK)$/, /^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)$/,
       /(TYPE|TIPE|MODEL|VARIAN|VARIANT)/, /(ASSET|ASET|OBJEK|OBJECT|KENDARAAN|UNIT|MOBIL|MOTOR) ?(DESC|DESKRIPSI|DESCRIPTION|NAME|NAMA|DETAIL)?/, /DESKRIPSI|DESCRIPTION/], true),
     pokok: cariKolom(h, [/^POKOK HTG$/, /POKOK HTG/, /POKOK HUTANG/, /^AMM?OUNT$/, /^PENCAIRAN$/]),
-    tgl: cariKolom(h, [/TGL.*(GOLIVE|GO LIVE|CAIR|KONTRAK|AGREEMENT)/, /TANGGAL.*(GOLIVE|GO LIVE|CAIR|KONTRAK)/, /(GOLIVE|GO LIVE) DATE/, /AGREEMENT DATE/, /^TGL$/, /^TANGGAL$/]),
+    tgl: cariKolom(h, [/^TGL GL$/, /^(TGL|TANGGAL) GO ?LIVE$/, /^TGL JUAL$/, /TGL.*(GOLIVE|GO LIVE|CAIR|KONTRAK|AGREEMENT)/, /TANGGAL.*(GOLIVE|GO LIVE|CAIR|KONTRAK)/, /(GOLIVE|GO LIVE) DATE/, /AGREEMENT DATE/, /^TGL$/, /^TANGGAL$/]),
     kec: cariKolom(h, [/^KECAMATAN$/]),
     kel: cariKolom(h, [/^KELURAHAN$/, /^DESA$/]),
-    produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/, /^BRAND$/]),
+    produk: cariKolom(h, [/^BRAND$/, /^PRODUK$/, /^PRODUCT$/, /^NAMA PRODUK$/]),
     flag: cariKolom(h, [/^FLAG( APPROVAL| APP)?$/, /FLAG/, /^(JALUR|TIPE|JENIS) APPROVAL$/]),
     offering: cariKolom(h, [/^PRODU(K|CT) ?OFFERING( TYPE| NAME| NAMA)?$/, /OFFERING/, /^POT$/]),
     tenor: cariKolom(h, [/^TENOR$/, /^TENOR\b/, /TENOR/, /JANGKA WAKTU/]),
@@ -198,7 +198,7 @@ export function barisCair(t: Tabel | null, headSheet1: string[], sudahAda: Set<s
     const kunci = kk || kc || nama.toUpperCase();
     if (dipakai.has(kunci)) continue;
     dipakai.add(kunci);
-    const jenis = N(sel(b, k.tipe) || sel(b, k.produk));
+    const jenis = N(`${sel(b, k.produk)} ${sel(b, k.tipe)}`);
     const brand = /MOTOR/.test(jenis) ? 'MOTORKU' : /MOBIL/.test(jenis) ? 'MOBILKU' : sel(b, k.produk);
     const pokok = angka(sel(b, k.pokok));
     const r: Record<string, string> = { [J.nama]: nama.toUpperCase() };
@@ -229,7 +229,7 @@ const EKSTRA: [string[], RegExp[]][] = [
   [['TAHUN UNIT', 'TAHUN'], [/^TAHUN( UNIT| KENDARAAN| MOBIL| MOTOR)?$/, /^THN\b/, /^(YEAR|TAHUN) ?(OF )?(MFG|MANUFACTURE|PEMBUATAN|RAKIT)?$/, /TAHUN/]],
   [['NOPOL'], [/^NOPOL$/, /^NO\.? ?POL(ISI)?$/, /PLAT|NOPOL/]],
   [['LTV'], [/^LTV\b/, /LTV/]],
-  [['BRAND UNIT'], [/^(MERK|MEREK|BRAND)( UNIT| KENDARAAN)?$/]],
+  [['BRAND UNIT'], [/^(NAMA )?(MERK|MEREK)( UNIT| KENDARAAN)?$/]],
   [['NO HP'], [/^(NO\.? ?)?(HP|WA|TELP|TELEPON|HANDPHONE|PHONE)( ?\d)?$/, /^(NO\.? )?(HP|TELP)/]],
   [['PRODUK OFFERING'], [/OFFERING/]],
 ];
@@ -260,8 +260,10 @@ export function ekstraCair(h: string[], b: string[], k: ReturnType<typeof kolomC
 // Unit: kalau kolom yang terbaca hanya MERK, digabung dengan kolom TYPE/MODEL (mis. HONDA + BEAT)
 function gabungUnit(h: string[], b: string[], iUnit: number): string {
   const v = iUnit >= 0 ? (b[iUnit] || '').trim() : '';
-  if (iUnit < 0 || !/^(MERK|MEREK|BRAND)/.test(N(h[iUnit]))) return v;
-  const iTipe = h.map(N).findIndex((x) => /^(TYPE|TIPE|MODEL)( UNIT| MOBIL| MOTOR)?$/.test(x));
+  if (iUnit < 0 || !/^(NAMA )?(MERK|MEREK|BRAND)/.test(N(h[iUnit]))) return v;
+  const hn = h.map(N);
+  let iTipe = hn.findIndex((x) => /RINCI/.test(x) && /TIPE|TYPE/.test(x));
+  if (iTipe < 0) iTipe = hn.findIndex((x) => /^(TYPE|TIPE|MODEL)( UNIT| MOBIL| MOTOR| KENDARAAN)?$/.test(x) && !/^(MOBIL|MOTOR)$/i.test((b[hn.indexOf(x)] || '').trim()));
   const tipe = iTipe >= 0 ? (b[iTipe] || '').trim() : '';
   return [v, tipe].filter(Boolean).join(' ');
 }
@@ -322,10 +324,10 @@ export function daftarCair(t: Tabel | null): CairItem[] {
     const nama = sel(b, k.nama), kontrak = sel(b, k.kontrak);
     if (!nama && !kontrak) continue;
     if (/^(GRAND )?TOTAL$/i.test(nama) || /^(GRAND )?TOTAL$/i.test(sel(b, k.cmo))) continue;
-    const jenis = N(sel(b, k.tipe) || sel(b, k.produk));
+    const jenis = N(`${sel(b, k.produk)} ${sel(b, k.tipe)}`);
     out.push({
       nama: nama.toUpperCase(), kontrak, cust: sel(b, k.cust), app: sel(b, k.app), cmo: sel(b, k.cmo),
-      unit: sel(b, k.unit) || sel(b, k.tipe), pokok: angka(sel(b, k.pokok)), tgl: sel(b, k.tgl),
+      unit: gabungUnit(t.h, b, k.unit) || sel(b, k.tipe), pokok: angka(sel(b, k.pokok)), tgl: sel(b, k.tgl),
       brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
       sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), semuaSoa.map((i) => sel(b, i)).join(' | ')),
       offering: sel(b, k.offering), tenor: Math.round(angka(sel(b, k.tenor))) || 0, flag: rapikanFlag(sel(b, k.flag)),
