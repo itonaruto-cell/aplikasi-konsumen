@@ -114,7 +114,33 @@ function kolomTeks(h: string[], r: string[][], pola: RegExp[], bukanJenis = fals
   }
   return -1;
 }
+// Pencarian kolom dari isinya, kalau judulnya tidak dikenali
+const MERK = /\b(TOYOTA|HONDA|DAIHATSU|SUZUKI|MITSUBISHI|NISSAN|DATSUN|ISUZU|WULING|HYUNDAI|MAZDA|KIA|CHEVROLET|FORD|BMW|MERCEDES|YAMAHA|KAWASAKI|TVS|VESPA|PIAGGIO|CHERY|DFSK|MG|HINO|AVANZA|XENIA|BRIO|JAZZ|BEAT|VARIO|NMAX|SCOOPY|MIO|ERTIGA|SIGRA|CALYA|AYLA|AGYA|INNOVA|RUSH|TERIOS|XPANDER|LIVINA|GRAN ?MAX|L300|CARRY)\b/;
+const PERUSAHAAN = /^(PT|CV)\b\.?\s*\S|\s(PT|CV)\.?$/;
+const TANGGAL = /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$|^\d{4}-\d{2}-\d{2}|^\d{1,2}[ -](JAN|FEB|MAR|APR|MEI|MAY|JUN|JUL|AGU|AUG|SEP|OKT|OCT|NOV|DES|DEC)/i;
+function kolomIsi(h: string[], r: string[][], cocok: RegExp, minimal: number, kecuali: number[] = [], judulDulu?: RegExp): number {
+  let terbaik = -1, skor = 0;
+  h.forEach((judul, j) => {
+    if (kecuali.includes(j)) return;
+    const isi = r.map((b) => (b[j] || '').trim().toUpperCase()).filter(Boolean);
+    if (!isi.length) return;
+    let s = isi.filter((v) => cocok.test(v)).length / isi.length;
+    if (judulDulu && judulDulu.test(N(judul))) s += 0.5;
+    if (s >= minimal && s > skor) { skor = s; terbaik = j; }
+  });
+  return terbaik;
+}
 export function kolomCair(h: string[], r: string[][] = []) {
+  const k = kolomCairJudul(h, r);
+  if (r.length) {
+    const jangan = [k.nama, k.cmo, k.kontrak, k.cust];
+    if (k.unit < 0) k.unit = kolomIsi(h, r, MERK, 0.5, jangan);
+    if (k.tgl < 0) k.tgl = kolomIsi(h, r, TANGGAL, 0.5, jangan, /TGL|TANGGAL|DATE|GO ?LIVE|CAIR|AGREEMENT/);
+    if (k.soa < 0) k.soa = kolomIsi(h, r, PERUSAHAAN, 0.05, jangan, /SO[AR]|SOURCE|SUMBER|AGEN|SUPPLIER|DEALER|MITRA|REFERRAL|REF/);
+  }
+  return k;
+}
+function kolomCairJudul(h: string[], r: string[][] = []) {
   return {
     nama: kolomNama(h, r),
     kontrak: cariKolom(h, [/^NO ?KONTRAK$/, /^(NO )?AGRE?E?ME?NT( NO)?$/, /^AGRMNT NO$/, /^NO PERJANJIAN$/, /^(?!.*(TGL|TANGGAL|DATE)).*KONTRAK/]),
@@ -130,7 +156,7 @@ export function kolomCair(h: string[], r: string[][] = []) {
     produk: cariKolom(h, [/^PRODUK$/, /^PRODUCT$/, /^BRAND$/]),
     offering: cariKolom(h, [/^PRODU(K|CT) ?OFFERING( TYPE| NAME| NAMA)?$/, /OFFERING/, /^POT$/]),
     tenor: cariKolom(h, [/^TENOR$/, /^TENOR\b/, /TENOR/, /JANGKA WAKTU/]),
-    soa: cariKolom(h, [/^SOA ?2$/, /^SOA$/, /^(NAMA |NAME )?SOA( NAME| NAMA| DESC)?$/, /^SOA\b/, /\bSOA\b/, /SOURCE OF APP/]),
+    soa: cariKolom(h, [/^SO[AR] ?2$/, /^SO[AR]$/, /^SO[AR] ?\d$/, /^(NAMA |NAME )?SOA( NAME| NAMA| DESC)?$/, /^SOA\b/, /\bSOA\b/, /SOURCE OF APP/]),
     sumber: kolomTeks(h, r, [/^(?!.*SOA)(SUMBER|SOURCE|CHANNEL|CHANEL|JALUR|ASAL)( (ORDER|DATA|APLIKASI|APP|KONSUMEN))?$/, /^(TIPE|JENIS|KATEGORI) (ORDER|SUMBER|CHANNEL)$/,
       /^(ORDER|DATA) (SOURCE|SUMBER|CHANNEL)$/, /^(?!.*SOA)(?!SOURCE OF APP).*(SUMBER|SOURCE|CHANNEL|CHANEL)/, /^RETAIL/, /AGGREGATOR|AGREGATOR/]),
   };
@@ -252,7 +278,7 @@ export function daftarCair(t: Tabel | null): CairItem[] {
   const k = kolomCair(t.h, t.r);
   const sel = (b: string[], i: number) => (i >= 0 ? (b[i] || '').trim() : '');
   // Semua kolom SOA (SOA, SOA 2, ...): kalau salah satunya perusahaan (PT/CV) → Aggregator
-  const semuaSoa = t.h.map((x, i) => (/\bSOA\b|SOURCE OF APP/.test(N(x)) ? i : -1)).filter((i) => i >= 0);
+  const semuaSoa = [...new Set([...t.h.map((x, i) => (/\bSO[AR]\b|SO[AR] ?\d|SOURCE OF APP/.test(N(x)) ? i : -1)), k.soa])].filter((i) => i >= 0);
   const out: CairItem[] = [];
   for (const b of t.r) {
     const nama = sel(b, k.nama), kontrak = sel(b, k.kontrak);

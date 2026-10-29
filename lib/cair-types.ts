@@ -4,7 +4,7 @@ export type CairItem = {
   pokok: number; tgl: string; brand: 'mobilku' | 'motorku' | ''; sumber: string;
   offering?: string; tenor?: number;
 };
-export type DataCair = { ada: boolean; sumber?: string; dikirim?: string; list: CairItem[]; adaSumber?: boolean; kolom?: Record<string, string>; error?: string };
+export type DataCair = { ada: boolean; sumber?: string; dikirim?: string; list: CairItem[]; adaSumber?: boolean; kolom?: Record<string, string>; semuaKolom?: string[]; error?: string };
 
 // Nama channel / sumber order dirapikan supaya cocok dengan tabel "Sales per channel"
 export function rapikanSumber(v: string): string {

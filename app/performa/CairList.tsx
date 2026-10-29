@@ -116,6 +116,7 @@ export function CairList({ brand, sumber0, orang, push }: { brand?: 'mobilku' | 
         <p className="mt-3 text-[11px] leading-snug text-neutral-400">
           Dari tab {d.sumber}. Kolom terbaca: {Object.entries({ nama: 'nama', kontrak: 'no kontrak', cust: 'no cust', cmo: 'CMO', unit: 'unit', sumber: 'sumber', offering: 'produk offering', soa: 'SOA', tenor: 'tenor', tgl: 'tanggal', pokok: 'pokok' })
             .map(([k, l]) => `${l} = ${d.kolom![k] || '–'}`).join(' · ')}
+          {d.semuaKolom?.length ? <><br />Semua kolom tab: {d.semuaKolom.filter(Boolean).join(' · ')}</> : null}
         </p>
       )}
     </div>

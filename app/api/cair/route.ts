@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const k = kolomCair(t.h, t.r);
     // Judul kolom yang dipakai (ditampilkan kecil di aplikasi, untuk cek kalau ada kolom yang salah tebak)
     const kolom = Object.fromEntries(Object.entries(k).map(([x, i]) => [x, i >= 0 ? t.h[i] : '']));
-    return NextResponse.json({ ada: true, sumber: t.sumber, dikirim: t.dikirim, adaSumber: k.sumber >= 0, kolom, list: daftarCair(t) },
+    return NextResponse.json({ ada: true, sumber: t.sumber, dikirim: t.dikirim, adaSumber: k.sumber >= 0, kolom, semuaKolom: t.h, list: daftarCair(t) },
       { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('Gagal membaca konsumen cair:', err);
