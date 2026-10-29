@@ -366,7 +366,8 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
                       </span>
                       <span className="mt-0.5 block truncate text-[13px] text-neutral-500">
                         {r.__CAIR && <span className="mr-1.5 rounded-full bg-green-100 px-1.5 py-px text-[11px] font-bold text-green-800 dark:bg-green-950 dark:text-green-300">CAIR</span>}
-                        {[pick(r, 'KECAMATAN'), [pick(r, 'BRAND UNIT'), pick(r, 'TYPE UNIT DETAIL', 'TYPE UNIT')].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
+                        {[pick(r, 'KECAMATAN'), [pick(r, 'BRAND UNIT'), pick(r, 'TYPE UNIT DETAIL', 'TYPE UNIT')].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
+                          || (r.__CAIR ? [pick(r, 'CMO'), pick(r, 'TIPE KENDARAAN', 'PRODUK')].filter(Boolean).join(' · ') : '')}
                       </span>
                     </span>
                     {isSaved && <I n="star" filled className="h-4 w-4 shrink-0 text-[#E0A800]" />}
