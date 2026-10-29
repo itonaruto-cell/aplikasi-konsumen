@@ -2,6 +2,7 @@ import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getRole, canSeeKonsumen } from '../../../lib/access';
 import { bacaDatabase, terapkan } from '../../../lib/koreksi-konsumen';
 import { koreksiAman } from '../../../lib/konsumen-db';
+import { bacaTabel, barisCair, kunciSheet1, pembuatKunci, petaCair, TAB_CAIR } from '../../../lib/tarikan-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,23 +31,33 @@ export async function GET(request) {
   }
 
   try {
-    const [{ head, rows }, peta] = await Promise.all([bacaDatabase(), koreksiAman()]);
-    if (!head.length) return Response.json([]);
+    const [{ head, rows }, peta, cair] = await Promise.all([
+      bacaDatabase(), koreksiAman(),
+      bacaTabel(TAB_CAIR).catch((err) => { console.error('Gagal membaca tab CAIR:', err); return null; }),
+    ]);
+    if (!head.length && !cair) return Response.json([]);
     const owner = role === 'owner';
 
     // 2. Tentukan kolom yang boleh dikirim
     const allowed = head.map((h, i) => ({ h, i })).filter(({ h }) => h && (owner || !PHONE_COLUMN.test(h)));
 
+    const cairAda = petaCair(cair);
+    const kunciDari = pembuatKunci(head);
     const result = terapkan(head, rows, peta)
       .map(({ nilai, kunci, dikoreksi }) => {
         const obj = {};
         allowed.forEach(({ h, i }) => { obj[h] = nilai[i] || ''; });
+        // Konsumen lama yang bulan ini cair lagi: tandai supaya ikut di daftar "Sudah cair"
+        const c = cairAda.size ? kunciDari(nilai).map((x) => cairAda.get(x)).find(Boolean) : null;
+        if (c) { obj.__CAIR = '1'; obj.__CAIR_INFO = JSON.stringify(c); }
         if (owner) {
           obj.__ID = kunci;
           if (dikoreksi.size) obj.__KOREKSI = JSON.stringify(Object.fromEntries([...dikoreksi].map(([k, x]) => [k, x.asli])));
         }
         return obj;
       })
+      // Konsumen yang sudah cair (tab tarikan sales) dan belum ada di Sheet1 ikut ditambahkan, ditandai __CAIR
+      .concat(barisCair(cair, head, kunciSheet1(head, rows)))
       .filter((obj) => !query || Object.entries(obj).some(([k, v]) => !k.startsWith('__') && String(v).toLowerCase().includes(query)));
 
     return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });
