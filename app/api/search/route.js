@@ -2,7 +2,7 @@ import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getRole, canSeeKonsumen } from '../../../lib/access';
 import { bacaDatabase, terapkan } from '../../../lib/koreksi-konsumen';
 import { koreksiAman } from '../../../lib/konsumen-db';
-import { bacaTabel, barisCair, kunciSheet1, pembuatKunci, petaCair, TAB_CAIR } from '../../../lib/tarikan-data';
+import { bacaTabel, barisCair, isiCair, kunciSheet1, pembuatKunci, petaCair, TAB_CAIR } from '../../../lib/tarikan-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +42,7 @@ export async function GET(request) {
     const allowed = head.map((h, i) => ({ h, i })).filter(({ h }) => h && (owner || !PHONE_COLUMN.test(h)));
 
     const cairAda = petaCair(cair);
+    const cairIsi = isiCair(cair);
     const kunciDari = pembuatKunci(head);
     const result = terapkan(head, rows, peta)
       .map(({ nilai, kunci, dikoreksi }) => {
@@ -49,7 +50,15 @@ export async function GET(request) {
         allowed.forEach(({ h, i }) => { obj[h] = nilai[i] || ''; });
         // Konsumen lama yang bulan ini cair lagi: tandai supaya ikut di daftar "Sudah cair"
         const c = cairAda.size ? kunciDari(nilai).map((x) => cairAda.get(x)).find(Boolean) : null;
-        if (c) { obj.__CAIR = '1'; obj.__CAIR_INFO = JSON.stringify(c); }
+        if (c) {
+          obj.__CAIR = '1'; obj.__CAIR_INFO = JSON.stringify(c);
+          // Lengkapi dengan isi tarikan sales (angsuran, tenor, tipe, LTV, dst.) tanpa menimpa data yang sudah ada
+          const isi = kunciDari(nilai).map((x) => cairIsi.get(x)).find(Boolean) || {};
+          for (const [k, v] of Object.entries(isi)) {
+            if (!owner && PHONE_COLUMN.test(k.trim())) continue;
+            if (!String(obj[k] ?? '').trim()) obj[k] = v;
+          }
+        }
         if (owner) {
           obj.__ID = kunci;
           if (dikoreksi.size) obj.__KOREKSI = JSON.stringify(Object.fromEntries([...dikoreksi].map(([k, x]) => [k, x.asli])));
@@ -57,7 +66,8 @@ export async function GET(request) {
         return obj;
       })
       // Konsumen yang sudah cair (tab tarikan sales) dan belum ada di Sheet1 ikut ditambahkan, ditandai __CAIR
-      .concat(barisCair(cair, head, kunciSheet1(head, rows)))
+      .concat(barisCair(cair, head, kunciSheet1(head, rows))
+        .map((o) => (owner ? o : Object.fromEntries(Object.entries(o).filter(([k]) => !PHONE_COLUMN.test(k.trim()))))))
       .filter((obj) => !query || Object.entries(obj).some(([k, v]) => !k.startsWith('__') && String(v).toLowerCase().includes(query)));
 
     return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });

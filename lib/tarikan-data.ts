@@ -101,12 +101,14 @@ function kolomNama(h: string[], r: string[][]): number {
   return terbaik ? terbaik.j : -1;
 }
 // Kolom teks (bukan angka) pertama yang cocok, mis. TYPE UNIT harus berisi huruf, bukan nominal
-function kolomTeks(h: string[], r: string[][], pola: RegExp[]): number {
+function kolomTeks(h: string[], r: string[][], pola: RegExp[], bukanJenis = false): number {
   const hn = h.map(N);
   for (const p of pola) {
     for (let j = 0; j < hn.length; j++) {
       if (!p.test(hn[j])) continue;
       const isi = r.map((b) => (b[j] || '').trim()).filter(Boolean);
+      // Kolom unit tidak boleh hanya berisi jenis kendaraan (MOBIL / MOTOR)
+      if (bukanJenis && isi.length && isi.every((v) => /^(MOBIL|MOTOR)(KU)?$/i.test(v))) continue;
       if (!isi.length || isi.filter(hurufSaja).length >= isi.length * 0.8) return j;
     }
   }
@@ -120,7 +122,7 @@ export function kolomCair(h: string[], r: string[][] = []) {
     app: cariKolom(h, [/^NO ?APP(LIKASI)?$/, /^APP(LICATION)? ?(NO|ID)$/]),
     cmo: kolomTeks(h, r, [/^NAMA CMO$/, /^CMO$/, /^NAMA CMO\b/, /^(NAMA )?SALES$/, /^PIC$/]),
     tipe: cariKolom(h, [/^TIPE KENDARAAN$/, /JENIS KENDARAAN/, /TIPE KENDARAAN/]),
-    unit: kolomTeks(h, r, [/^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)( KENDARAAN)?$/]),
+    unit: kolomTeks(h, r, [/^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)$/], true),
     pokok: cariKolom(h, [/^POKOK HTG$/, /POKOK HTG/, /POKOK HUTANG/, /^AMM?OUNT$/, /^PENCAIRAN$/]),
     tgl: cariKolom(h, [/TGL.*(GOLIVE|GO LIVE|CAIR|KONTRAK|AGREEMENT)/, /TANGGAL.*(GOLIVE|GO LIVE|CAIR|KONTRAK)/, /(GOLIVE|GO LIVE) DATE/, /AGREEMENT DATE/, /^TGL$/, /^TANGGAL$/]),
     kec: cariKolom(h, [/^KECAMATAN$/]),
@@ -169,17 +171,50 @@ export function barisCair(t: Tabel | null, headSheet1: string[], sudahAda: Set<s
     if (kontrak) r[J.kontrak] = kontrak;
     if (cust) r[J.cust] = cust;
     if (sel(b, k.app)) r['NO APP'] = sel(b, k.app);
-    if (sel(b, k.unit)) r[J.unit] = sel(b, k.unit);
+    const unitTeks = gabungUnit(t.h, b, k.unit);
+    if (unitTeks) r[J.unit] = unitTeks;
     if (brand) r[J.produk] = brand;
     if (sel(b, k.kec)) r[J.kec] = sel(b, k.kec);
     if (sel(b, k.kel)) r[J.kel] = sel(b, k.kel);
     if (sel(b, k.cmo)) r['CMO'] = sel(b, k.cmo);
     if (sel(b, k.tgl)) r['TGL CAIR'] = sel(b, k.tgl);
     if (pokok) r['POKOK HUTANG'] = String(pokok);
+    // Kolom lain dari tarikan sales ikut ditampilkan apa adanya (judul asli)
+    const dipetakan = new Set([k.nama, k.kontrak, k.cust, k.app, k.unit, k.produk, k.kec, k.kel, k.cmo, k.tgl, k.pokok]);
+    t.h.forEach((judulAsli, i) => {
+      const v = (b[i] || '').trim();
+      if (!v || dipetakan.has(i) || !judulAsli.trim() || judulAsli in r) return;
+      r[judulAsli] = v;
+    });
     r.__CAIR = '1'; r.__CAIR_INFO = JSON.stringify({ tgl: sel(b, k.tgl), cmo: sel(b, k.cmo) });
     out.push(r);
   }
   return out;
+}
+
+// Unit: kalau kolom yang terbaca hanya MERK, digabung dengan kolom TYPE/MODEL (mis. HONDA + BEAT)
+function gabungUnit(h: string[], b: string[], iUnit: number): string {
+  const v = iUnit >= 0 ? (b[iUnit] || '').trim() : '';
+  if (iUnit < 0 || !/^(MERK|MEREK|BRAND)/.test(N(h[iUnit]))) return v;
+  const iTipe = h.map(N).findIndex((x) => /^(TYPE|TIPE|MODEL)( UNIT| MOBIL| MOTOR)?$/.test(x));
+  const tipe = iTipe >= 0 ? (b[iTipe] || '').trim() : '';
+  return [v, tipe].filter(Boolean).join(' ');
+}
+
+// Semua isi baris tarikan (judul asli) per kunci no kontrak / cust no, untuk melengkapi konsumen yang sudah ada di Sheet1
+export function isiCair(t: Tabel | null): Map<string, Record<string, string>> {
+  const m = new Map<string, Record<string, string>>();
+  if (!t) return m;
+  const k = kolomCair(t.h, t.r);
+  for (const b of t.r) {
+    const isi: Record<string, string> = {};
+    t.h.forEach((judul, i) => { const v = (b[i] || '').trim(); if (v && judul.trim()) isi[judul] = v; });
+    const kk = k.kontrak >= 0 ? kunciKontrak(b[k.kontrak] || '') : '';
+    const kc = k.cust >= 0 ? (b[k.cust] || '').trim().toUpperCase() : '';
+    if (kk.length >= 6) m.set(kk, isi);
+    if (kc) m.set(kc, isi);
+  }
+  return m;
 }
 
 // Kunci satu baris Sheet1 (no kontrak & cust no) untuk mencocokkan dengan data cair
