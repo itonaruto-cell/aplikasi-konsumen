@@ -205,16 +205,47 @@ export function barisCair(t: Tabel | null, headSheet1: string[], sudahAda: Set<s
     if (sel(b, k.cmo)) r['CMO'] = sel(b, k.cmo);
     if (sel(b, k.tgl)) r['TGL CAIR'] = sel(b, k.tgl);
     if (pokok) r['POKOK HUTANG'] = String(pokok);
-    // Kolom lain dari tarikan sales ikut ditampilkan apa adanya (judul asli)
-    const dipetakan = new Set([k.nama, k.kontrak, k.cust, k.app, k.unit, k.produk, k.kec, k.kel, k.cmo, k.tgl, k.pokok]);
-    t.h.forEach((judulAsli, i) => {
-      const v = (b[i] || '').trim();
-      if (!v || dipetakan.has(i) || !judulAsli.trim() || judulAsli in r) return;
-      r[judulAsli] = v;
-    });
+    // Kolom tambahan secukupnya (angsuran, tenor, tahun, nopol, LTV, merk, HP, sumber, offering), judul mengikuti Sheet1
+    for (const [kunciJ, v] of Object.entries(ekstraCair(t.h, b, k, headSheet1))) if (!(kunciJ in r)) r[kunciJ] = v;
     r.__CAIR = '1'; r.__CAIR_INFO = JSON.stringify({ tgl: sel(b, k.tgl), cmo: sel(b, k.cmo) });
     out.push(r);
   }
+  return out;
+}
+
+// Kolom tarikan yang dipakai di Cari konsumen (selain nama/kontrak/cust/unit/CMO/tgl/pokok yang dipetakan terpisah).
+// Judulnya disamakan dengan Sheet1 kalau ada, supaya tampil di tempat yang sama (mis. ANGSURAN & TENOR di kotak atas).
+const EKSTRA: [string[], RegExp[]][] = [
+  [['ANGSURAN'], [/^NOMINAL ANGS/, /^ANGSURAN$/, /^ANGS(URAN)?\b/, /ANGSURAN/, /INSTAL+MENT/]],
+  [['TENOR'], [/^TENOR$/, /^TENOR\b/, /TENOR/]],
+  [['TAHUN UNIT', 'TAHUN'], [/^TAHUN( UNIT| KENDARAAN| MOBIL| MOTOR)?$/, /^THN\b/, /^(YEAR|TAHUN) ?(OF )?(MFG|MANUFACTURE|PEMBUATAN|RAKIT)?$/, /TAHUN/]],
+  [['NOPOL'], [/^NOPOL$/, /^NO\.? ?POL(ISI)?$/, /PLAT|NOPOL/]],
+  [['LTV'], [/^LTV\b/, /LTV/]],
+  [['BRAND UNIT'], [/^(MERK|MEREK|BRAND)( UNIT| KENDARAAN)?$/]],
+  [['NO HP'], [/^(NO\.? ?)?(HP|WA|TELP|TELEPON|HANDPHONE|PHONE)( ?\d)?$/, /^(NO\.? )?(HP|TELP)/]],
+  [['PRODUK OFFERING'], [/OFFERING/]],
+];
+export function ekstraCair(h: string[], b: string[], k: ReturnType<typeof kolomCair>, headSheet1: string[]): Record<string, string> {
+  const hs = headSheet1.map((x) => x.trim());
+  const hn = h.map(N);
+  const out: Record<string, string> = {};
+  const dipakai = new Set([k.nama, k.kontrak, k.cust, k.app, k.unit, k.cmo, k.tgl, k.pokok]);
+  for (const [nama, pola] of EKSTRA) {
+    let j = -1;
+    for (const p of pola) { j = hn.findIndex((x, i) => !dipakai.has(i) && p.test(x)); if (j >= 0) break; }
+    const v = j >= 0 ? (b[j] || '').trim() : '';
+    if (!v) continue;
+    const judul = hs.find((x) => nama.includes(x.toUpperCase())) || nama[0];
+    out[judul] = v;
+    dipakai.add(j);
+  }
+  if (k.unit >= 0) { const u = gabungUnit(h, b, k.unit); if (u) out[hs.find((x) => /^TYPE UNIT( DETAIL)?$/i.test(x)) || 'TYPE UNIT DETAIL'] = u; }
+  if (k.cmo >= 0 && (b[k.cmo] || '').trim()) out.CMO = (b[k.cmo] || '').trim();
+  // Sumber order yang sudah dirapikan (Retail / Aggregator / Tele / Booking Mandiri / ...)
+  const soa = [...new Set([...hn.map((x, i) => (/\bSO[AR]\b|SO[AR] ?\d|SOURCE OF APP/.test(x) ? i : -1)), k.soa])].filter((i) => i >= 0);
+  const sb = sumberOrder(k.sumber >= 0 ? b[k.sumber] || '' : '', k.offering >= 0 ? b[k.offering] || '' : '', soa.map((i) => b[i] || '').join(' | '));
+  if (sb) out['SUMBER ORDER'] = sb;
+  if (k.tgl >= 0 && (b[k.tgl] || '').trim()) out['TGL CAIR'] = (b[k.tgl] || '').trim();
   return out;
 }
 
@@ -228,13 +259,12 @@ function gabungUnit(h: string[], b: string[], iUnit: number): string {
 }
 
 // Semua isi baris tarikan (judul asli) per kunci no kontrak / cust no, untuk melengkapi konsumen yang sudah ada di Sheet1
-export function isiCair(t: Tabel | null): Map<string, Record<string, string>> {
+export function isiCair(t: Tabel | null, headSheet1: string[] = []): Map<string, Record<string, string>> {
   const m = new Map<string, Record<string, string>>();
   if (!t) return m;
   const k = kolomCair(t.h, t.r);
   for (const b of t.r) {
-    const isi: Record<string, string> = {};
-    t.h.forEach((judul, i) => { const v = (b[i] || '').trim(); if (v && judul.trim()) isi[judul] = v; });
+    const isi = ekstraCair(t.h, b, k, headSheet1);
     const kk = k.kontrak >= 0 ? kunciKontrak(b[k.kontrak] || '') : '';
     const kc = k.cust >= 0 ? (b[k.cust] || '').trim().toUpperCase() : '';
     if (kk.length >= 6) m.set(kk, isi);
