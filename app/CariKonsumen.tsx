@@ -53,10 +53,15 @@ const rupiah = (v: string) => {
 };
 const initials = (n: string) =>
   n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
-const rowId = (r: Row) => pick(r, 'ORDER_NO', 'ORDER NO') || pick(r, 'NAMA KONSUMEN') + pick(r, 'NOPOL');
+const rowId = (r: Row) => pick(r, 'ORDER_NO', 'ORDER NO', 'NO KONTRAK') || pick(r, 'NAMA KONSUMEN') + pick(r, 'NOPOL');
 // Kolom data saja (tanpa __ID / __KOREKSI yang hanya dikirim ke owner)
 const isiBaris = (r: Row) => Object.entries(r).filter(([k]) => !k.startsWith('__'));
 // Kolom yang sudah dikoreksi owner → nilai aslinya
+// Info cair (dari tab tarikan sales): tanggal cair & CMO
+const cairDari = (r: Row): { tgl: string; cmo: string } | null => {
+  if (!r.__CAIR) return null;
+  try { return { tgl: '', cmo: '', ...JSON.parse(r.__CAIR_INFO || '{}') }; } catch { return { tgl: '', cmo: '' }; }
+};
 const koreksiDari = (r: Row): Record<string, string> => {
   try { return r.__KOREKSI ? JSON.parse(r.__KOREKSI) : {}; } catch { return {}; }
 };
@@ -118,7 +123,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
   const [filters, setFilters] = useState<Record<FKey, string[]>>(EMPTY_FILTERS);
   const [openFilter, setOpenFilter] = useState<FKey | null>(null);
   const [optSearch, setOptSearch] = useState('');
-  const [mode, setMode] = useState<'semua' | 'simpan'>('semua');
+  const [mode, setMode] = useState<'semua' | 'simpan' | 'cair'>('semua');
   const [selected, setSelected] = useState<Row | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
@@ -168,6 +173,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
   // Cek apakah satu baris lolos semua filter (kecuali filter `except`)
   const passes = (r: Row, except?: FKey) => {
     if (mode === 'simpan' && !saved.includes(rowId(r))) return false;
+    if (mode === 'cair' && !r.__CAIR) return false;
     for (const f of FILTERS) {
       if (f.key === except) continue;
       const sel = filters[f.key];
@@ -220,6 +226,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
     });
   };
 
+  const jumlahCair = useMemo(() => rows.filter((r) => r.__CAIR).length, [rows]);
   const shown = filtered.slice(0, 100);
 
   const openDetail = (r: Row) => {
@@ -269,10 +276,10 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
 
       {/* Semua / Disimpan */}
       <div className="flex items-center justify-between gap-3 px-4">
-        <div className="flex gap-0.5 rounded-full bg-neutral-100 p-[3px] dark:bg-neutral-900">
-          {([['semua', 'Semua'], ['simpan', `Disimpan · ${saved.length}`]] as const).map(([k, l]) => (
+        <div className="flex shrink-0 gap-0.5 rounded-full bg-neutral-100 p-[3px] dark:bg-neutral-900">
+          {([['semua', 'Semua'], ...(jumlahCair ? [['cair', `Sudah cair · ${jumlahCair}`]] : []), ['simpan', `Disimpan · ${saved.length}`]] as ['semua' | 'simpan' | 'cair', string][]).map(([k, l]) => (
             <button key={k} onClick={() => setMode(k)} aria-pressed={mode === k}
-              className={`min-h-10 whitespace-nowrap rounded-full px-4 text-sm ${mode === k
+              className={`min-h-10 whitespace-nowrap rounded-full ${jumlahCair ? 'px-3' : 'px-4'} text-sm ${mode === k
                 ? 'bg-white font-bold shadow-sm dark:bg-neutral-700' : 'font-semibold text-neutral-500 dark:text-neutral-400'}`}>
               {l}
             </button>
@@ -335,7 +342,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
         ) : shown.length === 0 ? (
           <div>
             <Kosong art={mode === 'simpan' ? 'bendera' : 'motor'}
-              title={mode === 'simpan' && !activeCount ? 'Belum ada konsumen disimpan' : 'Konsumen tidak ditemukan'}
+              title={mode === 'simpan' && !activeCount ? 'Belum ada konsumen disimpan' : mode === 'cair' && !activeCount && !query ? 'Belum ada konsumen cair' : 'Konsumen tidak ditemukan'}
               text={activeCount ? 'Tidak ada yang cocok dengan kombinasi filter ini.'
                 : mode === 'simpan' ? 'Ketuk bintang di detail konsumen untuk menyimpannya.' : 'Coba nama lain, nopol, atau order no.'}>
               {activeCount > 0 && (
@@ -358,7 +365,8 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
                         <span className="shrink-0 font-mono text-[13px] text-neutral-500"><Highlight text={pick(r, 'NOPOL')} q={query.trim()} /></span>
                       </span>
                       <span className="mt-0.5 block truncate text-[13px] text-neutral-500">
-                        {[pick(r, 'KECAMATAN'), [pick(r, 'BRAND UNIT'), pick(r, 'TYPE UNIT DETAIL')].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
+                        {r.__CAIR && <span className="mr-1.5 rounded-full bg-green-100 px-1.5 py-px text-[11px] font-bold text-green-800 dark:bg-green-950 dark:text-green-300">CAIR</span>}
+                        {[pick(r, 'KECAMATAN'), [pick(r, 'BRAND UNIT'), pick(r, 'TYPE UNIT DETAIL', 'TYPE UNIT')].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
                       </span>
                     </span>
                     {isSaved && <I n="star" filled className="h-4 w-4 shrink-0 text-[#E0A800]" />}
@@ -440,6 +448,10 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-lg font-bold">{nm}</p>
                   {pick(r, 'PRODUK') && <span className="mt-1 inline-block max-w-full truncate rounded-full bg-neutral-100 px-2.5 py-0.5 text-[13px] dark:bg-neutral-800">{pick(r, 'PRODUK')}</span>}
+                  {cairDari(r) && (() => {
+                    const c = cairDari(r)!;
+                    return <span className="ml-1 mt-1 inline-block max-w-full truncate rounded-full bg-green-100 px-2.5 py-0.5 text-[13px] font-semibold text-green-800 dark:bg-green-950 dark:text-green-300">Cair{c.tgl ? ` ${c.tgl}` : ''}{c.cmo ? ` · ${c.cmo}` : ''}</span>;
+                  })()}
                 </div>
                 <button onClick={() => toggleSave(r)} aria-label={isSaved ? 'Hapus dari disimpan' : 'Simpan konsumen'}
                   className={`flex h-12 w-12 items-center justify-center rounded-full ${isSaved ? 'text-[#E0A800]' : 'text-neutral-400'}`}>

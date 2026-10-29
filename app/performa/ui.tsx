@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FotoVisit } from './parts';
+import { BahanOi, OiDetail } from './BahanOi';
 import type { KonsumenFull, MaFull, Orang, Performa, RekrutRegist, Sales, VisitRow } from '../../lib/performa-types';
 import { targetMingguan, todayJkt } from '../../lib/performa-calc';
 
@@ -136,7 +137,9 @@ export type View =
   | { t: 'maList'; title: string; sub: string; items: MaFull[] }
   | { t: 'kList'; title: string; sub: string; items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string }
   | { t: 'ma'; m: MaFull }
-  | { t: 'k'; k: KonsumenFull; pic?: string };
+  | { t: 'k'; k: KonsumenFull; pic?: string }
+  | { t: 'oi'; nama?: string }
+  | { t: 'oiRow'; h: string[]; r: string[]; judul: string };
 export type Push = (v: View) => void;
 
 /* ---------- Daftar MA ---------- */
@@ -491,6 +494,7 @@ export function OrangDetail({ o, rank, total, data, push, hideHeader = false }: 
             <Stat label="Pending" value={angka(o.oi.pending)} />
             <Stat label="Reject" value={angka(o.oi.reject)} />
           </div>
+          <OpenRow title="Bahan OI" sub="Daftar order in atas nama ini" onClick={() => push({ t: 'oi', nama: o.nama })} />
         </section>
       )}
     </>
@@ -535,6 +539,15 @@ export function Sheet({ stack, data, rankOf, push, pop, close }: {
               </>)}
               {view.t === 'k' && <KDetail k={view.k} pic={view.pic} />}
               {view.t === 'ma' && <MaDetail m={view.m} />}
+              {view.t === 'oi' && (<>
+                <p className="text-lg font-semibold">Bahan OI</p>
+                <p className="mb-1 text-sm text-neutral-500">{view.nama ? nama(view.nama) : 'Data order in cabang'} · ketuk untuk detail</p>
+                <BahanOi nama={view.nama} push={push} />
+              </>)}
+              {view.t === 'oiRow' && (<>
+                <p className="mb-2 text-lg font-semibold">{view.judul}</p>
+                <OiDetail h={view.h} r={view.r} />
+              </>)}
             </div>
           );
         })}

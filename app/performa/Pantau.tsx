@@ -252,6 +252,11 @@ function Cabang({ c, push }: { c: Ctx; push: Push }) {
               <span key={l} className="flex flex-col rounded-2xl bg-neutral-100 p-2.5 dark:bg-neutral-900"><b className="text-xl">{v}</b><span className="text-xs text-neutral-500">{l}</span></span>
             ))}
           </div>
+          <div className="px-4">
+            <button onClick={() => push({ t: 'oi' })} className="mt-2.5 flex min-h-12 w-full items-center justify-between rounded-2xl border border-neutral-200 px-4 text-left text-[15px] font-semibold active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+              Bahan OI<span className="text-[13px] font-normal text-neutral-500">daftar order in ›</span>
+            </button>
+          </div>
         </Sec>
       )}
 
