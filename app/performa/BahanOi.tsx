@@ -60,11 +60,6 @@ const warnaStatus = (s: string) => {
   if (/CANCEL|BATAL/.test(u)) return 'bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300';
   return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
 };
-const waktu = (iso?: string) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return isNaN(+d) ? '' : new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).format(d);
-};
 
 export function BahanOi({ nama, push }: { nama?: string; push: Push }) {
   const [d, setD] = useState<DataOi | null>(null);
@@ -77,8 +72,12 @@ export function BahanOi({ nama, push }: { nama?: string; push: Push }) {
   const k = useMemo(() => kolomOi(d?.h || [], d?.r || []), [d]);
   const rows = useMemo(() => {
     if (!d?.ada) return [];
-    return d.r.filter((r) => !nama || d.cmo < 0 || namaCocok(r[d.cmo] || '', nama));
-  }, [d, nama]);
+    // Baris copy cancel (no app berakhiran _1, _2, ...) tidak ditampilkan supaya aplikasi tidak dobel
+    const appKol = k.app;
+    return d.r.filter((r) => (!nama || d.cmo < 0 || namaCocok(r[d.cmo] || '', nama))
+      && !(appKol >= 0 && /_\d+$/.test((r[appKol] || '').trim()))
+      && !r.some((v) => /^APP\w*_\d+$/i.test((v || '').trim())));
+  }, [d, nama, k]);
   const hitung = (i: number, list: string[][]) => {
     const m = new Map<string, number>();
     if (i >= 0) list.forEach((r) => { const v = (r[i] || '').trim(); if (v) m.set(v, (m.get(v) || 0) + 1); });
@@ -108,7 +107,6 @@ export function BahanOi({ nama, push }: { nama?: string; push: Push }) {
 
   return (
     <div>
-      <p className="text-[12px] text-neutral-500">{[d.sumber && `Tab ${d.sumber}`, d.dikirim && `diperbarui ${waktu(d.dikirim)}`].filter(Boolean).join(' · ')}</p>
       <SearchBox value={q} onChange={setQ} placeholder="Cari nama, no app, status" />
       {daftarCmo.length > 1 && (
         <div className="-mx-5 mt-2 flex gap-1.5 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="CMO">
@@ -130,7 +128,8 @@ export function BahanOi({ nama, push }: { nama?: string; push: Push }) {
           {tampil.slice(0, 300).map((r, i) => {
             const nm = (k.nama >= 0 ? r[k.nama] : '') || r.find(Boolean) || '-';
             const status = k.status >= 0 ? r[k.status] : '';
-            const sub = [k.app >= 0 ? r[k.app] : '', k.tgl >= 0 ? r[k.tgl] : '', k.unit >= 0 ? r[k.unit] : '', !nama && d.cmo >= 0 ? r[d.cmo] : ''].filter(Boolean).join(' · ');
+            const sub = [k.app >= 0 ? r[k.app] : '', k.tgl >= 0 ? r[k.tgl] : '', k.unit >= 0 ? r[k.unit] : '', !nama && d.cmo >= 0 ? r[d.cmo] : '']
+              .filter((v) => v && v.trim().toUpperCase() !== (status || '').trim().toUpperCase()).join(' · ');
             return (
               <li key={i}>
                 <button onClick={() => push({ t: 'oiRow', h: d.h, r, judul: nm })}
