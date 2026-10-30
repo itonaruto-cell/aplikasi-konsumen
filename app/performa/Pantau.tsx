@@ -240,11 +240,11 @@ function Cabang({ c, push }: { c: Ctx; push: Push }) {
       </Sec>
 
       {oi.length > 0 && (
-        <Sec title="Order in per CMO" right="success rate">
+        <Sec title="Order in per CMO" right="ketuk untuk aplikasi">
           <Legend items={[['Golive', C_GO], ['Pending', C_PEN], ['Reject', C_REJ], ['Cancel', C_CAN]]} />
           <div className="border-t border-neutral-200 dark:border-neutral-800">
             {oi.map((o) => (
-              <button key={o.nama} onClick={() => push({ t: 'orang', o })} className="flex w-full flex-col gap-1.5 border-b border-neutral-200 px-4 py-2.5 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+              <button key={o.nama} onClick={() => push({ t: 'oi', nama: o.nama })} aria-label={`${o.nama}: lihat aplikasi order in`} className="flex w-full flex-col gap-1.5 border-b border-neutral-200 px-4 py-2.5 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
                 <span className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 text-sm font-bold">{shortName(o.nama)}<BrandChip b={brandOf(o)} /></span>
                   <span className="text-[13px] text-neutral-500"><b className="text-neutral-900 dark:text-white">{angka(o.oi!.golive)}</b> golive / {angka(o.oi!.total)} OI · <b className="text-neutral-900 dark:text-white">{pct(o.oi!.successRate)}</b></span>

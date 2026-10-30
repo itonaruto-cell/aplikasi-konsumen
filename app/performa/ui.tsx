@@ -543,8 +543,8 @@ export function Sheet({ stack, data, rankOf, push, pop, close }: {
               {view.t === 'k' && <KDetail k={view.k} pic={view.pic} />}
               {view.t === 'ma' && <MaDetail m={view.m} />}
               {view.t === 'oi' && (<>
-                <p className="text-lg font-semibold">Bahan OI</p>
-                <p className="mb-1 text-sm text-neutral-500">{view.nama ? nama(view.nama) : 'Data order in cabang'} · ketuk untuk detail</p>
+                <p className="text-lg font-semibold">Order in{view.nama ? ` · ${nama(view.nama)}` : ''}</p>
+                <p className="mb-1 text-sm text-neutral-500">Aplikasi bulan ini · ketuk untuk detail</p>
                 <BahanOi nama={view.nama} push={push} />
               </>)}
               {view.t === 'cair' && (<>
