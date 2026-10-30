@@ -72,11 +72,11 @@ export function BahanOi({ nama, push }: { nama?: string; push: Push }) {
   const k = useMemo(() => kolomOi(d?.h || [], d?.r || []), [d]);
   const rows = useMemo(() => {
     if (!d?.ada) return [];
-    // Baris copy cancel (no app berakhiran _1, _2, ...) tidak ditampilkan supaya aplikasi tidak dobel
-    const appKol = k.app;
-    return d.r.filter((r) => (!nama || d.cmo < 0 || namaCocok(r[d.cmo] || '', nama))
-      && !(appKol >= 0 && /_\d+$/.test((r[appKol] || '').trim()))
-      && !r.some((v) => /^APP\w*_\d+$/i.test((v || '').trim())));
+    // Baris copy cancel (no app berakhiran _1, _2, ... DAN statusnya CANCEL) tidak ditampilkan supaya aplikasi tidak dobel.
+    // No app _1 yang masih berjalan (pending, golive, dst.) tetap tampil.
+    const copy = (r: string[]) => (k.app >= 0 ? /_\d+$/.test((r[k.app] || '').trim()) : r.some((v) => /^APP\w*_\d+$/i.test((v || '').trim())));
+    const batal = (r: string[]) => k.status >= 0 && /CANCEL|BATAL/i.test(r[k.status] || '');
+    return d.r.filter((r) => (!nama || d.cmo < 0 || namaCocok(r[d.cmo] || '', nama)) && !(copy(r) && batal(r)));
   }, [d, nama, k]);
   const hitung = (i: number, list: string[][]) => {
     const m = new Map<string, number>();
