@@ -57,6 +57,23 @@ export function bawaRekapLama(baru: Performa, lama: Performa | null, sekarang = 
   return d;
 }
 
+// Pengaman kiriman kosong: file pantauan sedang diperbarui / rumus belum selesai menghitung saat Apps Script jalan,
+// sehingga terkirim angka kosong. Kalau kiriman sebelumnya di bulan yang sama ada isinya, kiriman kosong diabaikan
+// dan angka terakhir yang benar tetap tampil. Awal bulan baru (bulan berbeda) tetap diterima walau masih nol.
+const adaAngka = (v?: { ini?: number | null } | null) => typeof v?.ini === 'number' && v.ini > 0;
+export function isiSales(d: Performa | null): boolean {
+  if (!d) return false;
+  if (adaAngka(d.cabangTotal?.amount) || adaAngka(d.cabangTotal?.unit)) return true;
+  return (d.orang || []).some((o) => adaAngka(o.amount) || adaAngka(o.unit));
+}
+export function kirimanKosong(baru: Performa, lama: Performa | null): boolean {
+  if (!lama || !isiSales(lama) || isiSales(baru)) return false;
+  const bulanSama = bulanOf(baru.updated) && bulanOf(lama.updated)
+    ? bulanOf(baru.updated) === bulanOf(lama.updated)
+    : !!baru.bulan?.ini && baru.bulan.ini === lama.bulan?.ini;
+  return bulanSama || !bulanOf(baru.updated);
+}
+
 async function bacaMentah(api: ReturnType<typeof sheets>, spreadsheetId?: string): Promise<Performa | null> {
   try {
     const res = await api.spreadsheets.values.get({ spreadsheetId, range: `${PERF_TAB}!A2:A` });
@@ -69,8 +86,12 @@ export async function savePerforma(data: Performa) {
   await ensureTab();
   const api = sheets();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-  const perluLama = !data.salesBrand || !data.salesLalu;
-  data = rapikanPerforma({ ...bawaRekapLama(data, perluLama ? await bacaMentah(api, spreadsheetId) : null), riwayat: undefined });
+  const lama = await bacaMentah(api, spreadsheetId);
+  if (kirimanKosong(data, lama)) {
+    console.warn('Kiriman performa kosong diabaikan; data terakhir tetap dipakai.', { updated: data.updated, lama: lama?.updated });
+    return { before: undefined, after: undefined, dilewati: true as const };
+  }
+  data = rapikanPerforma({ ...bawaRekapLama(data, lama), riwayat: undefined });
   const json = JSON.stringify(data);
   const chunks: string[][] = [];
   for (let i = 0; i < json.length; i += CHUNK) chunks.push([json.slice(i, i + CHUNK)]);
@@ -99,7 +120,7 @@ export async function savePerforma(data: Performa) {
     requestBody: { values: [[NOTE], ...chunks] },
   });
   cache = { at: Date.now(), data };
-  return { before, after: rank };
+  return { before, after: rank, dilewati: false as const };
 }
 
 export async function loadPerforma(): Promise<Performa | null> {

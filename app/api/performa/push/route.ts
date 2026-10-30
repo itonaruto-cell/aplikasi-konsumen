@@ -34,11 +34,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { before, after } = await savePerforma(data);
+    const { before, after, dilewati } = await savePerforma(data);
+    if (dilewati) {
+      return NextResponse.json({ ok: true, dilewati: true, pesan: 'Kiriman kosong diabaikan (file pantauan mungkin sedang diperbarui). Angka terakhir tetap dipakai.' });
+    }
     // Notifikasi HP: yang naik peringkat amount & yang disalip
     let notif = 0;
     try {
-      const moves = rankMoves(before?.amount, after.amount);
+      const moves = rankMoves(before?.amount, after!.amount);
       if (moves.length) {
         const subs = await listSubs();
         const r = await sendMany(subs, (s) => {
