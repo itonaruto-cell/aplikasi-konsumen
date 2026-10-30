@@ -22,16 +22,27 @@ export function ambilOi(paksa = false): Promise<DataOi> {
   return p;
 }
 
-const N = (s: string) => s.toUpperCase().replace(/[_.]/g, ' ').replace(/\s+/g, ' ').trim();
+const N = (s: string) => s.toUpperCase().replace(/[_.]/g, ' ').replace(/\bC[OU]STU?M+[EO]R\b/g, 'CUSTOMER').replace(/\s+/g, ' ').trim();
 const kolom = (h: string[], pola: RegExp[]) => { const hn = h.map(N); for (const p of pola) { const i = hn.findIndex((x) => p.test(x)); if (i >= 0) return i; } return -1; };
-export function kolomOi(h: string[]) {
-  return {
+const STATUS_OI = /^(GO ?LIVE|GOLIVE|PENDING|PO ?PENDING|REJECT|REJECTED|CANCEL|CANCELLED|BATAL|APPROVE|APPROVED|DDI|SURVEY|PROSES|ON ?PROCESS|RETURN|BANDING)/;
+export function kolomOi(h: string[], r: string[][] = []) {
+  const k = {
     nama: kolom(h, [/^NAMA (KONSUMEN|CUSTOMER|CUST|DEBITUR|NASABAH|PEMOHON)$/, /^(CUSTOMER|CUST) NAME$/, /^NAMA KONSUMEN/, /^NAMA$/, /^KONSUMEN$/]),
-    status: kolom(h, [/^STATUS( APLIKASI| APP| OI)?$/, /^STATUS/, /^HASIL$/, /^KETERANGAN$/]),
-    tgl: kolom(h, [/^TGL (OI|ORDER|INPUT|MASUK)/, /^TANGGAL (OI|ORDER|INPUT|MASUK)/, /^TGL$/, /^TANGGAL$/, /TGL|TANGGAL|DATE/]),
-    app: kolom(h, [/^NO ?APP(LIKASI)?$/, /^APP(LICATION)? ?(NO|ID)$/, /^NO ?ORDER$/]),
-    unit: kolom(h, [/^(TYPE|TIPE) UNIT/, /^UNIT$/, /^(MERK|MEREK)/, /^TIPE KENDARAAN$/, /^PRODUK$/]),
+    status: kolom(h, [/^STATUS( APLIKASI| APP| OI| ORDER)?$/, /^STATUS/, /^HASIL$/]),
+    tgl: kolom(h, [/^TGL (OI|ORDER|INPUT|MASUK)/, /^TANGGAL (OI|ORDER|INPUT|MASUK)/, /^TANGGAL APLIKASI$/, /^TGL$/, /^TANGGAL$/, /TGL|TANGGAL|DATE/]),
+    app: kolom(h, [/^NO ?APP(LIKASI)?$/, /^APP(LICATION)? ?(NO|ID)$/, /^NO ?ORDER$/, /^NO KONTRAK$/]),
+    unit: kolom(h, [/^TIPE KENDARAAN RINCI$/, /^(TYPE|TIPE) UNIT/, /^UNIT$/, /^(NAMA )?(MERK|MEREK)/, /^TIPE KENDARAAN$/]),
   };
+  // Kolom status dari isinya kalau judulnya tidak dikenali (GOLIVE / PENDING / REJECT / CANCEL ...)
+  if (r.length) {
+    const cocok = (j: number) => { const isi = r.map((b) => N(b[j] || '')).filter(Boolean); return isi.length ? isi.filter((v) => STATUS_OI.test(v)).length / isi.length : 0; };
+    if (k.status < 0 || cocok(k.status) < 0.5) {
+      let best = -1, s = 0.5;
+      h.forEach((_, j) => { const c = cocok(j); if (c > s) { s = c; best = j; } });
+      if (best >= 0) k.status = best;
+    }
+  }
+  return k;
 }
 const kunci = (s: string) => N(s).replace(/[^A-Z ]/g, '').trim();
 // Nama CMO di data OI kadang hanya nama depan / tanpa gelar
@@ -63,7 +74,7 @@ export function BahanOi({ nama, push }: { nama?: string; push: Push }) {
   const muat = (paksa = false) => { setD(null); ambilOi(paksa).then(setD); };
   useEffect(() => { ambilOi().then(setD); }, []);
 
-  const k = useMemo(() => kolomOi(d?.h || []), [d]);
+  const k = useMemo(() => kolomOi(d?.h || [], d?.r || []), [d]);
   const rows = useMemo(() => {
     if (!d?.ada) return [];
     return d.r.filter((r) => !nama || d.cmo < 0 || namaCocok(r[d.cmo] || '', nama));
