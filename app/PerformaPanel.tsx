@@ -156,19 +156,31 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
   // Versi baru di-deploy saat aplikasi masih terbuka → tawarkan muat ulang (supaya fitur baru, mis. upload foto, muncul)
   const [versiBaru, setVersiBaru] = useState(false);
+  // Aplikasi dibuka lagi dari latar dan ternyata versinya sudah lama → langsung dimuat ulang otomatis,
+  // kecuali sedang di halaman isian (form banding, surat, report, dst.) supaya ketikan tidak hilang.
+  const halamanRef = useRef(page);
+  halamanRef.current = page;
   useEffect(() => {
     let awal = '';
-    const cek = async () => {
+    let disembunyikan = 0;
+    const AMAN = ['pantau', 'rute', 'cari', 'saya', 'juara', 'aktivitas', 'insentif', 'laporan', 'proyeksi', 'kesehatan'];
+    const cek = async (dariLatar = false) => {
       try {
         const j = await (await fetch('/api/versi', { cache: 'no-store' })).json();
         const v = String(j?.v || '');
         if (!v) return;
-        if (!awal) awal = v; else if (v !== awal) setVersiBaru(true);
+        if (!awal) { awal = v; return; }
+        if (v === awal) return;
+        if (dariLatar && AMAN.includes(halamanRef.current) && !document.querySelector('div.fixed.inset-0')) { window.location.reload(); return; }
+        setVersiBaru(true);
       } catch { /* abaikan */ }
     };
     cek();
     const t = setInterval(cek, 10 * 60_000);
-    const onVis = () => { if (document.visibilityState === 'visible') cek(); };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') { disembunyikan = Date.now(); return; }
+      cek(!!disembunyikan && Date.now() - disembunyikan > 30_000);
+    };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, []);
