@@ -13,6 +13,9 @@ import { KUNCI_SURAT_BUKA, suratTerbuka } from '../../lib/surat-buka';
 import { FIELD } from './form';
 import { Ico } from './parts';
 import { Bagian, Isian, kecilkan } from './Banding';
+import { EditorEntertain, bacaDrafEnt, idEntBaru } from './Entertain';
+import { entertainBaru, nomorIM, perjamuanKosong, rapikanEntertain, ringkasEnt, totalEnt, type Entertain } from '../../lib/entertain-types';
+import { rupiah } from './form';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 
@@ -361,13 +364,17 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
   const [list, setList] = useState<Surat[] | null>(null);
   const [err, setErr] = useState('');
   const [buka, setBuka] = useState<Surat | null>(null);
+  const [entList, setEntList] = useState<Entertain[]>([]);
+  const [bukaEnt, setBukaEnt] = useState<Entertain | null>(null);
 
   const muat = useCallback(async () => {
     setErr('');
     try {
-      const r = await fetch('/api/surat', { cache: 'no-store' });
+      const [r, re] = await Promise.all([fetch('/api/surat', { cache: 'no-store' }), fetch('/api/entertain', { cache: 'no-store' }).catch(() => null)]);
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error || 'Gagal memuat.');
+      const je = re && re.ok ? await re.json().catch(() => null) : null;
+      setEntList((je?.list || []).map(rapikanEntertain));
       setList((j.list || []).map(rapikanSurat));
     } catch (e) { setErr((e as Error).message); setList([]); }
   }, []);
@@ -380,10 +387,15 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
     pulih.current = true;
     const x = suratTerbuka();
     if (!x) return;
+    if (x.id.startsWith('ent_')) {
+      const e = entList.find((y) => y.id === x.id) || (() => { const d = bacaDrafEnt(x.id); return d ? rapikanEntertain({ ...d, diubah: '' }) : null; })();
+      if (e) setBukaEnt(e); else buang(BUKA);
+      return;
+    }
     const ada = list.find((y) => y.id === x.id);
     const draf = baca<{ s: Surat }>(DRAF + x.id);
     if (ada) setBuka(ada); else if (draf?.s) setBuka(rapikanSurat({ ...draf.s, diubah: '' })); else buang(BUKA);
-  }, [list]);
+  }, [list, entList]);
 
   const simpanLokal = useCallback((s: Surat) => setList((l) => [s, ...(l || []).filter((x) => x.id !== s.id)]), []);
   const hapus = async (s: Surat) => {
@@ -391,11 +403,34 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
     const r = await fetch(`/api/surat?id=${encodeURIComponent(s.id)}`, { method: 'DELETE' });
     if (r.ok) setList((l) => (l || []).filter((x) => x.id !== s.id));
   };
+  const noBerikut = () => {
+    const n = Math.max(0, parseInt(noUrutBerikut(list || []), 10) - 1 || 0, ...entList.map((x) => parseInt(x.noUrut, 10)).filter((v) => Number.isFinite(v)));
+    return n ? String(n + 1) : '';
+  };
   const baru = (template: string) => {
     const contoh = list?.find((x) => x.template === template);
-    setBuka(suratBaru(template, { id: idSuratBaru(), tanggal: todayJkt(), noUrut: noUrutBerikut(list || []), kode: contoh?.kode || 'MKT-KENDAL' }));
+    setBuka(suratBaru(template, { id: idSuratBaru(), tanggal: todayJkt(), noUrut: noBerikut(), kode: contoh?.kode || 'MKT-KENDAL' }));
   };
+  const baruEnt = () => {
+    const contoh = entList[0];
+    const hari = todayJkt();
+    const e = entertainBaru({ id: idEntBaru(), tanggal: hari, noUrut: noBerikut(), perjamuan: [perjamuanKosong(hari)] });
+    // Pakai lagi data yang biasanya sama dari form sebelumnya (rekening, approver, FPD)
+    if (contoh) Object.assign(e, { kode: contoh.kode, pengaju: contoh.pengaju, cabang: contoh.cabang, rekening: contoh.rekening,
+      approval: contoh.approval.map((a, i) => (i === 0 ? { ...a, tgl: hari } : { ...a, status: '', tgl: '' })),
+      aop: { ...e.aop, perihal: contoh.aop.perihal, beban: contoh.aop.beban, aopTahun: contoh.aop.aopTahun, danaAnggaran: contoh.aop.danaAnggaran, disiapkan: contoh.aop.disiapkan.map((a, i) => ({ ...a, tgl: i === 0 ? hari : '' })) },
+      fpd: { ...contoh.fpd, nomor: '', pembayaran: '', proses: 0, dibuat: { ...contoh.fpd.dibuat, tgl: hari } } });
+    else { e.approval[0].tgl = hari; e.aop.disiapkan[0].tgl = hari; e.fpd.dibuat.tgl = hari; }
+    setBukaEnt(e);
+  };
+  const hapusEnt = async (e: Entertain) => {
+    if (!window.confirm(`Hapus form entertain ${nomorIM(e)}?`)) return;
+    const r = await fetch(`/api/entertain?id=${encodeURIComponent(e.id)}`, { method: 'DELETE' });
+    if (r.ok) setEntList((l) => l.filter((x) => x.id !== e.id));
+  };
+  const simpanEnt = useCallback((e: Entertain) => setEntList((l) => [e, ...l.filter((x) => x.id !== e.id)]), []);
 
+  if (bukaEnt) return <EditorEntertain key={bukaEnt.id} awal={bukaEnt} onTutup={() => { buang(BUKA); setBukaEnt(null); muat(); }} onSimpan={simpanEnt} />;
   if (buka) return <Editor key={buka.id} awal={buka} onTutup={() => { buang(BUKA); setBuka(null); muat(); }} onSimpan={simpanLokal} />;
 
   return (
@@ -418,7 +453,29 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
           </li>
         ))}
       </ul>
+      <button onClick={baruEnt} className="mt-2 flex min-h-16 w-full items-center gap-3 rounded-2xl border border-neutral-200 px-4 py-3 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-[20px] font-bold dark:bg-neutral-800">+</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold">Form entertain</span>
+          <span className="block text-[12px] text-neutral-500">F-384 + Konfirmasi Saldo AOP + FPD, sekali isi jadi 3 file Excel</span>
+        </span>
+      </button>
       <p className="mt-2 text-[12px] text-neutral-500">Kirim contoh surat lain untuk ditambahkan sebagai template.</p>
+
+      {entList.length > 0 && (<>
+        <p className="mt-6 text-[15px] font-bold">Form entertain tersimpan</p>
+        <ul className="mt-2 overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800">
+          {entList.map((e) => (
+            <li key={e.id} className="flex items-center border-b border-neutral-200 last:border-0 dark:border-neutral-800">
+              <button onClick={() => setBukaEnt(e)} className="flex min-h-16 min-w-0 flex-1 flex-col justify-center px-4 py-2 text-left active:bg-neutral-50 dark:active:bg-neutral-900">
+                <span className="truncate text-[15px] font-bold">{ringkasEnt(e)}</span>
+                <span className="truncate text-[12px] text-neutral-500">{[nomorIM(e), rupiah(totalEnt(e)), `${e.foto.nota.length + e.foto.dokumentasi.length} foto`].join(' · ')}</span>
+              </button>
+              <button onClick={() => hapusEnt(e)} aria-label={`Hapus form entertain ${nomorIM(e)}`} className="flex h-12 w-12 shrink-0 items-center justify-center text-neutral-400"><Ico n="x" className="h-4 w-4" sw={2} /></button>
+            </li>
+          ))}
+        </ul>
+      </>)}
 
       <p className="mt-6 text-[15px] font-bold">Surat tersimpan</p>
       {err && <p className="mt-2 text-[13px] text-red-700 dark:text-red-300">{err}</p>}
