@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getRole } from '../../../lib/access';
 import { loadPerforma } from '../../../lib/performa';
+import { bulanBasi, kosongkanBulan } from '../../../lib/performa-kosong';
 import { bacaArsip } from '../../../lib/performa-arsip';
 import { rapikanPerforma } from '../../../lib/sales-brand';
 import type { Performa } from '../../../lib/performa-types';
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest) {
     }
     const data = await loadPerforma();
     if (!data) return NextResponse.json({ kosong: true }, { headers: { 'Cache-Control': 'no-store' } });
+    // Sudah ganti bulan tapi file pantauan bulan ini belum tersambung: tampilkan bulan berjalan kosong
+    // (data bulan lalu ada di arsip, diperbarui otomatis tiap pagi oleh cron cek-data)
+    if (bulanBasi(data)) return NextResponse.json(kosongkanBulan(data), { headers: { 'Cache-Control': 'no-store' } });
     return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('Gagal membaca performa:', err);
