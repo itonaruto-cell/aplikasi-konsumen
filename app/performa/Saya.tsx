@@ -11,9 +11,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport, onProyeksi, onMutasi, onSurat, onAlatPdf, onReportSore, onArsip, onFuKons }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport, onProyeksi, onMutasi, onSurat, onAlatPdf, onReportSore, onArsip }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void; onReport?: () => void; onProyeksi?: () => void; onMutasi?: () => void; onSurat?: () => void; onAlatPdf?: () => void; onReportSore?: () => void; onArsip?: () => void; onFuKons?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void; onReport?: () => void; onProyeksi?: () => void; onMutasi?: () => void; onSurat?: () => void; onAlatPdf?: () => void; onReportSore?: () => void; onArsip?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -42,7 +42,6 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
     ['Laporan & performa', [
       { judul: 'Proyeksi sales', sub: 'Tercapai + bahan vs target & bulan lalu', ico: ico('up'), on: onProyeksi },
       { judul: 'Report sore', sub: 'Plan & realisasi, achievement, follow up, update bahan · gambar', ico: ico('share'), on: onReportSore },
-      { judul: 'Report FU konsumen', sub: 'Konsumen yang di-plan pagi & hasil follow up-nya · gambar', ico: ico('users'), on: onFuKons },
       { judul: 'Laporan bergambar', sub: 'Achievement, aktivitas & follow up, siap unduh', ico: ico('chart'), on: onLaporan },
       { judul: 'Performa bulan lalu', sub: 'Buka arsip pantauan bulan sebelumnya: angka & daftar konsumen', ico: ico('list'), on: onArsip },
       { judul: 'Papan juara', sub: 'Peringkat amount, unit, visit, dan maintain', ico: ico('trophy'), on: onJuara },
