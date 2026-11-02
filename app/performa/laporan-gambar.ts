@@ -1,7 +1,8 @@
 // Gambar laporan (PNG) untuk dibagikan: achievement cabang + Mobilku/Motorku, dan aktivitas CMO/MAO.
 // Digambar langsung ke <canvas> (lebar 1080 px, cocok untuk WhatsApp), tanpa pustaka tambahan.
 import type { Orang, Sales } from '../../lib/performa-types';
-import type { LaporanFU } from '../../lib/prospek-types';
+import type { HitungFU, LaporanFU } from '../../lib/prospek-types';
+import type { PlanItem } from '../../lib/plan-types';
 import { brandOf, cekData, hariKerjaSisa, namaBulan, pace, targetMingguan, type Ctx } from '../../lib/performa-calc';
 import { posisiKosong } from '../../lib/kesehatan-data';
 import { brandBaris, labelLalu, rincianMotor, rpLalu } from '../../lib/sales-brand';
@@ -659,4 +660,160 @@ export function gambarBahan(g: G, c: Ctx, list: Bahan[], logo: HTMLImageElement 
   }
   kaki(g, y - 20, inf.dibuat);
   return H;
+}
+
+/* ---------- Report sore per PIC: plan & realisasi, achievement, follow up prospek, update bahan ---------- */
+export type DataSore = {
+  tgl: string; nama: string; peran: 'CMO' | 'MAO' | null;
+  o: Orang | null;
+  plan: PlanItem[];
+  fu: (HitungFU & { nama: string }) | null; fuTarget: number;
+  minat: LaporanFU['minat'];
+  bahan: Bahan[];           // bahan aktif milik / PIC orang ini
+  cairBulan: Bahan[];       // bahan yang sudah ditandai cair bulan ini
+};
+// Pecah teks jadi beberapa baris sesuai lebar
+function bungkus(g: G, s: string, maks: number, size: number, weight = 400, maksBaris = 3): string[] {
+  font(g, size, weight);
+  const kata = String(s || '').replace(/\s+/g, ' ').trim().split(' ');
+  const out: string[] = [];
+  let cur = '';
+  for (const w of kata) {
+    const coba = cur ? `${cur} ${w}` : w;
+    if (g.measureText(coba).width <= maks) cur = coba;
+    else { if (cur) out.push(cur); cur = w; }
+  }
+  if (cur) out.push(cur);
+  if (out.length > maksBaris) { out.length = maksBaris; out[maksBaris - 1] = out[maksBaris - 1].replace(/.{0,2}$/, '') + '…'; }
+  return out;
+}
+const STATUS_PLAN = { selesai: { warna: C.good, lembut: '#E3F5EA', teks: 'Selesai' }, rencana: { warna: '#9A958D', lembut: C.track, teks: 'Belum' }, batal: { warna: C.bad, lembut: '#FDECEC', teks: 'Batal' } };
+const JENIS_PLAN: Record<string, string> = { visit: 'Visit', maintain: 'Maintain MA', rekrut: 'Rekrut MA', regist: 'Regist MA', survey: 'Survey', map: 'Map pencairan', lainnya: 'Lainnya' };
+function judulKartu(g: G, y: number, judul: string, kanan = '') {
+  tulis(g, judul, P + 40, y + 58, { size: 26, weight: 700, color: C.muted, spasi: 2 });
+  if (kanan) tulis(g, kanan, W - P - 40, y + 58, { size: 24, weight: 700, color: C.ink, align: 'right' });
+}
+
+// Digambar ke kanvas tinggi lalu dipotong: tinggi akhir dikembalikan
+export function gambarSore(g: G, c: Ctx, d: DataSore, logo: HTMLImageElement | null): number {
+  const lebar = W - P * 2, isi = lebar - 80;
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, g.canvas.height);
+  const inf = info(c);
+  const brand = d.o ? brandOf(d.o) : '';
+  kepala(g, logo, 'REPORT SORE', pendek(d.nama) + (d.peran ? ` · ${d.peran}` : ''),
+    `${tglHari(d.tgl)}${brand ? ` · ${brand === 'motorku' ? 'Motorku' : 'Mobilku'}` : ''} · ${inf.sub}`, inf.tingkat);
+  let y = 250;
+
+  /* Achievement */
+  {
+    const o = d.o;
+    const h = 320 + (o?.visit || o?.maintain ? 120 : 0);
+    kotak(g, P, y, lebar, h, 32, C.card, true);
+    judulKartu(g, y, 'ACHIEVEMENT BULAN INI', o?.sukarela?.unit ? `+${o.sukarela.unit} motor sukarela` : '');
+    const kol = (isi - 40) / 2;
+    ([['Amount', o?.amount, true], ['Unit', o?.unit, false]] as const).forEach(([l, s], i) => {
+      const x = P + 40 + i * (kol + 40);
+      tulis(g, l, x, y + 112, { size: 24, weight: 600, color: C.muted });
+      tulis(g, pct(s?.ach), x, y + 186, { size: 64, weight: 700, color: tone(s?.ach) });
+      batang(g, x, y + 208, kol, 14, s?.ach, tone(s?.ach), C.track);
+      tulis(g, s ? (l === 'Amount' ? `${rp(s.ini)} / ${rp(s.target)}` : `${angka(s.ini)} / ${angka(s.target)} unit`) : 'Belum ada data', x, y + 262, { size: 26, weight: 600, color: C.ink, maks: kol });
+    });
+    if (o?.visit || o?.maintain) {
+      const yy = y + 300, w4 = (isi - 30) / 4;
+      g.fillStyle = C.line; g.fillRect(P + 40, yy, isi, 2);
+      const st: [string, string][] = o.visit
+        ? [['Visit', angka(o.visit.total)], ['Bertemu', angka(o.visit.bertemu)], ['Konsumen', angka(o.visit.konsumen)], ['OI', angka(o.oi?.total ?? null)]]
+        : [['MA', angka(o.maintain!.ma)], ['Sudah maintain', angka(o.maintain!.sudah)], ['Belum', angka(o.maintain!.belum)], ['Maintain 2x+', angka(o.maintain!.x2 + o.maintain!.x3 + o.maintain!.x4)]];
+      st.forEach(([l, v], i) => { const x = P + 40 + i * (w4 + 10); tulis(g, v, x, yy + 56, { size: 34, weight: 700 }); tulis(g, l, x, yy + 90, { size: 20, color: C.muted, maks: w4 }); });
+    }
+    y += h + 32;
+  }
+
+  /* Plan & realisasi */
+  {
+    const aktif = d.plan.filter((p) => p.status !== 'batal');
+    const selesai = d.plan.filter((p) => p.status === 'selesai').length;
+    const baris = d.plan.map((p) => ({ p, hasil: bungkus(g, p.hasil || (p.status === 'rencana' ? 'Belum ada hasil' : p.status === 'batal' ? 'Dibatalkan' : ''), isi - 70, 22, 400, 3) }));
+    const h = 110 + (d.plan.length ? baris.reduce((a, b) => a + 70 + b.hasil.length * 30 + 18, 0) : 70) + 10;
+    kotak(g, P, y, lebar, h, 32, C.card, true);
+    judulKartu(g, y, 'PLAN & REALISASI', d.plan.length ? `${selesai}/${aktif.length} selesai` : '');
+    if (d.plan.length) batang(g, P + 40, y + 78, isi, 10, aktif.length ? selesai / aktif.length : 0, C.good, C.track);
+    let yy = y + 110;
+    if (!d.plan.length) tulis(g, 'Belum ada plan aktivitas hari ini.', P + 40, yy + 30, { size: 24, color: C.muted });
+    for (const { p, hasil } of baris) {
+      const s = STATUS_PLAN[p.status];
+      g.beginPath(); g.arc(P + 56, yy + 30, 16, 0, Math.PI * 2); g.fillStyle = s.warna; g.fill();
+      tulis(g, p.status === 'selesai' ? '✓' : p.status === 'batal' ? '×' : '', P + 56, yy + 38, { size: 22, weight: 700, color: '#fff', align: 'center' });
+      const label = `${JENIS_PLAN[p.jenis] || p.jenis}${p.siapa ? ` · ${p.siapa}` : ''}${p.lokasi ? ` (${p.lokasi})` : ''}`;
+      tulis(g, label, P + 90, yy + 40, { size: 26, weight: 700, color: p.status === 'batal' ? C.muted : C.ink, maks: isi - 200 });
+      chip(g, s.teks, W - P - 40, yy + 12, { bg: s.lembut, color: s.warna, size: 18, align: 'right' });
+      hasil.forEach((t, i) => tulis(g, t, P + 90, yy + 74 + i * 30, { size: 22, color: p.hasil ? C.ink : C.muted }));
+      yy += 70 + hasil.length * 30 + 18;
+    }
+    y += h + 32;
+  }
+
+  /* Follow up prospek */
+  {
+    const f = d.fu;
+    const minat = d.minat.map((m) => ({ m, hasil: bungkus(g, m.hasil || '', isi - 40, 22, 400, 2) }));
+    const h = 250 + (minat.length ? 50 + minat.reduce((a, x) => a + 56 + x.hasil.length * 30 + 12, 0) : 0);
+    kotak(g, P, y, lebar, h, 32, C.card, true);
+    judulKartu(g, y, 'FOLLOW UP PROSPEK', `${f?.dihubungi || 0}/${d.fuTarget} dihubungi`);
+    batang(g, P + 40, y + 78, isi, 10, (f?.dihubungi || 0) / Math.max(1, d.fuTarget), (f?.dihubungi || 0) >= d.fuTarget ? C.good : C.mid, C.track);
+    const st: [string, number, string][] = [['Minat', f?.minat || 0, FU.minat], ['Jadi order', f?.order || 0, FU.order], ['Tidak minat', f?.tidak || 0, FU.tidak], ['Tidak respon', f?.norespon || 0, FU.norespon]];
+    const w4 = (isi - 30) / 4;
+    st.forEach(([l, v, w], i) => {
+      const x = P + 40 + i * (w4 + 10);
+      kotak(g, x, y + 112, w4, 108, 20, C.bg);
+      tulis(g, String(v), x + 20, y + 168, { size: 40, weight: 700, color: v ? w : C.muted });
+      tulis(g, l, x + 20, y + 202, { size: 20, color: C.muted, maks: w4 - 30 });
+    });
+    let yy = y + 250;
+    if (minat.length) {
+      tulis(g, 'Prospek minat / order', P + 40, yy + 30, { size: 22, weight: 700, color: C.muted });
+      yy += 50;
+      for (const { m, hasil } of minat) {
+        tulis(g, `${m.nama}${m.tempat ? ` · ${m.tempat}` : ''}`, P + 40, yy + 34, { size: 26, weight: 700, maks: isi - 180 });
+        chip(g, m.order ? 'Order' : 'Minat', W - P - 40, yy + 8, { bg: m.order ? '#E3F5EA' : FU_SOFT.minat[0], color: m.order ? FU.order : FU_SOFT.minat[1], size: 18, align: 'right' });
+        hasil.forEach((t, i) => tulis(g, t, P + 40, yy + 66 + i * 30, { size: 22, color: C.ink }));
+        yy += 56 + hasil.length * 30 + 12;
+      }
+    }
+    y += h + 32;
+  }
+
+  /* Update bahan */
+  {
+    const hariIni = d.tgl;
+    const urut = [...d.bahan].sort((a, b) => Number(tahapOf(a) !== 'proses') - Number(tahapOf(b) !== 'proses') || b.nominal - a.nominal);
+    const baris = urut.map((b) => ({ b, step: bungkus(g, b.step ? `Step: ${b.step}` : 'Step belum diisi', (b.diubah || '').slice(0, 10) === hariIni ? isi - 40 : isi - 270, 22, 400, 2) }));
+    const total = d.bahan.reduce((a, b) => a + (b.nominal || 0), 0);
+    const cair = d.cairBulan.reduce((a, b) => a + (b.nominal || 0), 0);
+    const h = 170 + (baris.length ? baris.reduce((a, x) => a + 60 + x.step.length * 30 + 16, 0) : 60);
+    kotak(g, P, y, lebar, h, 32, C.card, true);
+    judulKartu(g, y, 'UPDATE BAHAN', `${d.bahan.length} bahan · ${rp(total)}`);
+    tulis(g, `Cair bulan ini: ${d.cairBulan.length} bahan · ${rp(cair)}`, P + 40, y + 104, { size: 24, weight: 600, color: d.cairBulan.length ? C.good : C.muted });
+    const diupdate = d.bahan.filter((b) => (b.diubah || '').slice(0, 10) === hariIni).length;
+    tulis(g, `${diupdate}/${d.bahan.length} diupdate hari ini`, W - P - 40, y + 104, { size: 22, weight: 600, color: diupdate >= d.bahan.length ? C.good : C.mid, align: 'right' });
+    g.fillStyle = C.line; g.fillRect(P + 40, y + 128, isi, 2);
+    let yy = y + 150;
+    if (!baris.length) tulis(g, 'Tidak ada bahan aktif.', P + 40, yy + 30, { size: 24, color: C.muted });
+    for (const { b, step } of baris) {
+      const w = WARNA_TAHAP[tahapOf(b)];
+      kotak(g, P + 40, yy + 8, 6, 44 + step.length * 30, 3, w.tegas);
+      tulis(g, b.konsumen || '–', P + 62, yy + 36, { size: 26, weight: 700, maks: isi - 330 });
+      const baru = (b.diubah || '').slice(0, 10) === hariIni;
+      const xr = W - P - 40;
+      tulis(g, b.nominal ? rp(b.nominal) : '–', xr, yy + 36, { size: 26, weight: 700, align: 'right' });
+      font(g, 26, 700);
+      chip(g, tahapOf(b) === 'proses' ? 'Diproses' : 'Survey', xr - g.measureText(b.nominal ? rp(b.nominal) : '–').width - 14, yy + 10, { bg: w.lembut, color: w.teks, size: 16, align: 'right' });
+      step.forEach((t, i) => tulis(g, t, P + 62, yy + 70 + i * 30, { size: 22, color: baru ? C.ink : C.muted }));
+      if (!baru) tulis(g, 'belum diupdate hari ini', xr, yy + 70, { size: 18, color: C.bad, align: 'right' });
+      yy += 60 + step.length * 30 + 16;
+    }
+    y += h + 32;
+  }
+  kaki(g, y - 20, inf.dibuat);
+  return y + KAKI - 10;
 }

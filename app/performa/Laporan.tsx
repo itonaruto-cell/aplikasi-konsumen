@@ -2,7 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Orang } from '../../lib/performa-types';
 import type { Ctx } from '../../lib/performa-calc';
-import { gambarAchievement, gambarAktivitas, gambarBahan, gambarFollowUp, gambarProyeksi, pakaiFont, tinggiAchievement, tinggiAktivitas, tinggiBahan, tinggiFollowUp, tinggiProyeksi } from './laporan-gambar';
+import { gambarAchievement, gambarAktivitas, gambarBahan, gambarFollowUp, gambarProyeksi, gambarSore, pakaiFont, tinggiAchievement, tinggiAktivitas, tinggiBahan, tinggiFollowUp, tinggiProyeksi, type DataSore } from './laporan-gambar';
+import type { PlanItem } from '../../lib/plan-types';
+import { FU_TARGET_HARIAN } from '../../lib/prospek-types';
+import { samaOrang } from '../../lib/sales-brand';
+import { peranDari } from '../../lib/posisi-isi';
 import type { Bahan } from '../../lib/bahan-types';
 import { ambilBahanProyeksi, hitungSemua, type DataProyeksi, type Mode } from './proyeksi-data';
 import type { LaporanFU } from '../../lib/prospek-types';
@@ -14,8 +18,8 @@ import { PillSeg } from './parts';
 // Gambar dibuat di HP dari data pantauan terakhir, bisa diunduh (PNG), dibagikan, atau dibuka layar penuh
 // supaya gampang di-screenshot.
 
-export type Jenis = 'achievement' | 'aktivitas' | 'fu' | 'proyeksi' | 'bahan';
-const JUDUL: Record<Jenis, string> = { achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO', fu: 'Follow Up Prospek', proyeksi: 'Proyeksi Sales', bahan: 'Bahan Survey & Proses' };
+export type Jenis = 'sore' | 'achievement' | 'aktivitas' | 'fu' | 'proyeksi' | 'bahan';
+const JUDUL: Record<Jenis, string> = { sore: 'Report Sore', achievement: 'Achievement', aktivitas: 'Aktivitas CMO & MAO', fu: 'Follow Up Prospek', proyeksi: 'Proyeksi Sales', bahan: 'Bahan Survey & Proses' };
 const kemarin = (tgl: string) => { const d = new Date(tgl + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
 
 const muatGambar = (src: string) => new Promise<HTMLImageElement | null>((ok) => {
@@ -25,7 +29,27 @@ const muatGambar = (src: string) => new Promise<HTMLImageElement | null>((ok) =>
   img.src = src;
 });
 
-async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string, mode: Mode): Promise<Blob | null> {
+// Data report sore satu PIC: plan hari ini, follow up prospek, bahan, dan angka pantauan
+async function dataSore(c: Ctx, pic: string, tgl: string): Promise<DataSore> {
+  const ambil = async (url: string) => { const r = await fetch(url, { cache: 'no-store' }); const j = await r.json().catch(() => null); if (!r.ok) throw new Error(j?.error || 'Data gagal dimuat.'); return j; };
+  const [pj, fj, bj] = await Promise.all([ambil(`/api/plan?tgl=${tgl}`), ambil(`/api/prospek/laporan?tgl=${tgl}`).catch(() => null), ambil('/api/bahan')]);
+  const milik = (n: string) => !!n && samaOrang(n, pic);
+  const fu = fj as LaporanFU | null;
+  const bahan = ((bj?.list || []) as Bahan[]).filter((b) => milik(b.pic || b.nama));
+  const bulan = tgl.slice(0, 7);
+  return {
+    tgl, nama: pic, peran: peranDari(pic),
+    o: (c.data.orang || []).find((o) => samaOrang(o.nama, pic)) || null,
+    plan: ((pj?.list || []) as PlanItem[]).filter((p) => !p.spv && milik(p.nama) && !p.id.startsWith('wajib:'))
+      .sort((a, b) => a.dibuat.localeCompare(b.dibuat)),
+    fu: fu?.orang.find((x) => milik(x.nama)) || null, fuTarget: fu?.target || FU_TARGET_HARIAN,
+    minat: (fu?.minat || []).filter((m) => milik(m.oleh)),
+    bahan: bahan.filter((b) => b.status === 'aktif'),
+    cairBulan: bahan.filter((b) => b.status === 'cair' && (b.diubah || '').slice(0, 7) === bulan),
+  };
+}
+
+async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string, mode: Mode, pic = ''): Promise<Blob | null> {
   const fam = getComputedStyle(document.documentElement).getPropertyValue('--font-instrument').trim();
   if (fam) {
     pakaiFont(`${fam}, system-ui, sans-serif`);
@@ -47,6 +71,20 @@ async function buatGambar(jenis: Jenis, c: Ctx, spv: Orang | null, tgl: string, 
     const j = await r.json().catch(() => null);
     if (!r.ok || !Array.isArray(j?.list)) throw new Error(j?.error || 'Bahan survey gagal dimuat.');
     bahan = j.list as Bahan[];
+  }
+  if (jenis === 'sore') {
+    if (!pic) throw new Error('Pilih PIC dulu.');
+    const d = await dataSore(c, pic, tgl);
+    // Digambar di kanvas tinggi, lalu dipotong sesuai isi
+    const tmp = document.createElement('canvas');
+    tmp.width = 1080; tmp.height = 9000;
+    const tg = tmp.getContext('2d');
+    if (!tg) return null;
+    const h = Math.min(9000, gambarSore(tg, c, d, logo));
+    const cv = document.createElement('canvas');
+    cv.width = 1080; cv.height = h;
+    cv.getContext('2d')?.drawImage(tmp, 0, 0, 1080, h, 0, 0, 1080, h);
+    return new Promise((ok) => cv.toBlob((b) => ok(b), 'image/png'));
   }
   const cv = document.createElement('canvas');
   cv.width = 1080;
@@ -79,11 +117,14 @@ function LayarPenuh({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
-export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv: Orang | null; awal?: Jenis }) {
+export default function Laporan({ c, spv, awal = 'achievement', tim = [], aku = '', semua = false }: { c: Ctx; spv: Orang | null; awal?: Jenis; tim?: string[]; aku?: string; semua?: boolean }) {
   const [jenis, setJenis] = useState<Jenis>(awal);
+  // Report sore: owner/SPV memilih PIC; staff langsung dirinya sendiri
+  const pilihanPic = semua ? tim : tim.filter((n) => aku && samaOrang(n, aku)).concat(tim.some((n) => aku && samaOrang(n, aku)) || !aku ? [] : [aku]);
+  const [pic, setPic] = useState(() => pilihanPic[0] || aku || '');
   const [tgl, setTgl] = useState(() => todayJkt());
   const [mode, setMode] = useState<Mode>('maksimal');
-  const [gambar, setGambar] = useState<{ jenis: Jenis; tgl: string; mode: Mode; url: string; blob: Blob } | null>(null);
+  const [gambar, setGambar] = useState<{ jenis: Jenis; tgl: string; mode: Mode; url: string; blob: Blob; pic: string } | null>(null);
   const [err, setErr] = useState('');
   const [penuh, setPenuh] = useState(false);
   const [toast, setToast] = useState('');
@@ -92,21 +133,21 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
   useEffect(() => {
     let alive = true;
     setErr('');
-    buatGambar(jenis, c, spv, tgl, mode).then((blob) => {
+    buatGambar(jenis, c, spv, tgl, mode, pic).then((blob) => {
       if (!alive) return;
       if (!blob) { setErr('Gambar tidak bisa dibuat di HP ini.'); return; }
       const url = URL.createObjectURL(blob);
       if (urlLama.current) URL.revokeObjectURL(urlLama.current);
       urlLama.current = url;
-      setGambar({ jenis, tgl, mode, url, blob });
-    }).catch((e) => { if (alive) setErr((e as Error)?.message && (jenis === 'fu' || jenis === 'proyeksi' || jenis === 'bahan') ? (e as Error).message : 'Gambar tidak bisa dibuat. Coba muat ulang.'); });
+      setGambar({ jenis, tgl, mode, url, blob, pic });
+    }).catch((e) => { if (alive) setErr((e as Error)?.message && (jenis === 'fu' || jenis === 'proyeksi' || jenis === 'bahan' || jenis === 'sore') ? (e as Error).message : 'Gambar tidak bisa dibuat. Coba muat ulang.'); });
     return () => { alive = false; };
-  }, [jenis, c, spv, tgl, mode]);
+  }, [jenis, c, spv, tgl, mode, pic]);
   useEffect(() => () => { if (urlLama.current) URL.revokeObjectURL(urlLama.current); }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2200); return () => clearTimeout(t); }, [toast]);
 
-  const siap = gambar && gambar.jenis === jenis && (jenis !== 'fu' || gambar.tgl === tgl) && (jenis !== 'proyeksi' || gambar.mode === mode) ? gambar : null;
-  const namaFile = `Laporan ${JUDUL[jenis]} ${String(c.data.cabang || 'Kendal')} ${jenis === 'fu' ? tgl : c.today}.png`.replace(/[^\w\s.&-]/g, '').replace(/\s+/g, '-');
+  const siap = gambar && gambar.jenis === jenis && ((jenis !== 'fu' && jenis !== 'sore') || gambar.tgl === tgl) && (jenis !== 'proyeksi' || gambar.mode === mode) && (jenis !== 'sore' || gambar.pic === pic) ? gambar : null;
+  const namaFile = `Laporan ${JUDUL[jenis]}${jenis === 'sore' ? ` ${pic.split(' ').find((w) => !/^(MUHAMMAD|MUHAMAD|MOCH|MOH|M)$/i.test(w)) || pic}` : ''} ${String(c.data.cabang || 'Kendal')} ${jenis === 'fu' || jenis === 'sore' ? tgl : c.today}.png`.replace(/[^\w\s.&-]/g, '').replace(/\s+/g, '-');
   const bisaBagikan = typeof navigator !== 'undefined' && !!navigator.canShare && !!siap
     && navigator.canShare({ files: [new File([siap.blob], namaFile, { type: 'image/png' })] });
   const bagikan = async () => {
@@ -122,14 +163,19 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
     <div className="pb-8">
       <div className="px-4 pt-3">
         <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
-          <PillSeg value={jenis} rapat onChange={(v) => setJenis(v)} options={[['achievement', 'Achievement'], ['aktivitas', 'Aktivitas'], ['fu', 'Follow up'], ['proyeksi', 'Proyeksi'], ['bahan', 'Bahan']]} />
+          <PillSeg value={jenis} rapat onChange={(v) => setJenis(v)} options={[['sore', 'Report sore'], ['achievement', 'Achievement'], ['aktivitas', 'Aktivitas'], ['fu', 'Follow up'], ['proyeksi', 'Proyeksi'], ['bahan', 'Bahan']]} />
         </div>
+        {jenis === 'sore' && pilihanPic.length > 1 && (
+          <div className="-mx-4 mt-2 overflow-x-auto px-4 [scrollbar-width:none]">
+            <PillSeg value={pic} rapat onChange={(v) => setPic(v)} options={pilihanPic.map((n) => [n, n.split(/\s+/).find((w) => !/^(MUHAMMAD|MUHAMAD|MOCH|MOH|M)$/i.test(w))?.replace(/^\w/, (h) => h.toUpperCase()).replace(/\B\w+/, (x) => x.toLowerCase()) || n] as [string, string])} />
+          </div>
+        )}
         {jenis === 'proyeksi' && (
           <div className="mt-2">
             <PillSeg value={mode} onChange={(v) => setMode(v)} options={[['maksimal', '+ Diproses + Bahan survey'], ['realistis', '+ Diproses saja']]} />
           </div>
         )}
-        {jenis === 'fu' && (
+        {(jenis === 'fu' || jenis === 'sore') && (
           <div className="mt-2">
             <PillSeg value={tgl === todayJkt() ? 'ini' : 'kemarin'} onChange={(v) => setTgl(v === 'ini' ? todayJkt() : kemarin(todayJkt()))}
               options={[['ini', 'Hari ini'], ['kemarin', 'Kemarin']]} />
@@ -137,7 +183,9 @@ export default function Laporan({ c, spv, awal = 'achievement' }: { c: Ctx; spv:
         )}
       </div>
       <p className="px-4 pt-3 text-[13px] leading-snug text-neutral-500">
-        {jenis === 'achievement'
+        {jenis === 'sore'
+          ? 'Report sore per PIC: achievement, plan & realisasi hari ini, hasil follow up prospek, dan update bahan. Lengkapi hasil di Plan & step di Bahan survey dulu, lalu bagikan ke grup.'
+          : jenis === 'achievement'
           ? 'Cabang, Mobilku, dan Motorku beserta pencapaian tiap PIC. Dibuat dari data pantauan terakhir.'
           : jenis === 'bahan'
             ? 'Bahan yang sedang diproses dan yang belum disurvey, per PIC survey: konsumen, nominal, kendaraan, sumber, dan step terakhir.'
