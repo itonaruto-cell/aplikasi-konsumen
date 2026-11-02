@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getAccessList, getPerfName, getRole, lihatTim } from '../../../lib/access';
 import { appendRows, readRows, updateRowById } from '../../../lib/sheet-store';
-import { JENIS, type Jenis, type PlanItem, type StatusPlan } from '../../../lib/plan-types';
+import { JENIS, wajibBuktiFu, type Jenis, type PlanItem, type StatusPlan } from '../../../lib/plan-types';
+import { MAX_B64, saveFotos } from '../../../lib/foto-store';
 import { addDays, keyOf, todayJkt } from '../../../lib/performa-calc';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
 // Aturan map pencairan: survey yang sudah selesai dalam 4 hari terakhir dan belum punya map pencairan
 // muncul sebagai aktivitas WAJIB di plan hari ini (baru benar-benar tersimpan saat dicentang / dibatalkan).
 const TAB = 'PLAN';
-const HEAD = ['ID', 'TANGGAL', 'EMAIL', 'NAMA', 'JENIS', 'SIAPA', 'LOKASI', 'CATATAN', 'STATUS', 'HASIL', 'DIBUAT', 'DIUBAH', 'REF', 'BY_REQUEST'];
+const HEAD = ['ID', 'TANGGAL', 'EMAIL', 'NAMA', 'JENIS', 'SIAPA', 'LOKASI', 'CATATAN', 'STATUS', 'HASIL', 'DIBUAT', 'DIUBAH', 'REF', 'BY_REQUEST', 'FOTO'];
 const STATUS: StatusPlan[] = ['rencana', 'selesai', 'batal'];
 const MAKS_SEKALI = 20;
 const HARI_WAJIB = 4;
@@ -25,14 +26,14 @@ const toObj = (r: string[]): Baris => ({
   jenis: (JENIS as readonly string[]).includes(r[4]) ? (r[4] as Jenis) : 'lainnya',
   siapa: r[5], lokasi: r[6], catatan: r[7],
   status: (STATUS as string[]).includes(r[8]) ? (r[8] as StatusPlan) : 'rencana', hapus: r[8] === 'hapus',
-  hasil: r[9], dibuat: r[10], diubah: r[11] || r[10], ref: r[12], request: r[4] === 'visit' && r[13] === '1',
+  hasil: r[9], dibuat: r[10], diubah: r[11] || r[10], ref: r[12], request: r[4] === 'visit' && r[13] === '1', foto: r[14] || '',
 });
 const toRow = (b: Baris, status: string = b.status): string[] =>
-  [b.id, b.tgl, b.email, b.nama, b.jenis, b.siapa, b.lokasi, b.catatan, status, b.hasil, b.dibuat, b.diubah, b.ref, b.request ? '1' : ''];
+  [b.id, b.tgl, b.email, b.nama, b.jenis, b.siapa, b.lokasi, b.catatan, status, b.hasil, b.dibuat, b.diubah, b.ref, b.request ? '1' : '', b.foto || ''];
 const keluar = (b: Baris, email: string, owner?: Set<string>): PlanItem => ({
   id: b.id, tgl: b.tgl, nama: b.nama, jenis: b.jenis, siapa: b.siapa, lokasi: b.lokasi, catatan: b.catatan,
   status: b.status, hasil: b.hasil, dibuat: b.dibuat, diubah: b.diubah, wajib: !!b.ref, punyaku: b.email === email,
-  spv: !!owner?.has(b.email), request: b.request,
+  spv: !!owner?.has(b.email), request: b.request, foto: b.foto || '',
 });
 
 const teks = (v: unknown, maks: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, maks);
@@ -121,6 +122,18 @@ export async function POST(req: NextRequest) {
       if (!lama) return NextResponse.json({ error: 'Aktivitas tidak ditemukan.' }, { status: 404 });
       if (lama.email !== email && !lihatTim(role)) return NextResponse.json({ error: 'Bukan plan kamu.' }, { status: 403 });
       const baru = ubah(lama);
+      // Foto bukti follow up (khusus Naufal saat tidak bertemu konsumen; owner tidak wajib)
+      const f = b?.foto;
+      if (f && typeof f.data === 'string') {
+        const mime = /^image\/(jpeg|png|webp)$/.test(String(f.mime)) ? String(f.mime) : 'image/jpeg';
+        const data = f.data.replace(/^data:[^,]+,/, '');
+        if (!/^[A-Za-z0-9+/=]+$/.test(data) || data.length > MAX_B64) return NextResponse.json({ error: 'Foto terlalu besar atau rusak. Coba foto ulang.' }, { status: 400 });
+        const idFoto = `plan_${id}_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
+        await saveFotos([{ id: idFoto, mime, data }]);
+        baru.foto = idFoto;
+      } else if (wajibBuktiFu(baru) && !baru.foto && role !== 'owner') {
+        return NextResponse.json({ error: 'Tidak bertemu konsumen: lampirkan foto bukti follow up (screenshot chat WhatsApp / riwayat telepon ke konsumen).' }, { status: 400 });
+      }
       await updateRowById(TAB, HEAD, id, toRow(baru));
       return NextResponse.json({ ok: true, item: keluar(baru, email) });
     }

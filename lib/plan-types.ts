@@ -11,6 +11,12 @@ export const JENIS_LABEL: Record<Jenis, string> = {
 export type StatusPlan = 'rencana' | 'selesai' | 'batal';
 export const MIN_AKTIVITAS = 5;
 
+// Khusus Naufal: visit konsumen yang hasilnya "tidak bertemu" wajib dilampiri foto bukti follow up ke konsumen
+// (screenshot chat WhatsApp / riwayat telepon / foto lokasi)
+export const TIDAK_BERTEMU = /\b(tidak|tdk|gak|nggak|ga) (bertemu|ketemu)\b/i;
+export const wajibBuktiFu = (x: { jenis: string; nama: string; status: string; hasil: string }) =>
+  x.jenis === 'visit' && /NAUFAL/i.test(x.nama) && x.status === 'selesai' && TIDAK_BERTEMU.test(x.hasil);
+
 export type PlanItem = {
   id: string;         // "wajib:<id survey>" = map pencairan wajib yang belum disentuh (belum tersimpan)
   tgl: string;        // yyyy-MM-dd (WIB)
@@ -25,6 +31,7 @@ export type PlanItem = {
   punyaku: boolean;
   spv: boolean;       // milik akun owner (SPV): tidak masuk plan tim dan report
   request: boolean;   // visit by request CMO: konsumen diketik sendiri karena belum ada di database
+  foto?: string;      // ID foto bukti follow up (tab FOTO)
   dibuat: string;
   diubah: string;
 };

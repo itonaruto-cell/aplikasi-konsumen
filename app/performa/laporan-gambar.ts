@@ -2,7 +2,7 @@
 // Digambar langsung ke <canvas> (lebar 1080 px, cocok untuk WhatsApp), tanpa pustaka tambahan.
 import type { Orang, Sales, VisitRow } from '../../lib/performa-types';
 import type { HitungFU, LaporanFU } from '../../lib/prospek-types';
-import type { PlanItem } from '../../lib/plan-types';
+import { wajibBuktiFu, type PlanItem } from '../../lib/plan-types';
 import { brandOf, cekData, hariKerjaSisa, namaBulan, pace, targetMingguan, type Ctx } from '../../lib/performa-calc';
 import { posisiKosong } from '../../lib/kesehatan-data';
 import { brandBaris, labelLalu, rincianMotor, rpLalu } from '../../lib/sales-brand';
@@ -825,7 +825,7 @@ export function gambarSore(g: G, c: Ctx, d: DataSore, logo: HTMLImageElement | n
 }
 
 /* ---------- Follow up konsumen yang di-plan pagi (per PIC) ---------- */
-export type BarisFuKons = { p: PlanItem; prioritas: number | null; visit: VisitRow | null };
+export type BarisFuKons = { p: PlanItem; prioritas: number | null; visit: VisitRow | null; foto?: HTMLImageElement | null };
 export type DataFuKons = { tgl: string; nama: string; peran: 'CMO' | 'MAO' | null; baris: BarisFuKons[] };
 const MINAT = /minat|tertarik|order|survey|ajuk|pengajuan|top ?up|ro\b|cair|setuju|deal/i;
 const TIDAK_MINAT = /tidak (minat|tertarik|butuh)|belum (minat|butuh)|menolak|tolak/i;
@@ -879,18 +879,24 @@ function bagianFuKons(g: G, d: DataFuKons, y: number): number {
     const hasil = bungkus(g, b.p.hasil || (b.p.status === 'batal' ? 'Dibatalkan' : 'Belum ada hasil'), isi - 40, 22, 400, 3);
     const v = b.visit;
     const pant = v ? bungkus(g, `Pantauan: ${[v.st, v.bd && `bertemu ${v.bd}`, v.h, v.kt].filter(Boolean).join(' · ')}`, isi - 40, 20, 400, 2) : [];
-    return { b, k: kat[i], hasil, pant };
+    // Foto bukti FU (tidak bertemu): ditampilkan kecil; kalau wajib tapi belum ada, diberi tanda merah
+    const img = b.foto && b.foto.naturalWidth ? b.foto : null;
+    const k2 = img ? Math.min(360 / img.naturalWidth, 240 / img.naturalHeight) : 0;
+    const foto = img ? { img, w: Math.round(img.naturalWidth * k2), h: Math.round(img.naturalHeight * k2) } : null;
+    const kurang = !foto && wajibBuktiFu(b.p);
+    const ekstra = (foto ? foto.h + 50 : 0) + (kurang ? 30 : 0);
+    return { b, k: kat[i], hasil, pant, foto, kurang, ekstra };
   });
-  const h = 100 + (baris.length ? baris.reduce((a, x) => a + 64 + x.hasil.length * 30 + x.pant.length * 28 + 22, 0) : 70);
+  const h = 100 + (baris.length ? baris.reduce((a, x) => a + 64 + x.hasil.length * 30 + x.pant.length * 28 + x.ekstra + 22, 0) : 70);
   kotak(g, P, y, lebar, h, 32, C.card, true);
   tulis(g, 'KONSUMEN DI PLAN', P + 40, y + 58, { size: 26, weight: 700, color: C.muted, spasi: 2 });
   tulis(g, `${d.baris.length} konsumen`, W - P - 40, y + 58, { size: 24, weight: 700, align: 'right' });
   let yy = y + 92;
   if (!baris.length) tulis(g, 'Tidak ada konsumen di plan hari ini.', P + 40, yy + 30, { size: 24, color: C.muted });
-  baris.forEach(({ b, k, hasil, pant }, i) => {
+  baris.forEach(({ b, k, hasil, pant, foto, kurang, ekstra }, i) => {
     const s = KAT_FU[k];
     if (i) { g.fillStyle = C.line; g.fillRect(P + 40, yy, isi, 2); }
-    kotak(g, P + 40, yy + 16, 6, 44 + hasil.length * 30 + pant.length * 28, 3, s.warna);
+    kotak(g, P + 40, yy + 16, 6, 44 + hasil.length * 30 + pant.length * 28 + ekstra, 3, s.warna);
     const pr = b.prioritas ? `P${b.prioritas} · ` : '';
     tulis(g, `${i + 1}. ${b.p.siapa || '–'}`, P + 62, yy + 46, { size: 26, weight: 700, maks: isi - 260 });
     chip(g, s.teks, W - P - 40, yy + 18, { bg: s.lembut, color: s.warna, size: 18, align: 'right' });
@@ -899,7 +905,16 @@ function bagianFuKons(g: G, d: DataFuKons, y: number): number {
     let ty = yy + 76;
     hasil.forEach((t) => { ty += 30; tulis(g, t, P + 62, ty, { size: 22, color: b.p.hasil ? C.ink : C.muted }); });
     pant.forEach((t) => { ty += 28; tulis(g, t, P + 62, ty, { size: 20, color: '#1B2F5B' }); });
-    yy += 64 + hasil.length * 30 + pant.length * 28 + 22;
+    if (foto) {
+      tulis(g, 'Bukti follow up', P + 62, ty + 34, { size: 20, weight: 700, color: C.muted });
+      g.save();
+      g.beginPath(); g.roundRect(P + 62, ty + 48, foto.w, foto.h, 14); g.clip();
+      g.drawImage(foto.img, P + 62, ty + 48, foto.w, foto.h);
+      g.restore();
+      ty += foto.h + 50;
+    }
+    if (kurang) { ty += 30; tulis(g, 'Belum ada foto bukti follow up', P + 62, ty, { size: 20, weight: 700, color: C.bad }); }
+    yy += 64 + hasil.length * 30 + pant.length * 28 + ekstra + 22;
   });
   return y + h + 32;
 }

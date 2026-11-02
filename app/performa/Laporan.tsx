@@ -40,6 +40,9 @@ async function dataSore(c: Ctx, pic: string, tgl: string): Promise<DataSore> {
   const bahan = ((bj?.list || []) as Bahan[]).filter((b) => milik(b.pic || b.nama));
   const bulan = tgl.slice(0, 7);
   const semuaPlan = (pj?.list || []) as PlanItem[];
+  // Khusus Naufal: konsumen yang di-plan pagi & hasil follow up-nya ikut di report sore, beserta foto bukti FU
+  const fuKons = FU_KONS.test(pic) ? dataFuKons(c, pic, tgl, semuaPlan) : null;
+  if (fuKons) await Promise.all(fuKons.baris.map(async (b) => { if (b.p.foto) b.foto = await muatGambar(`/api/foto/${encodeURIComponent(b.p.foto)}`); }));
   return {
     tgl, nama: pic, peran: peranDari(pic),
     o: (c.data.orang || []).find((o) => samaOrang(o.nama, pic)) || null,
@@ -49,8 +52,7 @@ async function dataSore(c: Ctx, pic: string, tgl: string): Promise<DataSore> {
     minat: (fu?.minat || []).filter((m) => milik(m.oleh)),
     bahan: bahan.filter((b) => b.status === 'aktif'),
     cairBulan: bahan.filter((b) => b.status === 'cair' && (b.diubah || '').slice(0, 7) === bulan),
-    // Khusus Naufal: konsumen yang di-plan pagi & hasil follow up-nya ikut di report sore
-    fuKons: FU_KONS.test(pic) ? dataFuKons(c, pic, tgl, semuaPlan) : null,
+    fuKons,
   };
 }
 
