@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getRole } from '../../../lib/access';
 import { bacaTabel, daftarCair, kolomCair, TAB_CAIR } from '../../../lib/tarikan-data';
+import { bacaArsip } from '../../../lib/performa-arsip';
+import type { Tabel } from '../../../lib/tarikan-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +14,8 @@ export async function GET(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'Silakan login dulu.' }, { status: 401 });
   if (!(await getRole(s.email))) return NextResponse.json({ error: 'Akses akun ini sudah dicabut. Hubungi owner.' }, { status: 403 });
   try {
-    const t = await bacaTabel(TAB_CAIR);
+    const bulan = req.nextUrl.searchParams.get('bulan') || '';
+    const t = /^\d{4}-\d{2}$/.test(bulan) ? await bacaArsip<Tabel>(bulan, 'cair') : await bacaTabel(TAB_CAIR);
     if (!t) return NextResponse.json({ ada: false, list: [] }, { headers: { 'Cache-Control': 'no-store' } });
     const k = kolomCair(t.h, t.r);
     // Judul kolom yang dipakai (ditampilkan kecil di aplikasi, untuk cek kalau ada kolom yang salah tebak)

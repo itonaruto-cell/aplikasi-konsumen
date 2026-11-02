@@ -5,20 +5,21 @@ import { brandOf, keyOf } from '../../lib/performa-calc';
 import { angka, kunciFlag, kunciSumber, type CairItem, type DataCair } from '../../lib/cair-types';
 import type { Orang } from '../../lib/performa-types';
 import { feeBookingMandiri } from '../../lib/fee-bm';
+import { bulanArsip, dgnBulan } from '../../lib/arsip-aktif';
 
 // Konsumen yang sudah cair bulan ini (tab tarikan sales), per brand, bisa difilter per channel/sumber order & CMO.
 
-let simpan: { at: number; p: Promise<DataCair> } | null = null;
+let simpan: { at: number; p: Promise<DataCair>; bulan: string } | null = null;
 export function ambilCair(paksa = false): Promise<DataCair> {
-  if (!paksa && simpan && Date.now() - simpan.at < 60_000) return simpan.p;
-  const p = fetch('/api/cair', { cache: 'no-store' })
+  if (!paksa && simpan && simpan.bulan === bulanArsip() && Date.now() - simpan.at < 60_000) return simpan.p;
+  const p = fetch(dgnBulan('/api/cair'), { cache: 'no-store' })
     .then(async (res) => {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) return { ada: false, list: [], error: j?.error || 'Data cair tidak bisa dimuat.' };
       return { list: [], ...j } as DataCair;
     })
     .catch(() => ({ ada: false, list: [], error: 'Koneksi bermasalah. Coba lagi.' }));
-  simpan = { at: Date.now(), p };
+  simpan = { at: Date.now(), p, bulan: bulanArsip() };
   p.then((d) => { if (d.error) simpan = null; });
   return p;
 }

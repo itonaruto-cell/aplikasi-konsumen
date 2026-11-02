@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getRole } from '../../../lib/access';
 import { bacaTabel, cariKolom, TAB_OI } from '../../../lib/tarikan-data';
+import { bacaArsip } from '../../../lib/performa-arsip';
+import type { Tabel } from '../../../lib/tarikan-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +17,8 @@ export async function GET(req: NextRequest) {
   const role = await getRole(s.email);
   if (!role) return NextResponse.json({ error: 'Akses akun ini sudah dicabut. Hubungi owner.' }, { status: 403 });
   try {
-    const t = await bacaTabel(TAB_OI);
+    const bulan = req.nextUrl.searchParams.get('bulan') || '';
+    const t = /^\d{4}-\d{2}$/.test(bulan) ? await bacaArsip<Tabel>(bulan, 'oi') : await bacaTabel(TAB_OI);
     if (!t) return NextResponse.json({ ada: false }, { headers: { 'Cache-Control': 'no-store' } });
     const owner = role === 'owner';
     const pakai = t.h.map((h, i) => ({ h, i })).filter(({ h }) => owner || !RAHASIA.test(h.trim()));

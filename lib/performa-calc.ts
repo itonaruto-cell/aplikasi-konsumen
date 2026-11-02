@@ -401,6 +401,8 @@ export type CekData = {
 // telat = angka mungkin belum terbaru
 export function cekData(data: Performa, now = new Date()): CekData {
   const today = todayJkt(now);
+  // Data arsip bulan lalu memang bukan data terbaru: jangan tampilkan peringatan
+  if (data.arsip) return { tingkat: 'aman', sebab: '', bulanData: data.arsip, bedaBulan: false, teks: '' };
   const upd = day10(data.updated || '');
   const bulanData = validDay(upd) ? upd.slice(0, 7) : null;
   const bedaBulan = !!bulanData && bulanData < today.slice(0, 7);

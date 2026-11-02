@@ -81,6 +81,7 @@ export type Aktivitas = {
 
 export type Performa = {
   cabang: string;
+  arsip?: string;           // ditambahkan server: YYYY-MM kalau ini data arsip bulan lalu (hanya dibaca)
   updated: string | null;   // tanggal "UPDATE PER" di sheet
   dikirim: string;          // waktu kiriman terakhir dari Apps Script (ISO)
   bulan: { lalu: string; ini: string };
