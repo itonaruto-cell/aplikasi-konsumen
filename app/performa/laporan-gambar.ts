@@ -671,6 +671,7 @@ export type DataSore = {
   minat: LaporanFU['minat'];
   bahan: Bahan[];           // bahan aktif milik / PIC orang ini
   cairBulan: Bahan[];       // bahan yang sudah ditandai cair bulan ini
+  fuKons?: DataFuKons | null; // khusus PIC tertentu (Naufal): konsumen di-plan pagi & hasil FU-nya
 };
 // Pecah teks jadi beberapa baris sesuai lebar
 function bungkus(g: G, s: string, maks: number, size: number, weight = 400, maksBaris = 3): string[] {
@@ -729,17 +730,22 @@ export function gambarSore(g: G, c: Ctx, d: DataSore, logo: HTMLImageElement | n
     y += h + 32;
   }
 
-  /* Plan & realisasi */
-  {
-    const aktif = d.plan.filter((p) => p.status !== 'batal');
-    const selesai = d.plan.filter((p) => p.status === 'selesai').length;
-    const baris = d.plan.map((p) => ({ p, hasil: bungkus(g, p.hasil || (p.status === 'rencana' ? 'Belum ada hasil' : p.status === 'batal' ? 'Dibatalkan' : ''), isi - 70, 22, 400, 3) }));
-    const h = 110 + (d.plan.length ? baris.reduce((a, b) => a + 70 + b.hasil.length * 30 + 18, 0) : 70) + 10;
+  /* FU konsumen yang di-plan pagi (khusus PIC tertentu) */
+  if (d.fuKons) y = bagianFuKons(g, d.fuKons, y);
+
+  /* Plan & realisasi (kalau FU konsumen tampil, visit sudah ada di sana) */
+  const planSore = d.fuKons ? d.plan.filter((p) => p.jenis !== 'visit') : d.plan;
+  if (!d.fuKons || planSore.length) {
+    const d0 = { plan: planSore };
+    const aktif = d0.plan.filter((p) => p.status !== 'batal');
+    const selesai = d0.plan.filter((p) => p.status === 'selesai').length;
+    const baris = d0.plan.map((p) => ({ p, hasil: bungkus(g, p.hasil || (p.status === 'rencana' ? 'Belum ada hasil' : p.status === 'batal' ? 'Dibatalkan' : ''), isi - 70, 22, 400, 3) }));
+    const h = 110 + (d0.plan.length ? baris.reduce((a, b) => a + 70 + b.hasil.length * 30 + 18, 0) : 70) + 10;
     kotak(g, P, y, lebar, h, 32, C.card, true);
-    judulKartu(g, y, 'PLAN & REALISASI', d.plan.length ? `${selesai}/${aktif.length} selesai` : '');
-    if (d.plan.length) batang(g, P + 40, y + 78, isi, 10, aktif.length ? selesai / aktif.length : 0, C.good, C.track);
+    judulKartu(g, y, d.fuKons ? 'PLAN LAINNYA' : 'PLAN & REALISASI', d0.plan.length ? `${selesai}/${aktif.length} selesai` : '');
+    if (d0.plan.length) batang(g, P + 40, y + 78, isi, 10, aktif.length ? selesai / aktif.length : 0, C.good, C.track);
     let yy = y + 110;
-    if (!d.plan.length) tulis(g, 'Belum ada plan aktivitas hari ini.', P + 40, yy + 30, { size: 24, color: C.muted });
+    if (!d0.plan.length) tulis(g, 'Belum ada plan aktivitas hari ini.', P + 40, yy + 30, { size: 24, color: C.muted });
     for (const { p, hasil } of baris) {
       const s = STATUS_PLAN[p.status];
       g.beginPath(); g.arc(P + 56, yy + 30, 16, 0, Math.PI * 2); g.fillStyle = s.warna; g.fill();
@@ -845,12 +851,9 @@ const KAT_FU = {
   batal: { teks: 'Batal', warna: C.bad, lembut: '#FDECEC' },
 } as const;
 
-export function gambarFuKons(g: G, c: Ctx, d: DataFuKons, logo: HTMLImageElement | null): number {
+// Bagian report sore: ringkasan & daftar konsumen di plan pagi beserta hasil FU-nya; mengembalikan y berikutnya
+function bagianFuKons(g: G, d: DataFuKons, y: number): number {
   const lebar = W - P * 2, isi = lebar - 80;
-  g.fillStyle = C.bg; g.fillRect(0, 0, W, g.canvas.height);
-  const inf = info(c);
-  kepala(g, logo, 'FOLLOW UP KONSUMEN', pendek(d.nama) + (d.peran ? ` · ${d.peran}` : ''), `${tglHari(d.tgl)} · konsumen yang di-plan pagi`);
-  let y = 250;
   const kat = d.baris.map(kategoriFu);
   const n = (k: string) => kat.filter((x) => x === k).length;
   const sudah = kat.filter((x) => x !== 'belum' && x !== 'batal').length;
@@ -858,7 +861,7 @@ export function gambarFuKons(g: G, c: Ctx, d: DataFuKons, logo: HTMLImageElement
 
   // Ringkasan
   kotak(g, P, y, lebar, 330, 32, C.card, true);
-  tulis(g, 'RINGKASAN', P + 40, y + 58, { size: 26, weight: 700, color: C.muted, spasi: 2 });
+  tulis(g, 'FU KONSUMEN PLAN PAGI', P + 40, y + 58, { size: 26, weight: 700, color: C.muted, spasi: 2 });
   tulis(g, `${sudah}/${aktif} sudah di-follow up`, W - P - 40, y + 58, { size: 24, weight: 700, align: 'right' });
   batang(g, P + 40, y + 80, isi, 12, aktif ? sudah / aktif : 0, sudah >= aktif && aktif ? C.good : C.mid, C.track);
   const kotakKat: (keyof typeof KAT_FU)[] = ['minat', 'bertemu', 'tidakBertemu', 'tidak', 'belum', 'batal'];
@@ -898,7 +901,5 @@ export function gambarFuKons(g: G, c: Ctx, d: DataFuKons, logo: HTMLImageElement
     pant.forEach((t) => { ty += 28; tulis(g, t, P + 62, ty, { size: 20, color: '#1B2F5B' }); });
     yy += 64 + hasil.length * 30 + pant.length * 28 + 22;
   });
-  y += h + 32;
-  kaki(g, y - 20, inf.dibuat);
-  return y + KAKI - 10;
+  return y + h + 32;
 }
