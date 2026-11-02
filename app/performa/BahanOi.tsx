@@ -1,23 +1,24 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { SearchBox, Chev, type Push } from './ui';
+import { bulanArsip, dgnBulan } from '../../lib/arsip-aktif';
 
 // Bahan OI: isi tab data OI (order in) dari pantauan cabang, dikirim Apps Script bersama data performa.
 // Kolomnya mengikuti tab di pantauan; di sini cukup ditebak kolom nama, status, tanggal, dan CMO untuk daftar.
 
 export type DataOi = { ada: boolean; sumber?: string; dikirim?: string; semua?: boolean; h: string[]; r: string[][]; cmo: number; error?: string };
 
-let simpan: { at: number; p: Promise<DataOi> } | null = null;
+let simpan: { at: number; p: Promise<DataOi>; bulan: string } | null = null;
 export function ambilOi(paksa = false): Promise<DataOi> {
-  if (!paksa && simpan && Date.now() - simpan.at < 60_000) return simpan.p;
-  const p = fetch('/api/oi', { cache: 'no-store' })
+  if (!paksa && simpan && simpan.bulan === bulanArsip() && Date.now() - simpan.at < 60_000) return simpan.p;
+  const p = fetch(dgnBulan('/api/oi'), { cache: 'no-store' })
     .then(async (res) => {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) return { ada: false, h: [], r: [], cmo: -1, error: j?.error || 'Data OI tidak bisa dimuat.' };
       return { h: [], r: [], cmo: -1, ...j } as DataOi;
     })
     .catch(() => ({ ada: false, h: [], r: [], cmo: -1, error: 'Koneksi bermasalah. Coba lagi.' }));
-  simpan = { at: Date.now(), p };
+  simpan = { at: Date.now(), p, bulan: bulanArsip() };
   p.then((d) => { if (d.error) simpan = null; });
   return p;
 }

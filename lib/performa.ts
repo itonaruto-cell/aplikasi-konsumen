@@ -2,6 +2,8 @@ import { sheetsApi } from './sheets-api';
 import type { Performa, Peringkat } from './performa-types';
 import { rankSnapshot, todayJkt } from './performa-calc';
 import { rapikanPerforma } from './sales-brand';
+import { simpanArsip } from './performa-arsip';
+import { bacaTabel, TAB_CAIR, TAB_OI } from './tarikan-data';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
 // (dibuat otomatis). Isinya JSON dari Apps Script, dipotong per sel karena
@@ -74,6 +76,19 @@ export function kirimanKosong(baru: Performa, lama: Performa | null): boolean {
   return bulanSama || !bulanOf(baru.updated);
 }
 
+// Simpan data (dan tab CAIR & DATA_OI saat ini) sebagai arsip bulan data itu. Gagal tidak menghentikan proses lain.
+export async function arsipkan(d: Performa) {
+  const b = bulanOf(d.updated);
+  if (!b) return false;
+  try {
+    await simpanArsip(b, 'performa', { ...d, riwayat: undefined });
+    const [cair, oi] = await Promise.all([bacaTabel(TAB_CAIR).catch(() => null), bacaTabel(TAB_OI).catch(() => null)]);
+    if (cair) await simpanArsip(b, 'cair', cair);
+    if (oi) await simpanArsip(b, 'oi', oi);
+    return true;
+  } catch (err) { console.error('Gagal menyimpan arsip bulan', b, err); return false; }
+}
+
 async function bacaMentah(api: ReturnType<typeof sheets>, spreadsheetId?: string): Promise<Performa | null> {
   try {
     const res = await api.spreadsheets.values.get({ spreadsheetId, range: `${PERF_TAB}!A2:A` });
@@ -87,6 +102,10 @@ export async function savePerforma(data: Performa) {
   const api = sheets();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   const lama = await bacaMentah(api, spreadsheetId);
+  // Bulan berganti: simpan dulu data bulan sebelumnya (termasuk daftar konsumen, konsumen cair, data OI) ke arsip
+  if (lama && isiSales(lama) && bulanOf(lama.updated) && bulanOf(data.updated) && bulanOf(lama.updated) !== bulanOf(data.updated)) {
+    await arsipkan(lama);
+  }
   if (kirimanKosong(data, lama)) {
     console.warn('Kiriman performa kosong diabaikan; data terakhir tetap dipakai.', { updated: data.updated, lama: lama?.updated });
     return { before: undefined, after: undefined, dilewati: true as const };

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
-import { loadPerforma } from '../../../../lib/performa';
+import { arsipkan, isiSales, loadPerforma } from '../../../../lib/performa';
 import { getAccessList } from '../../../../lib/access';
 import { listSubs, sendMany } from '../../../../lib/notif';
 import { cekData } from '../../../../lib/performa-calc';
@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
   if (!cronOk(req.headers.get('authorization'))) return NextResponse.json({ error: 'Kunci salah.' }, { status: 401 });
   const data = await loadPerforma();
   if (!data) return NextResponse.json({ ok: true, tingkat: 'kosong' });
+  // Arsip harian bulan berjalan (ditimpa tiap hari): data akhir bulan tetap tersimpan walau file bulan baru belum tersambung
+  if (isiSales(data)) await arsipkan(data);
   const cek = cekData(data);
   if (cek.tingkat !== 'gawat') return NextResponse.json({ ok: true, tingkat: cek.tingkat });
 
