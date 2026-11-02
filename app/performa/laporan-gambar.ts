@@ -1,6 +1,6 @@
 // Gambar laporan (PNG) untuk dibagikan: achievement cabang + Mobilku/Motorku, dan aktivitas CMO/MAO.
 // Digambar langsung ke <canvas> (lebar 1080 px, cocok untuk WhatsApp), tanpa pustaka tambahan.
-import type { Orang, Sales } from '../../lib/performa-types';
+import type { Orang, Sales, VisitRow } from '../../lib/performa-types';
 import type { HitungFU, LaporanFU } from '../../lib/prospek-types';
 import type { PlanItem } from '../../lib/plan-types';
 import { brandOf, cekData, hariKerjaSisa, namaBulan, pace, targetMingguan, type Ctx } from '../../lib/performa-calc';
@@ -814,6 +814,91 @@ export function gambarSore(g: G, c: Ctx, d: DataSore, logo: HTMLImageElement | n
     }
     y += h + 32;
   }
+  kaki(g, y - 20, inf.dibuat);
+  return y + KAKI - 10;
+}
+
+/* ---------- Follow up konsumen yang di-plan pagi (per PIC) ---------- */
+export type BarisFuKons = { p: PlanItem; prioritas: number | null; visit: VisitRow | null };
+export type DataFuKons = { tgl: string; nama: string; peran: 'CMO' | 'MAO' | null; baris: BarisFuKons[] };
+const MINAT = /minat|tertarik|order|survey|ajuk|pengajuan|top ?up|ro\b|cair|setuju|deal/i;
+const TIDAK_MINAT = /tidak (minat|tertarik|butuh)|belum (minat|butuh)|menolak|tolak/i;
+const bertemuDari = (b: BarisFuKons) => {
+  const t = `${b.p.hasil} ${b.visit?.st || ''} ${b.visit?.bd || ''}`;
+  if (/tidak bertemu|tdk bertemu|tidak ada di ?tempat|rumah kosong/i.test(t)) return false;
+  return /bertemu/i.test(t) || !!b.visit?.bd;
+};
+export function kategoriFu(b: BarisFuKons): 'belum' | 'batal' | 'minat' | 'tidak' | 'bertemu' | 'tidakBertemu' {
+  if (b.p.status === 'batal') return 'batal';
+  if (b.p.status !== 'selesai' && !b.visit) return 'belum';
+  const t = `${b.p.hasil} ${b.visit?.h || ''} ${b.visit?.kt || ''}`;
+  if (TIDAK_MINAT.test(t)) return 'tidak';
+  if (MINAT.test(t)) return 'minat';
+  return bertemuDari(b) ? 'bertemu' : 'tidakBertemu';
+}
+const KAT_FU = {
+  minat: { teks: 'Minat', warna: FU.order, lembut: '#E3F5EA' },
+  bertemu: { teks: 'Bertemu', warna: '#1B2F5B', lembut: '#E9EEF8' },
+  tidak: { teks: 'Tidak minat', warna: FU.tidak, lembut: '#FDECEC' },
+  tidakBertemu: { teks: 'Tidak bertemu', warna: '#8A4700', lembut: '#FFF4E0' },
+  belum: { teks: 'Belum FU', warna: '#6E6A64', lembut: C.track },
+  batal: { teks: 'Batal', warna: C.bad, lembut: '#FDECEC' },
+} as const;
+
+export function gambarFuKons(g: G, c: Ctx, d: DataFuKons, logo: HTMLImageElement | null): number {
+  const lebar = W - P * 2, isi = lebar - 80;
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, g.canvas.height);
+  const inf = info(c);
+  kepala(g, logo, 'FOLLOW UP KONSUMEN', pendek(d.nama) + (d.peran ? ` · ${d.peran}` : ''), `${tglHari(d.tgl)} · konsumen yang di-plan pagi`);
+  let y = 250;
+  const kat = d.baris.map(kategoriFu);
+  const n = (k: string) => kat.filter((x) => x === k).length;
+  const sudah = kat.filter((x) => x !== 'belum' && x !== 'batal').length;
+  const aktif = d.baris.length - n('batal');
+
+  // Ringkasan
+  kotak(g, P, y, lebar, 330, 32, C.card, true);
+  tulis(g, 'RINGKASAN', P + 40, y + 58, { size: 26, weight: 700, color: C.muted, spasi: 2 });
+  tulis(g, `${sudah}/${aktif} sudah di-follow up`, W - P - 40, y + 58, { size: 24, weight: 700, align: 'right' });
+  batang(g, P + 40, y + 80, isi, 12, aktif ? sudah / aktif : 0, sudah >= aktif && aktif ? C.good : C.mid, C.track);
+  const kotakKat: (keyof typeof KAT_FU)[] = ['minat', 'bertemu', 'tidakBertemu', 'tidak', 'belum', 'batal'];
+  const w3 = (isi - 20) / 3;
+  kotakKat.forEach((k, i) => {
+    const x = P + 40 + (i % 3) * (w3 + 10), yy = y + 116 + Math.floor(i / 3) * 102;
+    kotak(g, x, yy, w3, 92, 18, KAT_FU[k].lembut);
+    tulis(g, String(n(k)), x + 18, yy + 50, { size: 38, weight: 700, color: n(k) ? KAT_FU[k].warna : C.muted });
+    tulis(g, KAT_FU[k].teks, x + 18, yy + 80, { size: 20, color: C.muted, maks: w3 - 30 });
+  });
+  y += 330 + 32;
+
+  // Daftar konsumen
+  const baris = d.baris.map((b, i) => {
+    const hasil = bungkus(g, b.p.hasil || (b.p.status === 'batal' ? 'Dibatalkan' : 'Belum ada hasil'), isi - 40, 22, 400, 3);
+    const v = b.visit;
+    const pant = v ? bungkus(g, `Pantauan: ${[v.st, v.bd && `bertemu ${v.bd}`, v.h, v.kt].filter(Boolean).join(' · ')}`, isi - 40, 20, 400, 2) : [];
+    return { b, k: kat[i], hasil, pant };
+  });
+  const h = 100 + (baris.length ? baris.reduce((a, x) => a + 64 + x.hasil.length * 30 + x.pant.length * 28 + 22, 0) : 70);
+  kotak(g, P, y, lebar, h, 32, C.card, true);
+  tulis(g, 'KONSUMEN DI PLAN', P + 40, y + 58, { size: 26, weight: 700, color: C.muted, spasi: 2 });
+  tulis(g, `${d.baris.length} konsumen`, W - P - 40, y + 58, { size: 24, weight: 700, align: 'right' });
+  let yy = y + 92;
+  if (!baris.length) tulis(g, 'Tidak ada konsumen di plan hari ini.', P + 40, yy + 30, { size: 24, color: C.muted });
+  baris.forEach(({ b, k, hasil, pant }, i) => {
+    const s = KAT_FU[k];
+    if (i) { g.fillStyle = C.line; g.fillRect(P + 40, yy, isi, 2); }
+    kotak(g, P + 40, yy + 16, 6, 44 + hasil.length * 30 + pant.length * 28, 3, s.warna);
+    const pr = b.prioritas ? `P${b.prioritas} · ` : '';
+    tulis(g, `${i + 1}. ${b.p.siapa || '–'}`, P + 62, yy + 46, { size: 26, weight: 700, maks: isi - 260 });
+    chip(g, s.teks, W - P - 40, yy + 18, { bg: s.lembut, color: s.warna, size: 18, align: 'right' });
+    const sub = `${pr}${JENIS_PLAN[b.p.jenis] || b.p.jenis}${b.p.lokasi ? ` · ${b.p.lokasi}` : ''}`;
+    tulis(g, sub, P + 62, yy + 76, { size: 20, color: C.muted, maks: isi - 40 });
+    let ty = yy + 76;
+    hasil.forEach((t) => { ty += 30; tulis(g, t, P + 62, ty, { size: 22, color: b.p.hasil ? C.ink : C.muted }); });
+    pant.forEach((t) => { ty += 28; tulis(g, t, P + 62, ty, { size: 20, color: '#1B2F5B' }); });
+    yy += 64 + hasil.length * 30 + pant.length * 28 + 22;
+  });
+  y += h + 32;
   kaki(g, y - 20, inf.dibuat);
   return y + KAKI - 10;
 }
