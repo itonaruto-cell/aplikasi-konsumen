@@ -2,13 +2,14 @@
 // dalam keadaan kosong (angka nol), sementara data bulan lalu tetap utuh di arsip (Saya › Performa bulan lalu).
 // Data asli di tab PERFORMA tidak diubah; begitu file bulan baru tersambung, angka aslinya langsung tampil.
 import type { Aktivitas, Orang, Performa, Sales } from './performa-types';
-import { namaBulan, todayJkt } from './performa-calc';
+import { bulanData, namaBulan, todayJkt } from './performa-calc';
+export { bulanData };
 
 // YYYY-MM data kalau sudah lewat bulan (kosong = masih bulan berjalan)
 export const bulanBasi = (d: Performa | null | undefined, now = new Date()): string => {
   if (!d || d.arsip) return '';
-  const b = String(d.updated || '').slice(0, 7);
-  return /^\d{4}-\d{2}$/.test(b) && b < todayJkt(now).slice(0, 7) ? b : '';
+  const b = bulanData(d);
+  return b && b < todayJkt(now).slice(0, 7) ? b : '';
 };
 
 const nol = (laluPenuh: number | null | undefined): Sales =>
@@ -37,12 +38,12 @@ function aktivitasKosong(a: Aktivitas): Aktivitas {
 
 export function kosongkanBulan(d: Performa, now = new Date()): Performa {
   const today = todayJkt(now);
-  const lalu = d.bulan?.ini || namaBulan(String(d.updated || ''));
+  const lalu = namaBulan(bulanData(d)) || d.bulan?.ini || '';
   return {
     cabang: d.cabang,
     updated: today,
     dikirim: d.dikirim,
-    menunggu: String(d.updated || '').slice(0, 7),
+    menunggu: bulanData(d),
     bulan: { lalu, ini: namaBulan(today) },
     cabangTotal: { unit: nol(d.cabangTotal?.unit?.ini), amount: nol(d.cabangTotal?.amount?.ini), oi: null },
     ...(d.aktivitas ? { aktivitas: aktivitasKosong(d.aktivitas) } : {}),

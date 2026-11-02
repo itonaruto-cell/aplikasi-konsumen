@@ -4,6 +4,7 @@ import { rankSnapshot, todayJkt } from './performa-calc';
 import { rapikanPerforma } from './sales-brand';
 import { simpanArsip } from './performa-arsip';
 import { bacaTabel, TAB_CAIR, TAB_OI } from './tarikan-data';
+import { bulanData } from './performa-kosong';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
 // (dibuat otomatis). Isinya JSON dari Apps Script, dipotong per sel karena
@@ -47,10 +48,9 @@ const kemarinOf = (s: Snaps, today: string) =>
 // Kiriman yang tidak membawa rekap tarikan sales / bulan lalu (mis. jadwal kirimPerforma lama masih jalan,
 // atau tab tarikan sedang tidak terbaca) memakai rekap dari kiriman sebelumnya di bulan yang sama,
 // supaya pemisahan motor sukarela tidak hilang-timbul.
-const bulanOf = (s?: string | null) => String(s || '').slice(0, 7);
 export function bawaRekapLama(baru: Performa, lama: Performa | null, sekarang = new Date().toISOString()): Performa {
   let d: Performa = baru.salesBrand ? { ...baru, salesBrand: { ...baru.salesBrand, diterima: sekarang, dibawa: undefined } } : baru;
-  if (!lama || !bulanOf(lama.updated) || bulanOf(lama.updated) !== bulanOf(baru.updated)) return d;
+  if (!lama || !bulanData(lama) || bulanData(lama) !== bulanData(baru)) return d;
   if (!d.salesBrand && lama.salesBrand?.orang?.length) {
     const sb = lama.salesBrand;
     d = { ...d, salesBrand: { sumber: sb.sumber, orang: sb.orang, diterima: sb.diterima, dibawa: sb.dibawa || sb.diterima || 'sebelumnya' } };
@@ -70,15 +70,15 @@ export function isiSales(d: Performa | null): boolean {
 }
 export function kirimanKosong(baru: Performa, lama: Performa | null): boolean {
   if (!lama || !isiSales(lama) || isiSales(baru)) return false;
-  const bulanSama = bulanOf(baru.updated) && bulanOf(lama.updated)
-    ? bulanOf(baru.updated) === bulanOf(lama.updated)
+  const bulanSama = bulanData(baru) && bulanData(lama)
+    ? bulanData(baru) === bulanData(lama)
     : !!baru.bulan?.ini && baru.bulan.ini === lama.bulan?.ini;
-  return bulanSama || !bulanOf(baru.updated);
+  return bulanSama || !bulanData(baru);
 }
 
 // Simpan data (dan tab CAIR & DATA_OI saat ini) sebagai arsip bulan data itu. Gagal tidak menghentikan proses lain.
 export async function arsipkan(d: Performa) {
-  const b = bulanOf(d.updated);
+  const b = bulanData(d);
   if (!b) return false;
   try {
     await simpanArsip(b, 'performa', { ...d, riwayat: undefined });
@@ -103,7 +103,7 @@ export async function savePerforma(data: Performa) {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   const lama = await bacaMentah(api, spreadsheetId);
   // Bulan berganti: simpan dulu data bulan sebelumnya (termasuk daftar konsumen, konsumen cair, data OI) ke arsip
-  if (lama && isiSales(lama) && bulanOf(lama.updated) && bulanOf(data.updated) && bulanOf(lama.updated) !== bulanOf(data.updated)) {
+  if (lama && isiSales(lama) && bulanData(lama) && bulanData(data) && bulanData(lama) !== bulanData(data)) {
     await arsipkan(lama);
   }
   if (kirimanKosong(data, lama)) {

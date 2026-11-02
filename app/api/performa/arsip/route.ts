@@ -1,3 +1,4 @@
+import { bulanData } from '../../../../lib/performa-calc';
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '../../../../lib/session';
 import { getRole } from '../../../../lib/access';
@@ -26,5 +27,5 @@ export async function POST(req: NextRequest) {
   const data = await loadPerforma();
   if (!data || !isiSales(data)) return NextResponse.json({ error: 'Belum ada data untuk diarsipkan.' }, { status: 400 });
   const ok = await arsipkan(data);
-  return ok ? NextResponse.json({ ok: true, bulan: String(data.updated || '').slice(0, 7) }) : NextResponse.json({ error: 'Arsip gagal disimpan.' }, { status: 500 });
+  return ok ? NextResponse.json({ ok: true, bulan: bulanData(data) }) : NextResponse.json({ error: 'Arsip gagal disimpan.' }, { status: 500 });
 }

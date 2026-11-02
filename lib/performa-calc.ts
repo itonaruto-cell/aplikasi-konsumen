@@ -390,11 +390,25 @@ export function staleInfo(data: Performa, now = new Date()): string {
 /* ---------- Data pantauan: masih bulan lalu / kiriman berhenti ---------- */
 const NAMA_BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 export const namaBulan = (ym: string) => NAMA_BULAN[Number(String(ym).slice(5, 7)) - 1] || '';
+// Bulan data yang sebenarnya (YYYY-MM). Kolom "bulan ini" di sheet (mis. OKT) lebih dipercaya daripada
+// tanggal UPDATE PER: file pantauan baru hasil salin bisa ber-UPDATE PER 1 November padahal angkanya masih Oktober.
+const KODE_BULAN = [/^JAN/, /^FEB/, /^MAR/, /^APR/, /^(MEI|MAY)/, /^JUN/, /^JUL/, /^(AGU|AGS|AUG)/, /^SEP/, /^(OKT|OCT)/, /^NOV/, /^(DES|DEC)/];
+export function bulanData(d: Pick<Performa, 'updated' | 'bulan'> | null | undefined): string {
+  const upd = String(d?.updated || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(upd)) return '';
+  const label = String(d?.bulan?.ini || '').trim().toUpperCase();
+  const i = KODE_BULAN.findIndex((r) => r.test(label));
+  if (i < 0) return upd;
+  const mUpd = Number(upd.slice(5, 7));
+  const tahun = Number(upd.slice(0, 4)) - (i + 1 > mUpd ? 1 : 0);   // mis. label DES, UPDATE PER Januari
+  return `${tahun}-${String(i + 1).padStart(2, '0')}`;
+}
+
 export type CekData = {
   tingkat: 'aman' | 'telat' | 'gawat';
   teks: string;
   sebab: '' | 'bulan' | 'kiriman' | 'sheet';
-  bulanData: string | null;  // YYYY-MM menurut tanggal "UPDATE PER" di sheet
+  bulanData: string | null;  // YYYY-MM data (kolom bulan ini di sheet, cadangan tanggal UPDATE PER)
   bedaBulan: boolean;        // data yang tampil masih bulan sebelumnya
 };
 // gawat = angka di aplikasi pasti salah untuk bulan ini (masih bulan lalu sejak tgl 3, atau kiriman berhenti >26 jam)
@@ -406,28 +420,27 @@ export function cekData(data: Performa, now = new Date()): CekData {
   // Bulan baru ditampilkan kosong karena file pantauan bulan ini belum tersambung
   if (data.menunggu) return {
     tingkat: 'telat', sebab: 'bulan', bulanData: data.menunggu, bedaBulan: true,
-    teks: `Data ${namaBulan(today)} belum masuk: Apps Script masih mengirim file pantauan ${namaBulan(data.menunggu)}. Performa ${namaBulan(data.menunggu)} tetap bisa dibuka di Saya › Performa bulan lalu.`,
+    teks: `Data ${namaBulan(today)} belum masuk: file pantauan yang terkirim masih berisi angka ${namaBulan(data.menunggu)}. Performa ${namaBulan(data.menunggu)} tetap bisa dibuka di Saya › Performa bulan lalu.`,
   };
-  const upd = day10(data.updated || '');
-  const bulanData = validDay(upd) ? upd.slice(0, 7) : null;
-  const bedaBulan = !!bulanData && bulanData < today.slice(0, 7);
+  const bulanD = bulanData(data) || null;
+  const bedaBulan = !!bulanD && bulanD < today.slice(0, 7);
   const sent = new Date(data.dikirim || '').getTime();
   const jam = isFinite(sent) ? Math.floor((now.getTime() - sent) / 3600_000) : null;
   const lama = (j: number) => (j >= 48 ? `${Math.floor(j / 24)} hari` : `${j} jam`);
   if (bedaBulan) {
     const awal = Number(today.slice(8, 10)) <= 2;
     return {
-      tingkat: awal ? 'telat' : 'gawat', sebab: 'bulan', bulanData, bedaBulan,
+      tingkat: awal ? 'telat' : 'gawat', sebab: 'bulan', bulanData: bulanD, bedaBulan,
       teks: awal
-        ? `Angka yang tampil masih data ${namaBulan(bulanData!)}. File pantauan ${namaBulan(today)} biasanya baru ada di awal bulan.`
-        : `Angka yang tampil masih data ${namaBulan(bulanData!)}, bukan ${namaBulan(today)}. File pantauan ${namaBulan(today)} belum tersambung ke aplikasi.`,
+        ? `Angka yang tampil masih data ${namaBulan(bulanD!)}. File pantauan ${namaBulan(today)} biasanya baru ada di awal bulan.`
+        : `Angka yang tampil masih data ${namaBulan(bulanD!)}, bukan ${namaBulan(today)}. File pantauan ${namaBulan(today)} belum tersambung ke aplikasi.`,
     };
   }
   if (jam !== null && jam >= 26) {
-    return { tingkat: 'gawat', sebab: 'kiriman', bulanData, bedaBulan, teks: `Kiriman otomatis dari sheet pantauan berhenti ${lama(jam)} lalu. Angka di aplikasi tidak ikut berubah.` };
+    return { tingkat: 'gawat', sebab: 'kiriman', bulanData: bulanD, bedaBulan, teks: `Kiriman otomatis dari sheet pantauan berhenti ${lama(jam)} lalu. Angka di aplikasi tidak ikut berubah.` };
   }
   const t = staleInfo(data, now);
-  return { tingkat: t ? 'telat' : 'aman', sebab: t ? 'sheet' : '', bulanData, bedaBulan, teks: t };
+  return { tingkat: t ? 'telat' : 'aman', sebab: t ? 'sheet' : '', bulanData: bulanD, bedaBulan, teks: t };
 }
 
 /* ---------- Teks untuk dibagikan (WhatsApp) ---------- */
