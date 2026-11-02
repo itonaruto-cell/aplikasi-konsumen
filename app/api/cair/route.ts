@@ -3,6 +3,8 @@ import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getRole } from '../../../lib/access';
 import { bacaTabel, daftarCair, kolomCair, TAB_CAIR } from '../../../lib/tarikan-data';
 import { bacaArsip } from '../../../lib/performa-arsip';
+import { loadPerforma } from '../../../lib/performa';
+import { bulanBasi } from '../../../lib/performa-kosong';
 import type { Tabel } from '../../../lib/tarikan-data';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +17,8 @@ export async function GET(req: NextRequest) {
   if (!(await getRole(s.email))) return NextResponse.json({ error: 'Akses akun ini sudah dicabut. Hubungi owner.' }, { status: 403 });
   try {
     const bulan = req.nextUrl.searchParams.get('bulan') || '';
-    const t = /^\d{4}-\d{2}$/.test(bulan) ? await bacaArsip<Tabel>(bulan, 'cair') : await bacaTabel(TAB_CAIR);
+    // Tab tarikan masih berisi bulan lalu (file pantauan bulan ini belum tersambung): bulan berjalan kosong
+    const t = /^\d{4}-\d{2}$/.test(bulan) ? await bacaArsip<Tabel>(bulan, 'cair') : bulanBasi(await loadPerforma().catch(() => null)) ? null : await bacaTabel(TAB_CAIR);
     if (!t) return NextResponse.json({ ada: false, list: [] }, { headers: { 'Cache-Control': 'no-store' } });
     const k = kolomCair(t.h, t.r);
     // Judul kolom yang dipakai (ditampilkan kecil di aplikasi, untuk cek kalau ada kolom yang salah tebak)

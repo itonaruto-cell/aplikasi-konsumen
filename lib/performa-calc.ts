@@ -403,6 +403,11 @@ export function cekData(data: Performa, now = new Date()): CekData {
   const today = todayJkt(now);
   // Data arsip bulan lalu memang bukan data terbaru: jangan tampilkan peringatan
   if (data.arsip) return { tingkat: 'aman', sebab: '', bulanData: data.arsip, bedaBulan: false, teks: '' };
+  // Bulan baru ditampilkan kosong karena file pantauan bulan ini belum tersambung
+  if (data.menunggu) return {
+    tingkat: 'telat', sebab: 'bulan', bulanData: data.menunggu, bedaBulan: true,
+    teks: `Data ${namaBulan(today)} belum masuk: Apps Script masih mengirim file pantauan ${namaBulan(data.menunggu)}. Performa ${namaBulan(data.menunggu)} tetap bisa dibuka di Saya › Performa bulan lalu.`,
+  };
   const upd = day10(data.updated || '');
   const bulanData = validDay(upd) ? upd.slice(0, 7) : null;
   const bedaBulan = !!bulanData && bulanData < today.slice(0, 7);
