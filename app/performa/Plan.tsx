@@ -4,7 +4,7 @@ import type { Orang } from '../../lib/performa-types';
 import type { Calon } from '../../lib/inject-types';
 import { addDays, belumVisit, brandOf, keyOf, konsumenOf, perluUlang, todayJkt, type BrandKey, type Ctx } from '../../lib/performa-calc';
 import {
-  JENIS, JENIS_LABEL, MIN_AKTIVITAS, ringkas, tanggalPanjang, tanggalPendek, teksPlan, urutkan,
+  JENIS, JENIS_LABEL, MIN_AKTIVITAS, TIDAK_BERTEMU, ringkas, tanggalPanjang, tanggalPendek, teksPlan, urutkan,
   type Jenis, type PlanItem, type StatusPlan,
 } from '../../lib/plan-types';
 import { BrandChip, Ico, Kosong, PillSeg, UnderTabs, shareText, shortName, type BrandId } from './parts';
@@ -12,6 +12,7 @@ import { FIELD, Lembar } from './form';
 import BahanSurvey, { sumberLabel, useBahan } from './Bahan';
 import { tahapOf, type Bahan } from '../../lib/bahan-types';
 import { rp } from './ui';
+import { FotoBukti, kecilkanFoto } from './foto-bukti';
 
 // Plan aktivitas: rencana pagi (minimal 5 aktivitas per staff), realisasi dicentang sepanjang hari,
 // dan report sore siap kirim ke WhatsApp. Semua diisi manual di aplikasi, jadi langsung terlihat owner.
@@ -181,6 +182,7 @@ function Baris({ x, onCentang, onBuka }: { x: PlanItem; onCentang?: () => void; 
         {(x.lokasi || x.catatan) && <span className="text-[13px] leading-snug text-neutral-500">{[x.lokasi, x.catatan].filter(Boolean).join(' · ')}</span>}
         {x.hasil && <span className="text-[13px] leading-snug text-green-700 dark:text-green-300">Hasil: {x.hasil}</span>}
       </button>
+      {x.foto && <span className="flex shrink-0 items-center pr-3"><FotoBukti id={x.foto} nama={x.siapa} /></span>}
     </div>
   );
 }
@@ -420,11 +422,22 @@ function DetailSheet({ x, onClose, onSaved }: { x: PlanItem; onClose: () => void
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const cepat = x.jenis === 'visit' ? ['Bertemu', 'Tidak bertemu'] : x.jenis === 'maintain' ? ['Ada bahan order', 'Belum ada order'] : [];
+  // Khusus Naufal: visit tidak bertemu konsumen wajib lampirkan foto bukti follow up
+  const perluBukti = x.jenis === 'visit' && /NAUFAL/i.test(x.nama) && status === 'selesai' && TIDAK_BERTEMU.test(hasil);
+  const [foto, setFoto] = useState<{ mime: string; data: string; url: string } | null>(null);
+  const [olah, setOlah] = useState(false);
+  const pilihFoto = async (f: File | undefined) => {
+    if (!f) return;
+    setOlah(true); setErr('');
+    try { setFoto(await kecilkanFoto(f)); } catch { setErr('Foto ini tidak bisa dibaca HP (mis. format HEIC). Coba screenshot, atau pilih foto lain dari galeri.'); } finally { setOlah(false); }
+  };
   const simpan = async () => {
+    if (perluBukti && !foto && !x.foto && x.punyaku) { setErr('Tidak bertemu konsumen: lampirkan foto bukti follow up dulu (screenshot chat WhatsApp / riwayat telepon ke konsumen).'); return; }
     setBusy(true); setErr('');
     try {
       const res = await fetch('/api/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           id: x.id, status, hasil, catatan,
+          ...(foto ? { foto: { mime: foto.mime, data: foto.data } } : {}),
           ...(namaBisaDiubah && siapa.trim() && siapa.trim() !== x.siapa ? { siapa: siapa.trim() } : {}),
           ...(lokasi.trim() !== x.lokasi ? { lokasi: lokasi.trim() } : {}),
         }),
@@ -468,6 +481,35 @@ function DetailSheet({ x, onClose, onSaved }: { x: PlanItem; onClose: () => void
             {cepat.map((t) => (
               <button key={t} onClick={() => { setHasil(t); setStatus('selesai'); }} className={PILIH(hasil === t)}>{t}</button>
             ))}
+          </div>
+        )}
+        {(perluBukti || foto || x.foto) && (
+          <div className="mt-3">
+            <p className="text-[13px] font-semibold text-neutral-500">Foto bukti follow up{perluBukti ? ' (wajib karena tidak bertemu)' : ''}</p>
+            {foto ? (
+              <div className="relative mt-1.5 overflow-hidden rounded-2xl bg-neutral-100 dark:bg-neutral-900">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={foto.url} alt="Pratinjau foto bukti" className="max-h-56 w-full object-contain" />
+                <button onClick={() => setFoto(null)} className="absolute right-2 top-2 min-h-9 rounded-full bg-black/70 px-3 text-xs font-semibold text-white">Ganti</button>
+              </div>
+            ) : olah ? (
+              <p className="mt-1.5 flex min-h-14 items-center justify-center rounded-2xl border border-dashed border-neutral-300 text-[15px] font-semibold dark:border-neutral-700">Memproses foto…</p>
+            ) : (
+              <>
+                {x.foto && <div className="mt-1.5"><FotoBukti id={x.foto} nama={x.siapa} /></div>}
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <label className="flex min-h-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-neutral-300 px-3 text-center text-[15px] font-semibold dark:border-neutral-700">
+                    <input type="file" accept="image/*" className="sr-only" aria-label="Pilih foto bukti" onChange={(e) => { pilihFoto(e.target.files?.[0]); e.target.value = ''; }} />
+                    {x.foto ? 'Ganti dari galeri' : 'Galeri / screenshot'}
+                  </label>
+                  <label className="flex min-h-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-neutral-300 px-3 text-center text-[15px] font-semibold dark:border-neutral-700">
+                    <input type="file" accept="image/*" capture="environment" className="sr-only" aria-label="Ambil foto dengan kamera" onChange={(e) => { pilihFoto(e.target.files?.[0]); e.target.value = ''; }} />
+                    Kamera
+                  </label>
+                </div>
+              </>
+            )}
+            <p className="mt-1.5 text-xs text-neutral-500">Screenshot chat WhatsApp / riwayat telepon ke konsumen, atau foto lokasi.</p>
           </div>
         )}
         <label className="mt-3 block text-[13px] font-semibold text-neutral-500">Catatan rencana
