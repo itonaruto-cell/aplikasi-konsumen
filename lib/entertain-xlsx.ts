@@ -7,7 +7,7 @@ import {
   type Berkas, type Gambar,
 } from './xlsx-isi';
 import {
-  namaFileAop, namaFileEnt, namaFileFpd, nomorFpd, nomorIM, pembayaranFpd, periodeDari, sisaAop, sisaDana, tglPanjang, totalEnt,
+  namaFileAop, namaFileEnt, namaFileFpd, nomorFpd, nomorIM, pembayaranFpd, periodeDari, sisaAop, tglPanjang, totalEnt, barisAop, namaFileAopKe, type BarisAop,
   type Entertain,
 } from './entertain-types';
 
@@ -102,9 +102,9 @@ export async function isiFormEntertain(tpl: ArrayBuffer, e: Entertain, foto: { n
 }
 
 /* ---------- Konfirmasi Saldo AOP ---------- */
-export async function isiSaldoAop(tpl: ArrayBuffer, e: Entertain): Promise<Uint8Array> {
+export async function isiSaldoAop(tpl: ArrayBuffer, e: Entertain, r: BarisAop): Promise<Uint8Array> {
   const b = await bukaZip(tpl);
-  const total = totalEnt(e);
+  const total = r.saatIni;
   ubah(b, 'xl/worksheets/sheet3.xml', (x0) => {
     let x = x0;
     x = isiSel(x, 'B3', nomorIM(e));
@@ -117,10 +117,10 @@ export async function isiSaldoAop(tpl: ArrayBuffer, e: Entertain): Promise<Uint8
     x = isiSel(x, 'B15', e.aop.aopProses || null);
     x = nilaiRumus(x, 'B16', sisaAop(e));
     x = isiSel(x, 'B22', e.aop.danaAnggaran || null);
-    x = isiSel(x, 'B23', e.aop.danaTerpakai || null);
-    x = isiSel(x, 'B24', e.aop.danaProses || null);
+    x = isiSel(x, 'B23', r.terpakai || null);
+    x = isiSel(x, 'B24', r.proses || null);
     x = nilaiRumus(x, 'B25', total);
-    x = nilaiRumus(x, 'B26', sisaDana(e));
+    x = nilaiRumus(x, 'B26', r.sisa);
     x = isiSel(x, 'B28', namaFileEnt(e));
     e.aop.disiapkan.slice(0, 2).forEach((a, i) => {
       const r = 32 + i;
@@ -174,12 +174,14 @@ export async function isiFpd(tpl: ArrayBuffer, e: Entertain): Promise<Uint8Array
 }
 
 /* ---------- Ketiganya sekaligus ---------- */
-export async function buatBerkasEntertain(e: Entertain, foto: { nota: FotoData[]; dokumentasi: FotoData[] }, ambil: (path: string) => Promise<ArrayBuffer>): Promise<HasilFile[]> {
+export async function buatBerkasEntertain(e: Entertain, foto: { nota: FotoData[]; dokumentasi: FotoData[] }, ambil: (path: string) => Promise<ArrayBuffer>, semua: Entertain[] = []): Promise<HasilFile[]> {
   const [te, ta, tf] = await Promise.all([ambil('/template/entertain.xlsx'), ambil('/template/saldo-aop.xlsx'), ambil('/template/fpd.xlsx')]);
-  const [fe, fa, ff] = await Promise.all([isiFormEntertain(te, e, foto), isiSaldoAop(ta, e), isiFpd(tf, e)]);
+  // Satu konfirmasi saldo AOP per perjamuan (tempat & waktu), dalam proses bertingkat
+  const aop = barisAop(e, semua);
+  const [fe, ff, ...fa] = await Promise.all([isiFormEntertain(te, e, foto), isiFpd(tf, e), ...aop.map((r) => isiSaldoAop(ta.slice(0), e, r))]);
   return [
     { nama: `${namaFileEnt(e)}.xlsx`, data: fe },
-    { nama: `${namaFileAop(e)}.xlsx`, data: fa },
+    ...aop.map((r, k) => ({ nama: `${namaFileAopKe(e, r, aop.length > 1)}.xlsx`, data: fa[k] })),
     { nama: `${namaFileFpd(e)}.xlsx`, data: ff },
   ];
 }
