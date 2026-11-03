@@ -29,7 +29,9 @@ export type Entertain = {
   aop: {
     perihal: string; beban: string;
     aopTahun: number; aopDeviasi: number; aopTerpakai: number; aopProses: number;
-    danaAnggaran: number; danaTerpakai: number; danaProses: number;
+    danaAnggaran: number;
+    danaTerpakai: number;   // terpakai di luar aplikasi (opsional); form entertain sebelumnya di aplikasi dihitung otomatis
+    danaProses: number;     // tidak dipakai lagi: dalam proses dihitung bertingkat per perjamuan
     disiapkan: Approver[];                             // Prepared by
   };
   fpd: {
@@ -65,7 +67,30 @@ export const namaFileAop = (e: Entertain) => `Form Konfirmasi Saldo AOP Entertai
 export const namaFileFpd = (e: Entertain) => `FPD IM Pengajuan ENTERTAIN MARKETING ${kotaCabang(e.cabang)} ${tglPanjang(tglPerjamuan(e))}`;
 
 export const sisaAop = (e: Entertain) => e.aop.aopTahun + e.aop.aopDeviasi - e.aop.aopTerpakai - e.aop.aopProses;
-export const sisaDana = (e: Entertain) => e.aop.danaAnggaran - e.aop.danaTerpakai - e.aop.danaProses - totalEnt(e);
+
+// Satu file Konfirmasi Saldo AOP per perjamuan (tempat & waktu). Permohonan dalam proses = perjamuan sebelumnya
+// di form ini (bertingkat); dana terpakai = form entertain sebelumnya di bulan yang sama untuk produk yang sama
+// + isian manual di luar aplikasi.
+export type BarisAop = { i: number; p: Perjamuan; terpakai: number; proses: number; saatIni: number; sisa: number };
+const bulanDari = (s: string) => String(s || '').slice(0, 7);
+export function terpakaiSebelumnya(e: Entertain, semua: Entertain[], produk: Perjamuan['produk']): number {
+  const kunci = (x: Entertain) => `${x.tanggal}|${x.dibuat || '9999'}|${x.id}`;
+  return semua
+    .filter((f) => f.id !== e.id && bulanDari(f.tanggal) === bulanDari(e.tanggal) && kunci(f) < kunci(e))
+    .reduce((a, f) => a + f.perjamuan.filter((p) => p.produk === produk).reduce((b, p) => b + (p.nominal || 0), 0), 0);
+}
+export function barisAop(e: Entertain, semua: Entertain[] = []): BarisAop[] {
+  const isi = e.perjamuan.map((p, i) => ({ p, i })).filter(({ p }) => p.nominal || p.tempat);
+  let proses = 0;
+  return isi.map(({ p, i }) => {
+    const terpakai = e.aop.danaTerpakai + terpakaiSebelumnya(e, semua, p.produk);
+    const r = { i, p, terpakai, proses, saatIni: p.nominal || 0, sisa: e.aop.danaAnggaran - terpakai - proses - (p.nominal || 0) };
+    proses += p.nominal || 0;
+    return r;
+  });
+}
+export const namaFileAopKe = (e: Entertain, r: BarisAop, banyak: boolean) =>
+  `Form Konfirmasi Saldo AOP Entertain ${kotaCabang(e.cabang)}_${r.p.produk}_${tglPanjang(r.p.tgl || e.tanggal)}${banyak ? `_${r.i + 1} ${r.p.tempat}`.replace(/[\\/:*?"<>|]/g, ' ').slice(0, 40).trim() : ''}`;
 
 export const perjamuanKosong = (tgl = ''): Perjamuan => ({
   tgl, produk: 'Mobilku', tempat: '', nominal: 0,
@@ -89,7 +114,7 @@ export function entertainBaru(p: Partial<Entertain> = {}): Entertain {
     link: { aop: '', fpd: '' },
     aop: {
       perihal: 'Pengajuan Dana Entertain MA', beban: 'Cabang Kendal',
-      aopTahun: 0, aopDeviasi: 0, aopTerpakai: 0, aopProses: 0, danaAnggaran: 0, danaTerpakai: 0, danaProses: 0,
+      aopTahun: 7_200_000, aopDeviasi: 0, aopTerpakai: 5_049_800, aopProses: 0, danaAnggaran: 1_600_000, danaTerpakai: 0, danaProses: 0,
       disiapkan: [
         { nama: 'Muhammad Aji Susilo', jabatan: 'BRANCH HEAD KENDAL', status: 'Submitted', tgl: '' },
         { nama: 'Dyah Pamungkas P', jabatan: 'BOH', status: 'Confirmed', tgl: '' },

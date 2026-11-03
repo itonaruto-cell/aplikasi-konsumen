@@ -418,7 +418,7 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
     // Pakai lagi data yang biasanya sama dari form sebelumnya (rekening, approver, FPD)
     if (contoh) Object.assign(e, { kode: contoh.kode, pengaju: contoh.pengaju, cabang: contoh.cabang, rekening: contoh.rekening,
       approval: contoh.approval.map((a, i) => (i === 0 ? { ...a, tgl: hari } : { ...a, status: '', tgl: '' })),
-      aop: { ...e.aop, perihal: contoh.aop.perihal, beban: contoh.aop.beban, aopTahun: contoh.aop.aopTahun, danaAnggaran: contoh.aop.danaAnggaran, disiapkan: contoh.aop.disiapkan.map((a, i) => ({ ...a, tgl: i === 0 ? hari : '' })) },
+      aop: { ...e.aop, perihal: contoh.aop.perihal, beban: contoh.aop.beban, aopTahun: contoh.aop.aopTahun || e.aop.aopTahun, aopTerpakai: contoh.aop.aopTerpakai || e.aop.aopTerpakai, danaAnggaran: contoh.aop.danaAnggaran || e.aop.danaAnggaran, disiapkan: contoh.aop.disiapkan.map((a, i) => ({ ...a, tgl: i === 0 ? hari : '' })) },
       fpd: { ...contoh.fpd, nomor: '', pembayaran: '', proses: 0, dibuat: { ...contoh.fpd.dibuat, tgl: hari } } });
     else { e.approval[0].tgl = hari; e.aop.disiapkan[0].tgl = hari; e.fpd.dibuat.tgl = hari; }
     setBukaEnt(e);
@@ -430,7 +430,7 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
   };
   const simpanEnt = useCallback((e: Entertain) => setEntList((l) => [e, ...l.filter((x) => x.id !== e.id)]), []);
 
-  if (bukaEnt) return <EditorEntertain key={bukaEnt.id} awal={bukaEnt} onTutup={() => { buang(BUKA); setBukaEnt(null); muat(); }} onSimpan={simpanEnt} />;
+  if (bukaEnt) return <EditorEntertain key={bukaEnt.id} awal={bukaEnt} semua={entList} onTutup={() => { buang(BUKA); setBukaEnt(null); muat(); }} onSimpan={simpanEnt} />;
   if (buka) return <Editor key={buka.id} awal={buka} onTutup={() => { buang(BUKA); setBuka(null); muat(); }} onSimpan={simpanLokal} />;
 
   return (
@@ -457,7 +457,7 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-[20px] font-bold dark:bg-neutral-800">+</span>
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-bold">Form entertain</span>
-          <span className="block text-[12px] text-neutral-500">F-384 + Konfirmasi Saldo AOP + FPD, sekali isi jadi 3 file Excel</span>
+          <span className="block text-[12px] text-neutral-500">F-384 + Konfirmasi Saldo AOP + FPD, sekali isi jadi file Excel siap kirim (AOP per tempat & waktu)</span>
         </span>
       </button>
       <p className="mt-2 text-[12px] text-neutral-500">Kirim contoh surat lain untuk ditambahkan sebagai template.</p>

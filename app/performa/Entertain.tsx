@@ -1,9 +1,9 @@
 'use client';
 // Form Entertain Marketing Agent (F-384) + Konfirmasi Saldo AOP + FPD: diisi sekali di aplikasi,
-// hasilnya tiga file Excel dengan format template kantor. Data yang sama otomatis dipakai di ketiganya.
+// hasilnya file Excel (F-384, satu konfirmasi saldo AOP per perjamuan, FPD) dengan format template kantor. Data yang sama otomatis dipakai di ketiganya.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  PRODUK, namaFileAop, namaFileEnt, namaFileFpd, nomorFpd, nomorIM, pembayaranFpd, perjamuanKosong, periodeDari, rapikanEntertain, sisaAop, sisaDana, tglPanjang, totalEnt,
+  PRODUK, namaFileAop, namaFileEnt, namaFileFpd, nomorFpd, nomorIM, pembayaranFpd, perjamuanKosong, periodeDari, rapikanEntertain, sisaAop, tglPanjang, totalEnt, barisAop,
   type Approver, type Entertain, type FotoEnt, type Perjamuan,
 } from '../../lib/entertain-types';
 import { buatBerkasEntertain, type FotoData } from '../../lib/entertain-xlsx';
@@ -40,7 +40,7 @@ async function ambilTemplate(path: string) {
 const input = `${FIELD} min-h-11`;
 const kecil = 'min-h-10 w-full rounded-lg border border-neutral-300 bg-white px-2 text-[14px] outline-none focus:ring-2 focus:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-950';
 
-export function EditorEntertain({ awal, onTutup, onSimpan }: { awal: Entertain; onTutup: () => void; onSimpan: (e: Entertain) => void }) {
+export function EditorEntertain({ awal, semua = [], onTutup, onSimpan }: { awal: Entertain; semua?: Entertain[]; onTutup: () => void; onSimpan: (e: Entertain) => void }) {
   useOverlay(true, onTutup);
   const [mulai] = useState(() => {
     const d = baca<{ t: number; e: Entertain }>(DRAF + awal.id);
@@ -128,7 +128,7 @@ export function EditorEntertain({ awal, onTutup, onSimpan }: { awal: Entertain; 
       const ok = <T,>(a: (T | null)[]) => a.filter((y): y is T => !!y);
       const gagal = nota.length + dok.length - ok(nota).length - ok(dok).length;
       if (gagal) setPesan(`${gagal} foto tidak bisa dimuat dan tidak ikut di file.`);
-      const hasil = await buatBerkasEntertain(x, { nota: ok(nota), dokumentasi: ok(dok) }, ambilTemplate);
+      const hasil = await buatBerkasEntertain(x, { nota: ok(nota), dokumentasi: ok(dok) }, ambilTemplate, semua);
       const files = hasil.map((h) => new File([h.data.buffer as ArrayBuffer], h.nama, { type: TIPE_XLSX }));
       if (bagikan && navigator.canShare?.({ files })) {
         try { await navigator.share({ files, title: namaFileEnt(x) }); return; } catch (err) { if ((err as Error)?.name === 'AbortError') return; }
@@ -144,6 +144,8 @@ export function EditorEntertain({ awal, onTutup, onSimpan }: { awal: Entertain; 
   };
 
   const total = totalEnt(e);
+  const aop = barisAop(e, semua);
+  const sisaAkhir = aop.length ? aop[aop.length - 1].sisa : e.aop.danaAnggaran - e.aop.danaTerpakai;
   const baris = (label: string, nilai: string, onChange: (v: string) => void, ph = '') => (
     <Isian label={label}><input value={nilai} onChange={(ev) => onChange(ev.target.value)} placeholder={ph} aria-label={label} className={input} /></Isian>
   );
@@ -294,7 +296,7 @@ export function EditorEntertain({ awal, onTutup, onSimpan }: { awal: Entertain; 
         {baris('Cabang bank (untuk FPD)', e.rekening.cabangBank, (v) => set('rekening', { ...e.rekening, cabangBank: v }))}
       </Bagian>
 
-      <Bagian judul="Saldo AOP (isi manual)" sub={`Sisa AOP ${rupiah(sisaAop(e))} · sisa dana ${rupiah(sisaDana(e))}`}>
+      <Bagian judul="Saldo AOP" sub={`${aop.length} form konfirmasi · sisa AOP ${rupiah(sisaAop(e))} · sisa dana ${rupiah(sisaAkhir)}`}>
         {baris('Perihal', e.aop.perihal, (v) => setAop('perihal', v))}
         {baris('Beban biaya', e.aop.beban, (v) => setAop('beban', v))}
         <p className="mt-4 text-[13px] font-bold">Data saldo AOP · COA By. Entertain Marketing 52001201</p>
@@ -308,11 +310,22 @@ export function EditorEntertain({ awal, onTutup, onSimpan }: { awal: Entertain; 
         <p className="mt-4 text-[13px] font-bold">Data saldo anggaran (dana anggaran + tambahan + deviasi)</p>
         <div className="grid grid-cols-2 gap-2">
           {uang('Dana anggaran', e.aop.danaAnggaran, (v) => setAop('danaAnggaran', v))}
-          {uang('Dana anggaran terpakai', e.aop.danaTerpakai, (v) => setAop('danaTerpakai', v))}
-          {uang('Permohonan dalam proses', e.aop.danaProses, (v) => setAop('danaProses', v))}
-          <Isian label="Permohonan saat ini"><span className="flex min-h-11 items-center rounded-xl bg-neutral-100 px-3 text-base dark:bg-neutral-900">{rupiah(total)}</span></Isian>
+          {uang('Terpakai di luar aplikasi (opsional)', e.aop.danaTerpakai, (v) => setAop('danaTerpakai', v))}
         </div>
-        <p className={`mt-2 rounded-xl px-3 py-2 text-[14px] ${sisaDana(e) < 0 ? 'bg-red-50 text-red-800 dark:bg-red-950/50 dark:text-red-300' : 'bg-neutral-100 dark:bg-neutral-900'}`}>Sisa dana anggaran <b>{rupiah(sisaDana(e))}</b>{sisaDana(e) < 0 ? ' · melebihi anggaran' : ''}</p>
+        <p className="mt-1.5 text-xs leading-snug text-neutral-500">Dana terpakai otomatis dari form entertain sebelumnya di bulan yang sama (produk sama). Dalam proses bertingkat dari perjamuan sebelumnya di form ini.</p>
+        <p className="mt-3 text-[13px] font-bold">Satu form konfirmasi per tempat & waktu</p>
+        {aop.length === 0 && <p className="mt-1 text-[14px] text-neutral-500">Isi perjamuan dulu.</p>}
+        {aop.map((r, k) => (
+          <div key={r.i} className={`mt-2 rounded-xl px-3 py-2.5 text-[14px] ${r.sisa < 0 ? 'bg-red-50 text-red-900 dark:bg-red-950/50 dark:text-red-200' : 'bg-neutral-100 dark:bg-neutral-900'}`}>
+            <p className="font-bold">{k + 1}. {r.p.tempat || 'Perjamuan'} · {tglPanjang(r.p.tgl || e.tanggal)} · {r.p.produk}</p>
+            <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
+              <dt className="text-neutral-500">Sudah terpakai</dt><dd className="text-right">{rupiah(r.terpakai)}</dd>
+              <dt className="text-neutral-500">Dalam proses</dt><dd className="text-right">{rupiah(r.proses)}</dd>
+              <dt className="text-neutral-500">Permohonan saat ini</dt><dd className="text-right font-semibold">{rupiah(r.saatIni)}</dd>
+              <dt className="text-neutral-500">Sisa dana</dt><dd className="text-right font-bold">{rupiah(r.sisa)}{r.sisa < 0 ? ' · melebihi' : ''}</dd>
+            </dl>
+          </div>
+        ))}
         {daftarApprover('Prepared by', e.aop.disiapkan, (l) => setAop('disiapkan', l))}
       </Bagian>
 
@@ -356,8 +369,8 @@ export function EditorEntertain({ awal, onTutup, onSimpan }: { awal: Entertain; 
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+64px)] z-30 border-t border-neutral-200 bg-white/95 px-4 py-2.5 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <div className="mx-auto grid max-w-xl grid-cols-[1fr_auto] gap-2">
-          <button onClick={() => unduh(false)} disabled={sibuk || !total} className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900">{sibuk ? 'Menyiapkan…' : 'Unduh 3 file Excel'}</button>
-          <button onClick={() => unduh(true)} disabled={sibuk || !total} aria-label="Bagikan 3 file Excel" className="min-h-12 rounded-2xl bg-[#0F8048] px-4 text-[15px] font-bold text-white disabled:opacity-40">Bagikan</button>
+          <button onClick={() => unduh(false)} disabled={sibuk || !total} className="min-h-12 rounded-2xl bg-neutral-900 text-[15px] font-bold text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900">{sibuk ? 'Menyiapkan…' : `Unduh ${aop.length + 2} file Excel`}</button>
+          <button onClick={() => unduh(true)} disabled={sibuk || !total} aria-label={`Bagikan ${aop.length + 2} file Excel`} className="min-h-12 rounded-2xl bg-[#0F8048] px-4 text-[15px] font-bold text-white disabled:opacity-40">Bagikan</button>
         </div>
       </div>
     </div>
