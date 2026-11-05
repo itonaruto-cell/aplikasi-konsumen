@@ -9,7 +9,7 @@ const enc = new TextEncoder();
 const EMU = 914400; // per inci
 
 type Run = { t: string; b?: boolean; i?: boolean; u?: boolean; sz?: number; font?: string; tab?: boolean; br?: boolean };
-type ParOpt = { jc?: 'left' | 'center' | 'both'; left?: number; hanging?: number; after?: number; before?: number; pageBreak?: boolean; keepNext?: boolean; tabs?: number[] };
+type ParOpt = { jc?: 'left' | 'center' | 'both'; left?: number; hanging?: number; after?: number; before?: number; pageBreak?: boolean; keepNext?: boolean; tabs?: number[]; garisBawah?: boolean };
 
 function buat(fontUtama: string) {
   const run = (x: Run) => {
@@ -21,6 +21,7 @@ function buat(fontUtama: string) {
     const ppr = [
       o.pageBreak ? '<w:pageBreakBefore/>' : '',
       o.keepNext ? '<w:keepNext/>' : '',
+      o.garisBawah ? '<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="1" w:color="000000"/></w:pBdr>' : '',
       o.tabs?.length ? `<w:tabs>${o.tabs.map((t) => `<w:tab w:val="left" w:pos="${t}"/>`).join('')}</w:tabs>` : '',
       `<w:spacing w:before="${o.before ?? 0}" w:after="${o.after ?? 0}" w:line="264" w:lineRule="auto"/>`,
       o.left || o.hanging ? `<w:ind w:left="${o.left || 0}" w:hanging="${o.hanging || 0}"/>` : '',
@@ -92,13 +93,15 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
         b.baris.forEach((x, i) => p([{ t: x.teks, b: x.tebal, u: x.garis, sz: b.besar ? t.sz + 4 : undefined, font: t.fontKop }], { jc: b.kiri ? 'left' : 'center', after: i === b.baris.length - 1 ? 240 : 60 }));
         break;
       case 'info': {
-        const tab = 1700;
+        const tab = 1700, kol2 = tab + 140 + 3600;
+        // "nama\tjabatan" → kolom kedua rata di satu posisi tab
+        const bt = (x: string): Run[] => x.split('\t').flatMap((bagian, j) => baris(bagian).map((r, k) => (j > 0 && k === 0 ? { ...r, tab: true } : r)));
         for (const [l, v] of b.baris) {
           const [awal, ...lain] = v.split('\n');
-          p([{ t: l, b: b.tebalLabel }, { t: ': ', tab: true }, ...baris(awal)], { jc: 'left', tabs: [tab], left: tab + 140, hanging: tab + 140, after: lain.length ? 0 : 40 });
-          lain.forEach((x, i) => p(baris(x), { jc: 'left', left: tab + 140, after: i === lain.length - 1 ? 40 : 0 }));
+          p([{ t: l, b: b.tebalLabel }, { t: ': ', tab: true }, ...bt(awal)], { jc: 'left', tabs: [tab, kol2], left: tab + 140, hanging: tab + 140, after: lain.length ? 0 : 40 });
+          lain.forEach((x, i) => p(bt(x), { jc: 'left', tabs: [kol2], left: tab + 140, after: i === lain.length - 1 ? 40 : 0 }));
         }
-        p('', { after: 120 });
+        p('', b.garis ? { after: 200, garisBawah: true } : { after: 120 });
         break;
       }
       case 'approval': tabelApproval(b); break;

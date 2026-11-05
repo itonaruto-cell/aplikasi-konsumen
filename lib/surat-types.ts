@@ -13,6 +13,7 @@ export type Surat = {
   noUrut: string; kode: string; tanggal: string; // nomor = noUrut/kode/bulan romawi/tahun (dari tanggal surat)
   approval: string; tglApproval: string; ket: string; // baris "Dibuat oleh"
   data: Record<string, string>;
+  baris?: Record<string, string>[];   // template dengan daftar berulang (mis. beberapa konsumen dalam satu BA)
   lampiran: LampiranSurat[];
 };
 
@@ -20,6 +21,9 @@ export type Surat = {
 export type IsianData = {
   k: string; label: string; ph?: string; besar?: boolean; saran?: string[];
   jenis?: 'teks' | 'tanggal' | 'panjang' | 'uang'; awal?: string; grup?: 'data' | 'isi';
+  fmt?: FormatTgl;        // format tanggal di surat (bawaan: panjang)
+  sembunyi?: boolean;     // tidak ditampilkan di editor (diisi otomatis)
+  dari?: string;          // kalau kosong, pakai isian lain (di baris yang sama)
 };
 type Kolom = 'peran' | 'nama' | 'jabatan' | 'status' | 'tanggal' | 'ket';
 type FormatTgl = 'panjang' | 'pendek' | 'angka';
@@ -33,12 +37,13 @@ export type Approval = {
 type Teks = string; // boleh berisi {kunci} / {kunci:format} dan **tebal**
 export type Blok =
   | { t: 'kop'; baris: Teks[]; garis?: boolean | boolean[]; tebal?: boolean[]; besar?: boolean; kiri?: boolean }
-  | { t: 'info'; baris: [string, Teks][]; tebalLabel?: boolean }
+  | { t: 'info'; baris: [string, Teks][]; tebalLabel?: boolean; garis?: boolean }   // \t di nilai = kolom kedua
   | { t: 'approval' }
   | { t: 'p'; teks: Teks; tebal?: boolean; kiri?: number; spasi?: number; tengah?: boolean }
   | { t: 'bagian'; no: string; judul: string; kiri?: number }
   | { t: 'daftar'; isi: Teks[]; kiri?: number }
   | { t: 'data'; keys: string[]; nomorPertama?: boolean; tebal?: boolean; kiri?: number; lebarLabel?: number }
+  | { t: 'dataBaris'; keys: string[]; kiri?: number; lebarLabel?: number }   // isian per baris, bernomor 1., 2., …
   | { t: 'halaman' }
   | { t: 'lampiran'; judul?: string; nomor: boolean };
 export type TemplateSurat = {
@@ -46,6 +51,9 @@ export type TemplateSurat = {
   font: string; fontKop?: string; sz: number; szTabel: number; kertas: 'letter' | 'a4'; margin?: number;
   judul: string; perihal: Teks; perihalDiKop?: boolean;
   approval: Approval; isian: IsianData[]; blok: Blok[]; lampiran: string[];
+  baris?: { label: string; isian: IsianData[] };   // daftar berulang, mis. konsumen 1, 2, …
+  namaFile?: Teks;              // nama file kalau beda dengan perihal
+  lampiranOpsional?: boolean;   // halaman lampiran hanya ada kalau ada foto
 };
 
 const NIKO = 'Niko Widyasmara';
@@ -252,6 +260,76 @@ export const TEMPLATE_SURAT: TemplateSurat[] = [
     ],
     lampiran: ['STNK', 'BPKB', 'FAKTUR', 'Approval History'],
   },
+  {
+    id: 'bpkb-cross', nama: 'BA Received BPKB Cross Branch',
+    ringkas: 'BPKB take over diterima & di-received di cabang lain (bisa beberapa konsumen sekaligus)',
+    font: 'Times New Roman', sz: 22, szTabel: 22, kertas: 'a4', margin: 1440,
+    judul: 'BERITA ACARA', lampiranOpsional: true,
+    perihal: 'Berita Acara BPKB Received Cross Branch di Cabang {cabTujuan}',
+    namaFile: 'BA RECEIVED BPKB CROSS BRANCH CABANG KENDAL AN {namaBaris:upper}',
+    approval: {
+      kolom: [['nama', 'Approved By'], ['jabatan', 'Jabatan'], ['status', 'Approval Status'], ['tanggal', 'Tanggal'], ['ket', 'Note']],
+      lebar: [1905, 2250, 1830, 1695, 3195], fill: 'B8CCE4',
+      pembuat: { nama: NIKO, jabatan: 'BMH Mobilku Kendal' },
+      penyetuju: [
+        { nama: 'Dyah Pamungkas P', jabatan: 'BOH Kendal' },
+        { nama: 'M. Aji Susilo', jabatan: 'Branch Head Kendal' },
+        { nama: '{bmhTujuan}', jabatan: 'BMH {cabTujuan}' },
+        { nama: '{bohTujuan}', jabatan: 'BOH {cabTujuan}' },
+        { nama: '{bhTujuan}', jabatan: 'Branch Head {cabTujuan}' },
+        { nama: 'Veronica Untik', jabatan: 'AMM Jatara' },
+        { nama: 'Geri Neno Aprilia', jabatan: 'AOM Jateng Utara' },
+      ],
+      status: ['Submitted', ''], tgl: 'panjang', tglHariIni: true,
+    },
+    isian: [
+      { k: 'nama', label: 'Nama konsumen', sembunyi: true },
+      { k: 'app', label: 'No APP', sembunyi: true },
+      { k: 'cabTujuan', label: 'Cabang tujuan (singkat)', grup: 'isi', awal: 'Semarang 1', ph: 'Semarang 1' },
+      { k: 'tujuan', label: 'Cabang tujuan (lengkap)', grup: 'isi', awal: 'Semarang 1 Semarang Selatan', ph: 'Semarang 1 Semarang Selatan' },
+      { k: 'sapaBh', label: 'Sapaan BH tujuan', grup: 'isi', awal: 'Bpk', saran: ['Bpk', 'Ibu'] },
+      { k: 'bhTujuan', label: 'Branch Head cabang tujuan', grup: 'isi', awal: 'Ali Bambang Suprapto' },
+      { k: 'sapaBoh', label: 'Sapaan BOH tujuan', grup: 'isi', awal: 'Ibu', saran: ['Bpk', 'Ibu'] },
+      { k: 'bohTujuan', label: 'BOH cabang tujuan', grup: 'isi', awal: 'Vivian Ayu C' },
+      { k: 'bmhTujuan', label: 'BMH cabang tujuan', grup: 'isi', awal: 'Grace Natalia Br Purba' },
+      { k: 'asalTo', label: 'Take over dari', grup: 'isi', ph: 'Mandiri Tunas Finance Semarang' },
+      { k: 'alasan', label: 'Alasan received di cabang tujuan', jenis: 'panjang', grup: 'isi',
+        ph: 'Branch Head yang melakukan pengambilan BPKB melanjutkan aktivitas visit konsumen Fleet Kendal an Hengky Susanto untuk penawaran pelunasan' },
+    ],
+    baris: { label: 'Konsumen', isian: [
+      { k: 'app', label: 'No APP', ph: 'APP0631…', besar: true },
+      { k: 'nama', label: 'Nama Konsumen', besar: true },
+      { k: 'fincoy', label: 'Finance Take Over', ph: 'Mandiri Tunas Finance' },
+      { k: 'ph', label: 'Pokok Hutang', jenis: 'uang' },
+      { k: 'tglGolive', label: 'Tanggal Go Live', jenis: 'tanggal', fmt: 'angka' },
+      { k: 'namaBpkb', label: 'Nama BPKB', besar: true, ph: 'Kosongkan kalau sama dengan nama konsumen', dari: 'nama' },
+      { k: 'tipe', label: 'Type Kendaraan', besar: true, ph: 'DAIHATSU SIGRA D 1.0 M/T 2023' },
+      { k: 'nopol', label: 'No Polisi', besar: true, ph: 'H1136DD' },
+      { k: 'rangka', label: 'No Rangka', besar: true },
+      { k: 'mesin', label: 'No Mesin', besar: true },
+    ] },
+    blok: [
+      { t: 'info', garis: true, baris: [
+        ['Nomor', '{nomor}'],
+        ['Kepada', 'Ibu Geri Neno Aprilia\tAOM Jateng Utara\nIbu Veronica Untik\tAMM NDS Jatara\nBpk M. Aji Susilo\tBranch Head Kendal\n{sapaBh} {bhTujuan}\tBranch Head {cabTujuan}\n{sapaBoh} {bohTujuan}\tBOH {cabTujuan}\nIbu Dyah Pamungkas P\tBOH Kendal'],
+        ['Dari', `${NIKO}\tBMH MobilKu`],
+        ['Cabang', 'Kendal'],
+        ['Tanggal', '{tanggal:panjang}'],
+        ['Perihal', '{perihal}'],
+      ] },
+      { t: 'approval' },
+      { t: 'p', teks: 'Kronologis', tebal: true, spasi: 160 },
+      { t: 'p', teks: 'Telah dilakukan persetujuan dan Go Live aplikasi dengan detail sbb :', spasi: 120 },
+      { t: 'dataBaris', keys: ['app', 'nama', 'fincoy', 'ph', 'tglGolive'], kiri: 360, lebarLabel: 2000 },
+      { t: 'p', teks: '{jumlahBaris} tersebut di atas melakukan pengajuan take over dari {asalTo}. Melalui Berita Acara berikut Cabang Kendal mengajukan Receive BPKB di Cabang {tujuan} dikarenakan {alasan} kemudian BPKB akan diterima oleh BOH cabang {tujuan} dan dilakukan received di Cabang {tujuan} dikarenakan kondisi tersebut.', spasi: 200 },
+      { t: 'p', teks: 'Detail BPKB yang diserahkan di {tujuan}:', spasi: 120 },
+      { t: 'dataBaris', keys: ['namaBpkb', 'tipe', 'nopol', 'rangka', 'mesin'], kiri: 360, lebarLabel: 2000 },
+      { t: 'p', teks: 'Demikian berita acara ini dibuat agar dapat dipergunakan sebagaimana mestinya', spasi: 120 },
+      { t: 'halaman' },
+      { t: 'lampiran', judul: 'Lampiran', nomor: false },
+    ],
+    lampiran: [],
+  },
 ];
 export const templateSurat = (id: string) => TEMPLATE_SURAT.find((t) => t.id === id) || TEMPLATE_SURAT[0];
 
@@ -288,21 +366,40 @@ export function isiTeks(teks: string, s: Surat, kosong = '…'): string {
     else if (k === 'perihal') v = perihalSurat(s);
     else if (k === 'tanggal') v = s.tanggal;
     else if (k === 'lampiranDaftar') v = s.lampiran.map((l, i) => `${i + 1}. ${l.judul}`).join('\n');
+    else if (k === 'namaBaris') v = namaBaris(s);
+    else if (k === 'jumlahBaris') { const n = barisTerisi(s).length; v = n > 1 ? `${KATA_ANGKA[n] || n} konsumen` : 'Konsumen'; }
     else v = (s.data[k] || '').trim();
     if (!v) return kosong;
     if (f === 'upper') return v.toUpperCase();
     if (f) return tglFormat(v, f as FormatTgl);
     const isian = t.isian.find((x) => x.k === k);
-    if (isian?.jenis === 'tanggal') return tglFormat(v, 'panjang');
+    if (isian?.jenis === 'tanggal') return tglFormat(v, isian.fmt || 'panjang');
     return v;
   });
+}
+// Daftar berulang (konsumen 1, 2, …)
+const KATA_ANGKA = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh'];
+export const barisKosong = (t: TemplateSurat): Record<string, string> => Object.fromEntries((t.baris?.isian || []).map((d) => [d.k, d.awal || '']));
+export const barisTerisi = (s: Surat) => (s.baris || []).filter((r) => Object.values(r).some((v) => (v || '').trim()));
+export const namaBaris = (s: Surat) => barisTerisi(s).map((r) => (r.nama || '').trim()).filter(Boolean).join(' & ');
+/** Nilai isian baris untuk surat (fallback `dari`, tanggal diformat). */
+export function nilaiBaris(t: TemplateSurat, r: Record<string, string>, k: string): string {
+  const d = t.baris?.isian.find((x) => x.k === k);
+  const v = (r[k] || '').trim() || (d?.dari ? (r[d.dari] || '').trim() : '');
+  return d?.jenis === 'tanggal' ? tglFormat(v, d.fmt || 'panjang') : v;
+}
+/** Nama & No APP surat dari daftar baris (dipakai daftar surat & syarat simpan). */
+export function sinkronBaris(s: Surat): Surat {
+  if (!templateSurat(s.template).baris) return s;
+  const isi = barisTerisi(s);
+  return { ...s, data: { ...s.data, nama: namaBaris(s), app: isi.map((r) => (r.app || '').trim()).filter(Boolean).join(', ') } };
 }
 export const perihalSurat = (s: Surat): string => (s.perihalOtomatis ? isiTeks(templateSurat(s.template).perihal, { ...s, perihalOtomatis: false, perihal: '' }) : s.perihal);
 /** Nilai isian untuk ditampilkan di surat (tanggal diformat). */
 export function nilaiIsian(s: Surat, k: string): string {
   const d = templateSurat(s.template).isian.find((x) => x.k === k);
   const v = (s.data[k] || '').trim();
-  return d?.jenis === 'tanggal' ? tglFormat(v, 'panjang') : v;
+  return d?.jenis === 'tanggal' ? tglFormat(v, d.fmt || 'panjang') : v;
 }
 
 export function suratBaru(template: string, x: Partial<Surat> = {}): Surat {
@@ -314,6 +411,7 @@ export function suratBaru(template: string, x: Partial<Surat> = {}): Surat {
     approval: t.approval.status[0], tglApproval: t.approval.tglHariIni ? tanggal : '', ket: t.approval.ketAwal || '',
     data: Object.fromEntries(t.isian.map((d) => [d.k, d.awal || (d.jenis === 'tanggal' && tanggal ? tanggal : '')])),
     lampiran: t.lampiran.map((judul) => ({ judul, foto: [] })),
+    ...(t.baris ? { baris: [barisKosong(t)] } : {}),
     ...x,
   };
 }
@@ -341,12 +439,19 @@ export function rapikanSurat(x: unknown): Surat {
     noUrut: str(o.noUrut, 20), kode: str(o.kode, 60) || 'MKT-KENDAL', tanggal: /^\d{4}-\d{2}-\d{2}$/.test(str(o.tanggal)) ? str(o.tanggal) : '',
     approval: typeof o.approval === 'string' ? str(o.approval, 60) : t.approval.status[0], tglApproval: str(o.tglApproval, 40), ket: str(o.ket, 300),
     data: Object.fromEntries(t.isian.map((f) => [f.k, typeof d[f.k] === 'string' ? str(d[f.k], 600) : f.awal || ''])),
+    ...(t.baris ? { baris: (() => {
+      const rows = (Array.isArray(o.baris) ? o.baris : []).slice(0, 20).map((r) => {
+        const y = (r && typeof r === 'object' ? r : {}) as Record<string, unknown>;
+        return Object.fromEntries(t.baris!.isian.map((f) => [f.k, str(y[f.k], 300)]));
+      });
+      return rows.length ? rows : [barisKosong(t)];
+    })() } : {}),
     lampiran,
   };
 }
 
 export const namaFileSurat = (s: Surat) =>
-  perihalSurat({ ...s, data: { ...s.data, nama: s.data.nama || 'tanpa nama' } }).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  (templateSurat(s.template).namaFile ? isiTeks(templateSurat(s.template).namaFile!, s, 'tanpa nama') : perihalSurat({ ...s, data: { ...s.data, nama: s.data.nama || 'tanpa nama' } })).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Nomor urut berikutnya: terbesar di daftar + 1 (sebagai saran, tetap bisa diubah). */
 export function noUrutBerikut(list: Surat[]): string {
@@ -358,7 +463,7 @@ export function noUrutBerikut(list: Surat[]): string {
 export type SelApproval = { teks: string; rowSpan?: number; lanjut?: boolean };
 export type BlokJadi =
   | { t: 'kop'; baris: { teks: string; tebal: boolean; garis: boolean }[]; besar: boolean; kiri: boolean }
-  | { t: 'info'; baris: [string, string][]; tebalLabel: boolean }
+  | { t: 'info'; baris: [string, string][]; tebalLabel: boolean; garis: boolean }
   | { t: 'approval'; judul?: string; fill?: string; tengah: boolean; lebar: number[]; kepala: string[]; kepalaGabung: number; kepalaTebal: boolean; peranTebal: boolean; baris: SelApproval[][] }
   | { t: 'p'; teks: string; tebal: boolean; kiri: number; spasi: number; tengah: boolean }
   | { t: 'bagian'; no: string; judul: string; kiri: number }
@@ -370,17 +475,21 @@ export type BlokJadi =
 export function susunSurat(s: Surat): BlokJadi[] {
   const t = templateSurat(s.template);
   const a = t.approval;
-  return t.blok.map((b): BlokJadi => {
+  const adaFoto = s.lampiran.some((l) => l.foto.length);
+  const blok = t.lampiranOpsional && !adaFoto
+    ? t.blok.filter((b, i) => b.t !== 'lampiran' && !(b.t === 'halaman' && t.blok[i + 1]?.t === 'lampiran'))
+    : t.blok;
+  return blok.map((b): BlokJadi => {
     switch (b.t) {
       case 'kop': {
         const garis = (i: number) => (Array.isArray(b.garis) ? !!b.garis[i] : !!b.garis);
         const baris = b.baris.flatMap((x, i) => isiTeks(x, s).split('\n').map((teks) => ({ teks, tebal: b.tebal ? b.tebal[i] !== false : true, garis: garis(i) })));
         return { t: 'kop', baris, besar: !!b.besar, kiri: !!b.kiri };
       }
-      case 'info': return { t: 'info', baris: b.baris.map(([l, v]) => [l, isiTeks(v, s)]), tebalLabel: !!b.tebalLabel };
+      case 'info': return { t: 'info', baris: b.baris.map(([l, v]) => [l, isiTeks(v, s)]), tebalLabel: !!b.tebalLabel, garis: !!b.garis };
       case 'approval': {
         const nilai = (k: Kolom, r: { peran?: string; nama: string; jabatan: string }, niko: boolean) =>
-          k === 'peran' ? r.peran || '' : k === 'nama' ? r.nama : k === 'jabatan' ? r.jabatan
+          k === 'peran' ? r.peran || '' : k === 'nama' ? isiTeks(r.nama, s, '') : k === 'jabatan' ? isiTeks(r.jabatan, s, '')
             : !niko ? '' : k === 'status' ? s.approval : k === 'tanggal' ? tglFormat(s.tglApproval, a.tgl) : s.ket;
         const semua = [{ r: a.pembuat, niko: true }, ...a.penyetuju.map((r) => ({ r, niko: false }))];
         const baris = semua.map(({ r, niko }, i) => a.kolom.map(([k]): SelApproval => {
@@ -398,6 +507,10 @@ export function susunSurat(s: Surat): BlokJadi[] {
       case 'data': return {
         t: 'data', tebal: !!b.tebal, kiri: b.kiri || 0, lebarLabel: b.lebarLabel || 2200,
         baris: b.keys.map((k, i) => [b.nomorPertama && i === 0 ? '1.' : '', t.isian.find((x) => x.k === k)?.label || k, nilaiIsian(s, k)]),
+      };
+      case 'dataBaris': return {
+        t: 'data', tebal: false, kiri: b.kiri || 0, lebarLabel: b.lebarLabel || 2200,
+        baris: barisTerisi(s).flatMap((r, i) => b.keys.map((k, j): [string, string, string] => [j === 0 ? `${i + 1}.` : '', t.baris?.isian.find((x) => x.k === k)?.label || k, nilaiBaris(t, r, k)])),
       };
       case 'halaman': return { t: 'halaman' };
       case 'lampiran': return { t: 'lampiran', judul: b.judul || 'Lampiran', nomor: b.nomor, isi: s.lampiran };

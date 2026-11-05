@@ -3,7 +3,7 @@
 // isian yang berubah tiap konsumen, dan foto lampiran. Hasilnya file Word (.docx) dengan susunan format kantor.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  TEMPLATE_SURAT, namaFileSurat, noUrutBerikut, nomorSurat, perihalSurat, potongTebal, rapikanSurat, ribuan, suratBaru, susunSurat, templateSurat,
+  TEMPLATE_SURAT, barisKosong, isiTeks, namaFileSurat, noUrutBerikut, nomorSurat, perihalSurat, potongTebal, rapikanSurat, ribuan, sinkronBaris, suratBaru, susunSurat, templateSurat,
   type BlokJadi, type FotoSurat, type IsianData, type Surat, type TemplateSurat,
 } from '../../lib/surat-types';
 import { TIPE_DOCX, buatDocxSurat, type FotoDocx } from '../../lib/surat-docx';
@@ -70,7 +70,13 @@ function HalamanSurat({ s }: { s: Surat }) {
       {isi.map((b, i) => {
         switch (b.t) {
           case 'kop': return <div key={i} className={`mb-3 ${b.kiri ? 'text-left' : 'text-center'}`} style={{ fontFamily: t.fontKop }}>{b.baris.map((x, j) => <p key={j} className={`${x.tebal ? 'font-bold' : ''} ${x.garis ? 'underline' : ''} ${b.besar ? 'text-[12px]' : ''}`}>{x.teks}</p>)}</div>;
-          case 'info': return <table key={i} className="mb-3"><tbody>{b.baris.map(([l, v]) => <tr key={l}><td className={`w-[90px] align-top ${b.tebalLabel ? 'font-bold' : ''}`}>{l}</td><td className="w-3 align-top">:</td><td className="align-top"><Teks teks={v} /></td></tr>)}</tbody></table>;
+          case 'info': return (
+            <div key={i} className={b.garis ? 'mb-4 border-b-2 border-black pb-2' : ''}>
+              <table className="mb-3"><tbody>{b.baris.map(([l, v]) => <tr key={l}><td className={`w-[90px] align-top ${b.tebalLabel ? 'font-bold' : ''}`}>{l}</td><td className="w-3 align-top">:</td><td className="align-top">
+                {v.includes('\t') ? v.split('\n').map((x, j) => { const [a1, ...a2] = x.split('\t'); return <span key={j} className="grid grid-cols-[1fr_1fr] gap-2"><span>{a1}</span><span>{a2.join(' ')}</span></span>; }) : <Teks teks={v} />}
+              </td></tr>)}</tbody></table>
+            </div>
+          );
           case 'approval': return (
             <table key={i} className="mb-3 w-full table-fixed border-collapse text-[9.5px]" style={{ fontFamily: t.fontKop }}>
               <colgroup>{b.lebar.map((w, j) => <col key={j} style={{ width: `${(w / b.lebar.reduce((x, y) => x + y, 0)) * 100}%` }} />)}</colgroup>
@@ -155,7 +161,7 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
   const antre = useRef<Promise<unknown>>(Promise.resolve());
   const t = templateSurat(s.template);
 
-  const ganti = (f: (x: Surat) => Surat) => { setS(f); ubah.current++; kotor.current = true; setSimpan(''); };
+  const ganti = (f: (x: Surat) => Surat) => { setS((x) => sinkronBaris(f(x))); ubah.current++; kotor.current = true; setSimpan(''); };
   const set = <K extends keyof Surat>(k: K, v: Surat[K]) => ganti((x) => ({ ...x, [k]: v }));
   const setData = (k: string, v: string) => ganti((x) => ({ ...x, data: { ...x.data, [k]: v } }));
 
@@ -234,17 +240,19 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
   const a = t.approval;
   const adaKet = a.kolom.some(([k]) => k === 'ket');
   const labelKet = a.kolom.find(([k]) => k === 'ket')?.[1] || 'Ket';
-  const isianIsi = t.isian.filter((d) => d.grup === 'isi');
-  const isianData = t.isian.filter((d) => d.grup !== 'isi');
-  const kolomIsian = (d: IsianData) => {
-    const v = s.data[d.k] || '';
-    const ubahV = (x: string) => setData(d.k, d.jenis === 'uang' ? ribuan(x) : d.besar ? x.toUpperCase() : x);
+  const isianIsi = t.isian.filter((d) => d.grup === 'isi' && !d.sembunyi);
+  const isianData = t.isian.filter((d) => d.grup !== 'isi' && !d.sembunyi);
+  const kolomIsian = (d: IsianData, baris?: number) => {
+    const v = (baris === undefined ? s.data[d.k] : s.baris?.[baris]?.[d.k]) || '';
+    const setV = (x: string) => baris === undefined ? setData(d.k, x)
+      : ganti((y) => ({ ...y, baris: (y.baris || []).map((r, j) => (j === baris ? { ...r, [d.k]: x } : r)) }));
+    const ubahV = (x: string) => setV(d.jenis === 'uang' ? ribuan(x) : d.besar ? x.toUpperCase() : x);
     return (
-      <Isian key={d.k} label={d.label}>
+      <Isian key={`${baris ?? ''}${d.k}`} label={d.label}>
         {d.jenis === 'tanggal' ? <input type="date" value={v} onChange={(e) => ubahV(e.target.value)} className={input} />
           : d.jenis === 'panjang' ? <textarea value={v} onChange={(e) => ubahV(e.target.value)} rows={2} placeholder={d.ph} aria-label={d.label} className={`${FIELD} py-2.5 leading-relaxed`} />
           : <input value={v} onChange={(e) => ubahV(e.target.value)} placeholder={d.ph} inputMode={d.jenis === 'uang' ? 'numeric' : undefined}
-              list={d.saran ? `saran-${d.k}` : undefined} className={`${input} ${d.k === 'app' || d.k === 'rangka' || d.k === 'mesin' ? 'font-mono' : ''}`} />}
+              list={d.saran ? `saran-${d.k}` : undefined} aria-label={baris === undefined ? undefined : `${d.label} ${t.baris?.label || ''} ${baris + 1}`} className={`${input} ${d.k === 'app' || d.k === 'rangka' || d.k === 'mesin' ? 'font-mono' : ''}`} />}
         {d.saran && <datalist id={`saran-${d.k}`}>{d.saran.map((x) => <option key={x} value={x} />)}</datalist>}
       </Isian>
     );
@@ -263,11 +271,11 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
       <p className="mt-1 text-[13px] text-neutral-500">{[t.nama, t.sk].filter(Boolean).join(' · ')}</p>
 
       <Bagian judul="Kop surat" sub={`${t.perihalDiKop ? `${perihalSurat(s)} · ` : ''}${nomorSurat(s)}`}>
-        <Isian label="Judul" hint={s.judul.includes('\n') ? 'Satu baris kop per baris.' : undefined}>
+        {t.blok.some((b) => b.t === 'kop') && <Isian label="Judul" hint={s.judul.includes('\n') ? 'Satu baris kop per baris.' : undefined}>
           {s.judul.includes('\n')
             ? <textarea value={s.judul} onChange={(e) => set('judul', e.target.value.toUpperCase())} rows={2} aria-label="Judul" className={`${FIELD} py-2.5`} />
             : <input value={s.judul} onChange={(e) => set('judul', e.target.value.toUpperCase())} className={input} />}
-        </Isian>
+        </Isian>}
         <Isian label={t.perihalDiKop ? 'Perihal' : 'Perihal / nama file'} hint={s.perihalOtomatis ? 'Otomatis mengikuti nama konsumen. Ketik untuk mengubah sendiri.' : undefined}>
           <input value={perihalSurat(s)} onChange={(e) => ganti((x) => ({ ...x, perihal: e.target.value, perihalOtomatis: false }))} aria-label="Perihal surat" className={input} />
         </Isian>
@@ -290,7 +298,7 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
           <Isian label="Tanggal"><input type="date" value={s.tglApproval} onChange={(e) => set('tglApproval', e.target.value)} className={input} /></Isian>
           {adaKet && <Isian label={labelKet}><input value={s.ket} onChange={(e) => set('ket', e.target.value)} className={input} /></Isian>}
         </div>
-        <p className="mt-3 text-[12px] leading-relaxed text-neutral-500">Baris lain tetap kosong untuk diisi masing-masing: {a.penyetuju.map((p) => `${p.nama} (${p.jabatan})`).join(', ')}.</p>
+        <p className="mt-3 text-[12px] leading-relaxed text-neutral-500">Baris lain tetap kosong untuk diisi masing-masing: {a.penyetuju.map((p) => `${isiTeks(p.nama, s)} (${isiTeks(p.jabatan, s)})`).join(', ')}.</p>
       </Bagian>
 
       {isianIsi.length > 0 && (
@@ -299,9 +307,29 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
         </Bagian>
       )}
 
-      <Bagian judul="Data konsumen" sub={[s.data.nama, s.data.app].filter(Boolean).join(' · ') || `${isianData.length} isian`}>
-        {isianData.map((d) => kolomIsian(d))}
-      </Bagian>
+      {t.baris && (
+        <Bagian judul={`Data ${t.baris.label.toLowerCase()}`} sub={`${(s.baris || []).length} ${t.baris.label.toLowerCase()}${s.data.nama ? ` · ${s.data.nama}` : ''}`}>
+          {(s.baris || []).map((_, bi) => (
+            <div key={bi} className="mt-4 rounded-2xl border border-neutral-200 p-3 first:mt-0 dark:border-neutral-800">
+              <div className="flex items-center">
+                <p className="text-[14px] font-bold">{t.baris!.label} {bi + 1}</p>
+                {(s.baris || []).length > 1 && (
+                  <button onClick={() => { if (window.confirm(`Hapus ${t.baris!.label.toLowerCase()} ${bi + 1}?`)) ganti((y) => ({ ...y, baris: (y.baris || []).filter((__, j) => j !== bi) })); }}
+                    aria-label={`Hapus ${t.baris!.label.toLowerCase()} ${bi + 1}`} className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl text-red-700 dark:text-red-400"><Ico n="x" className="h-4 w-4" sw={2.2} /></button>
+                )}
+              </div>
+              {t.baris!.isian.map((d) => kolomIsian(d, bi))}
+            </div>
+          ))}
+          <button onClick={() => ganti((y) => ({ ...y, baris: [...(y.baris || []), barisKosong(t)] }))} className="mt-3 min-h-11 w-full rounded-xl bg-neutral-100 text-[14px] font-semibold dark:bg-neutral-800">+ Tambah {t.baris.label.toLowerCase()}</button>
+        </Bagian>
+      )}
+
+      {isianData.length > 0 && (
+        <Bagian judul="Data konsumen" sub={[s.data.nama, s.data.app].filter(Boolean).join(' · ') || `${isianData.length} isian`}>
+          {isianData.map((d) => kolomIsian(d))}
+        </Bagian>
+      )}
 
       <Bagian judul="Lampiran" sub={`${nFoto} foto`}>
         {s.lampiran.map((l, li) => {
