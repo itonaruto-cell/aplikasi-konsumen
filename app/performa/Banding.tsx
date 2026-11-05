@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   C6, KAT_FOTO, daftarDok, type DokItem, bacaSlik, bandingBaru, ltv, namaFileBanding, otrTaksasi, rapikanBanding, rataMarket, saranReasonMh, saranSwot, teksWaBanding, tglPanjang,
   type Banding, type Cek, type FotoBanding, type KatFoto, type WaBanding,
@@ -9,6 +9,8 @@ import PreviewLembar, { ukuranLembar } from './PreviewLembar';
 import { useOverlay } from '../overlay';
 import { TIPE_XLSX } from '../../lib/xlsx-mini';
 import { todayJkt } from '../../lib/performa-calc';
+import { cariReport, isiDariReport } from '../../lib/banding-report';
+import { rapikanReport, type ReportSurvey } from '../../lib/report-survey';
 import { AngkaInput, FIELD } from './form';
 import { Ico } from './parts';
 import { ambilDraf, bacaBuka, hapusDraf, idBandingBaru, lepasBuka, pilihAwal, rapikanDraf, simpanDraf, tandaiBuka } from '../../lib/banding-draf';
@@ -183,7 +185,7 @@ function Pratinjau({ siap, onTutup, onUnduh }: { siap: Siap; onTutup: () => void
 }
 
 /* ---------- Editor ---------- */
-function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: Banding; akun: Akun; onTutup: () => void; onSimpan: (b: Banding) => void; lembarAwal?: 'form' | 'wa' }) {
+function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form', reports = [] }: { awal: Banding; akun: Akun; onTutup: () => void; onSimpan: (b: Banding) => void; lembarAwal?: 'form' | 'wa'; reports?: ReportSurvey[] }) {
   useOverlay(true, onTutup);   // tombol kembali menutup form dulu, baru keluar dari halaman
   // Isian yang belum terkirim (mis. tab dimatikan Android saat pindah ke WA) dipulihkan dari draf di HP
   const [mulai] = useState(() => { const d = ambilDraf(awal.id); return { ...pilihAwal(awal, d), idBaru: d?.idBaru }; });
@@ -202,6 +204,23 @@ function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: 
   const set = <K extends keyof Banding>(k: K, v: Banding[K]) => { setB((x) => ({ ...x, [k]: v })); ubah.current++; kotor.current = true; setSimpan(''); };
   const setWa = <K extends keyof WaBanding>(k: K, v: WaBanding[K]) => { setB((x) => ({ ...x, wa: { ...x.wa, [k]: v } })); ubah.current++; kotor.current = true; setSimpan(''); };
   const [pesanWa, setPesanWa] = useState('');
+
+  // Report survey 6C 1EP dengan nama konsumen / App No yang sama: isian kosong diisi otomatis saat form dibuka
+  const report = useMemo(() => cariReport(b, reports), [b.nama, b.appNo, reports]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pakaiReport = (timpa: boolean, otomatis = false) => {
+    const r = cariReport(terakhir.current, reports);
+    if (!r) return;
+    const h = isiDariReport(terakhir.current, r, timpa);
+    if (!h.n) { if (!otomatis) setPesan('Isian sudah sama dengan report 6C 1EP.'); return; }
+    setB(h.b); ubah.current++; kotor.current = true; setSimpan('');
+    setPesan(otomatis ? `Terhubung dengan report 6C 1EP: ${h.n} isian kosong terisi otomatis.` : `${h.n} isian diambil dari report 6C 1EP.`);
+  };
+  const sudahOto = useRef(false);
+  useEffect(() => {
+    if (sudahOto.current || !reports.length) return;
+    sudahOto.current = true;
+    pakaiReport(false, true);
+  }, [reports]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lembar, setLembar] = useState<'form' | 'wa'>(lembarAwal);
   const salinWa = async () => {
     try { await navigator.clipboard.writeText(teksWaBanding(terakhir.current)); setPesanWa('Teks tersalin. Tempel di WhatsApp BU Head.'); }
@@ -323,6 +342,16 @@ function Editor({ awal, akun, onTutup, onSimpan, lembarAwal = 'form' }: { awal: 
       </div>
 
       {lembar === 'form' && (<>
+        {report && (
+          <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/40">
+            <p className="text-[13px] font-bold text-blue-900 dark:text-blue-200">Terhubung dengan report 6C 1EP</p>
+            <p className="mt-0.5 text-[13px] leading-snug text-blue-900/80 dark:text-blue-200/80">{[report.nama, report.tglSurvey && tglPanjang(report.tglSurvey), report.surveyor, report.rekomendasi].filter(Boolean).join(' · ')}</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button onClick={() => pakaiReport(false)} className="min-h-10 rounded-xl bg-white text-[13px] font-semibold text-blue-900 dark:bg-blue-900 dark:text-white">Isi yang kosong</button>
+              <button onClick={() => { if (window.confirm('Timpa analisa 6C 1EP & data pembiayaan di form ini dengan isi report terbaru?')) pakaiReport(true); }} className="min-h-10 rounded-xl border border-blue-300 text-[13px] font-semibold text-blue-900 dark:border-blue-800 dark:text-blue-200">Timpa dari report</button>
+            </div>
+          </div>
+        )}
         <Bagian judul="Data aplikasi" sub={[b.nama, b.appNo].filter(Boolean).join(' · ') || 'App No, nama konsumen, BH, tanggal'}>
           <Isian label="App No."><input value={b.appNo} onChange={(e) => set('appNo', e.target.value.toUpperCase())} placeholder="APP0631…" className={`${FIELD} min-h-11 font-mono`} /></Isian>
           <Isian label="Nama konsumen"><input value={b.nama} onChange={(e) => set('nama', e.target.value.toUpperCase())} className={`${FIELD} min-h-11`} /></Isian>
@@ -548,6 +577,7 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
   const [err, setErr] = useState('');
   const [buka, setBuka] = useState<Banding | null>(null);
   const [bantuan, setBantuan] = useState(false);
+  const [reports, setReports] = useState<ReportSurvey[]>([]);
 
   const muat = useCallback(async () => {
     setErr('');
@@ -557,6 +587,8 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
       if (!r.ok) throw new Error(j?.error || 'Gagal memuat.');
       setList((j.list || []).map(rapikanBanding));
     } catch (e) { setErr((e as Error).message); setList([]); }
+    // Report survey 6C 1EP untuk mengisi form banding dengan nama konsumen yang sama
+    fetch('/api/report-survey', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.list) setReports(j.list.map(rapikanReport)); }).catch(() => {});
   }, []);
   useEffect(() => { muat(); }, [muat, reloadKey]);
 
@@ -588,7 +620,7 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
   const baru = () => { setLembarAwal('form'); setBuka(bandingDefault()); };
   const bukaForm = (x: Banding) => { setLembarAwal('form'); setBuka(x); };
 
-  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} akun={akun} lembarAwal={lembarAwal} onTutup={() => { lepasBuka(); setBuka(null); muat(); }} onSimpan={simpanLokal} />;
+  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} akun={akun} lembarAwal={lembarAwal} reports={reports} onTutup={() => { lepasBuka(); setBuka(null); muat(); }} onSimpan={simpanLokal} />;
 
   return (
     <div className="px-4 pb-10 pt-4">
@@ -619,7 +651,7 @@ export default function BandingPage({ akun, reloadKey = 0 }: { akun: Akun; reloa
                   <span className="truncate text-[15px] font-bold">{b.nama || '(tanpa nama)'}</span>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${b.status === 'selesai' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'}`}>{b.status === 'selesai' ? 'Submitted' : 'Draft'}</span>
                 </span>
-                <span className="truncate text-[12px] text-neutral-500">{[b.brand, b.appNo, tglPanjang(b.tanggal), `${b.foto.length} foto`].filter(Boolean).join(' · ')}</span>
+                <span className="truncate text-[12px] text-neutral-500">{[b.brand, b.appNo, tglPanjang(b.tanggal), `${b.foto.length} foto`, cariReport(b, reports) ? 'ada report 6C 1EP' : ''].filter(Boolean).join(' · ')}</span>
               </button>
               <button onClick={() => hapus(b)} aria-label={`Hapus banding ${b.nama}`} className="flex h-12 w-12 shrink-0 items-center justify-center text-neutral-400"><Ico n="x" className="h-4 w-4" sw={2} /></button>
             </li>

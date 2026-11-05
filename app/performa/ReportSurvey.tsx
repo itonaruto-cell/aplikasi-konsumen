@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { PENGAJUAN, REKOMENDASI, UNSUR, fmtPersen, hitungKapasitas, labaOf, rapikanReport, reportBaru, teksCapacity, teksWa, type Penghasilan, type ReportSurvey } from '../../lib/report-survey';
+import { bandingBaru, rapikanBanding, type Banding } from '../../lib/banding-types';
+import { cariBanding, isiDariReport } from '../../lib/banding-report';
+import { PENGAJUAN, REKOMENDASI, UNSUR, fmtPersen, hitungKapasitas, labaOf, rapikanReport, reportBaru, teksWa, type Penghasilan, type ReportSurvey } from '../../lib/report-survey';
 import { todayJkt } from '../../lib/performa-calc';
 import { AngkaInput, FIELD } from './form';
 import { Ico } from './parts';
@@ -88,15 +90,31 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
     }
   };
   const keWa = () => { window.open(`https://wa.me/?text=${encodeURIComponent(teks)}`, '_blank', 'noopener'); };
+  // Form banding dengan nama konsumen / App No yang sama: dilengkapi dari report ini (isian banding tidak ditimpa)
+  const [bandingAda, setBandingAda] = useState<Banding | null>(null);
+  useEffect(() => {
+    if (!onBanding) return;
+    let batal = false;
+    const t = setTimeout(() => {
+      fetch('/api/banding', { cache: 'no-store' }).then((x) => (x.ok ? x.json() : null))
+        .then((j) => { if (!batal) setBandingAda(cariBanding(r, (j?.list || []).map(rapikanBanding))); }).catch(() => {});
+    }, 600);
+    return () => { batal = true; clearTimeout(t); };
+  }, [r.nama, r.appNo, onBanding]); // eslint-disable-line react-hooks/exhaustive-deps
   const jadiBanding = async () => {
     setPesan('');
     try {
+      const lr = await fetch('/api/banding', { cache: 'no-store' });
+      const lj = lr.ok ? await lr.json().catch(() => null) : null;
+      const ada = cariBanding(r, (lj?.list || []).map(rapikanBanding));
+      const dasar = ada || bandingBaru({ nama: r.nama.toUpperCase(), brand: r.brand, tanggal: todayJkt() });
+      const { b: isi } = isiDariReport(dasar, r, false);
       const res = await fetch('/api/banding', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ banding: { nama: r.nama.toUpperCase(), appNo: r.appNo, brand: r.brand, tanggal: todayJkt(), c6: { ...r.c6, capacity: teksCapacity(r) } } }),
+        body: JSON.stringify({ banding: isi }),
       });
       const j = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(j?.error || 'Form banding gagal dibuat.');
+      if (!res.ok) throw new Error(j?.error || 'Form banding gagal disimpan.');
       onBanding?.();
     } catch (e) { setPesan((e as Error).message); }
   };
@@ -188,7 +206,7 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
         <pre className="whitespace-pre-wrap rounded-xl bg-[#E7FFDB] p-3 font-sans text-[13px] leading-relaxed text-neutral-900 dark:bg-[#0B3B2C] dark:text-neutral-100">{teks}</pre>
         {onBanding && (
           <button onClick={jadiBanding} disabled={!(r.nama || r.appNo)} className="mt-3 min-h-11 w-full rounded-xl border border-neutral-300 text-[14px] font-semibold disabled:opacity-40 dark:border-neutral-700">
-            Buat form banding (F-761) dari report ini
+            {bandingAda ? 'Lengkapi form banding (F-761) yang sudah ada' : 'Buat form banding (F-761) dari report ini'}
           </button>
         )}
       </Bagian>
