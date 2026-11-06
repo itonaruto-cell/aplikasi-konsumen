@@ -93,7 +93,7 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
         b.baris.forEach((x, i) => p([{ t: x.teks, b: x.tebal, u: x.garis, sz: b.besar ? t.sz + 4 : undefined, font: t.fontKop }], { jc: b.kiri ? 'left' : 'center', after: i === b.baris.length - 1 ? 240 : 60 }));
         break;
       case 'info': {
-        const tab = 1700, kol2 = tab + 140 + 3600;
+        const tab = 1700, kol2 = tab + 140 + b.kolom2;
         // "nama\tjabatan" → kolom kedua rata di satu posisi tab
         const bt = (x: string): Run[] => x.split('\t').flatMap((bagian, j) => baris(bagian).map((r, k) => (j > 0 && k === 0 ? { ...r, tab: true } : r)));
         for (const [l, v] of b.baris) {
