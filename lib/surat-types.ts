@@ -263,7 +263,6 @@ export const TEMPLATE_SURAT: TemplateSurat[] = [
       { k: 'stnk', label: 'Nama STNK', besar: true },
       { k: 'fincoy', label: 'Take over dari (leasing)', grup: 'isi', awal: 'Mandiri Tunas Finance', saran: ['Mandiri Tunas Finance', 'Adira Finance', 'BCA Finance', 'Toyota Astra Finance', 'ACC', 'Summit Oto Finance', 'Mandiri Utama Finance', 'BFI Finance', 'Clipan Finance', 'MNC Finance'] },
       { k: 'statusAbsah', label: 'Status cek absah HO', grup: 'isi', awal: 'Tidak Terdaftar dan Sudah Mutasi Keluar' },
-      { k: 'kondisiUnit', label: 'Konsumen membeli mobil', grup: 'isi', awal: 'Baru', saran: ['Baru', 'Bekas'] },
       { k: 'estimasi', label: 'Estimasi BPKB keluar', grup: 'isi', awal: '3 hari', ph: '3 hari' },
     ],
     blok: [
@@ -281,7 +280,7 @@ export const TEMPLATE_SURAT: TemplateSurat[] = [
       { t: 'p', teks: 'Latar Belakang', tebal: true, spasi: 40 },
       { t: 'p', teks: 'Pada hari {tanggal:hari}, tanggal {tanggal:panjang} Cabang Kendal terdapat aplikasi MobilKu take over dengan kronologis sebagai berikut :', kiri: 360, spasi: 60 },
       { t: 'daftar', kiri: 720, isi: [
-        'Status Cek absah HO {statusAbsah}. Kondisi Konsumen membeli mobil {kondisiUnit} dari Leasing {fincoy} dan belum pernah melakukan pelunasan di {fincoy}.',
+        'Status Cek absah HO {statusAbsah}. Kondisi Konsumen membeli mobil Baru dari Leasing {fincoy} dan belum pernah melakukan pelunasan di {fincoy}.',
         'Akan dilakukan cek fisik absah setempat saat BPKB sudah keluar yaitu estimasi {estimasi} setelah dilakukan pelunasan dari WOM.',
         'Sehingga Internal Memo ini diperuntukan agar proses aplikasi tetap bisa berjalan sampai dengan proses Go Live dengan dokumen Cek Absah Setempat menyusul.',
       ] },
