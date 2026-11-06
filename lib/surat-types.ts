@@ -37,7 +37,8 @@ export type Approval = {
 type Teks = string; // boleh berisi {kunci} / {kunci:format} dan **tebal**
 export type Blok =
   | { t: 'kop'; baris: Teks[]; garis?: boolean | boolean[]; tebal?: boolean[]; besar?: boolean; kiri?: boolean }
-  | { t: 'info'; baris: [string, Teks][]; tebalLabel?: boolean; garis?: boolean }   // \t di nilai = kolom kedua
+  | { t: 'info'; baris: [string, Teks][]; tebalLabel?: boolean; garis?: boolean; kolom2?: number }   // \t di nilai = kolom kedua (posisi kolom2 twip)
+  | { t: 'tabel'; judul?: string; kepala: string[]; baris: Teks[][]; lebar: number[]; fill?: string }   // tabel tetap, mis. Review OMD
   | { t: 'approval' }
   | { t: 'p'; teks: Teks; tebal?: boolean; kiri?: number; spasi?: number; tengah?: boolean }
   | { t: 'bagian'; no: string; judul: string; kiri?: number }
@@ -60,6 +61,7 @@ const NIKO = 'Niko Widyasmara';
 export const NIKO_NAMA = NIKO;
 // Pejabat terbaru (sama dengan IM SAKPOLE)
 const P = {
+  hendrik: 'Hendrik Progo', herwin: 'Herwin', iwan: 'Iwan Suherman', priskila: 'Priskila Eko M', boy: 'Boy Dedy Anto Tampubolon',
   dyah: 'Dyah Pamungkas', aji: 'Muhammad Aji Susilo', untik: 'Untik Hartati', geri: 'Geri Neno A', azza: 'Azza Dwi Septian', moga: 'Moga Mulya Saputra',
 };
 
@@ -221,6 +223,82 @@ export const TEMPLATE_SURAT: TemplateSurat[] = [
       { t: 'lampiran', judul: 'Lampiran :', nomor: false },
     ],
     lampiran: ['STNK', 'Form Pengurusan Takeover', 'SS History Approval'],
+  },
+  {
+    id: 'cek-fisik-menyusul', nama: 'IM Take Over Cek Fisik BPKB Setempat Menyusul',
+    ringkas: 'Golive take over dengan cek absah/fisik BPKB setempat menyusul setelah BPKB keluar (IM sampai Operation Director)',
+    font: 'Times New Roman', fontKop: 'Arial', sz: 22, szTabel: 17, kertas: 'letter', margin: 1080,
+    judul: 'Internal Memo',
+    perihal: 'Aplikasi MobilKu Take Over Cek Fisik BPKB Setempat Menyusul Kons an {nama}',
+    namaFile: 'IM Golive MobilKu Aplikasi Take Over Cek Fisik BPKB Setempat Menyusul Kons an {nama}',
+    approval: {
+      kolom: [['nama', 'APPROVED BY'], ['jabatan', 'JABATAN'], ['status', 'STATUS APPROVAL'], ['tanggal', 'TANGGAL APPROVAL'], ['ket', 'NOTED']],
+      lebar: [2205, 1723, 1652, 1530, 3300], judul: 'LEMBAR PERSETUJUAN', fill: 'BDD7EE',
+      pembuat: { nama: NIKO, jabatan: 'BMH MobilKu Kendal' },
+      penyetuju: [
+        { nama: 'Dyah Pamungkas P', jabatan: 'BOH Kendal' },
+        { nama: 'M. Aji Susilo', jabatan: 'Branch Head Kendal' },
+        { nama: 'Untik Hartanti', jabatan: 'AMM MobilKu' },
+        { nama: P.geri, jabatan: 'Area Operations Manager' },
+        { nama: P.moga, jabatan: 'BU Head' },
+        { nama: P.boy, jabatan: 'NDS Strategic & Development Dept. Head' },
+        { nama: 'Arif Lukman Hakim', jabatan: 'NDS Agency Strategic Dept. Head' },
+        { nama: 'Th Indah Prasetyaningsih', jabatan: 'NDS Acquisition Strategic Division Head' },
+        { nama: P.iwan, jabatan: 'Operation Div Head' },
+        { nama: P.herwin, jabatan: 'Risk Management Division Head' },
+        { nama: P.hendrik, jabatan: 'Operation Director (Caretaker Risk Management Director)' },
+      ],
+      status: ['Submitted', ''], tgl: 'panjang', tglHariIni: true,
+      ketAwal: 'Pengajuan take over dari {fincoy:upper}. Absah akan dilakukan setelah BPKB ready.',
+    },
+    isian: [
+      { k: 'nama', label: 'Nama konsumen', besar: true },
+      { k: 'app', label: 'No APP', ph: 'APP0631…', besar: true },
+      { k: 'ph', label: 'PH', jenis: 'uang' },
+      { k: 'nopol', label: 'No Pol', besar: true, ph: 'H1325YZ' },
+      { k: 'unit', label: 'Merk/Tipe', besar: true, ph: 'DAIHATSU TERIOS ALL NEW X' },
+      { k: 'rangka', label: 'Noka', besar: true },
+      { k: 'mesin', label: 'Nosin', besar: true },
+      { k: 'tahun', label: 'Tahun', ph: '2022' },
+      { k: 'stnk', label: 'Nama STNK', besar: true },
+      { k: 'fincoy', label: 'Take over dari (leasing)', grup: 'isi', awal: 'Mandiri Tunas Finance', saran: ['Mandiri Tunas Finance', 'Adira Finance', 'BCA Finance', 'Toyota Astra Finance', 'ACC', 'Summit Oto Finance', 'Mandiri Utama Finance', 'BFI Finance', 'Clipan Finance', 'MNC Finance'] },
+      { k: 'statusAbsah', label: 'Status cek absah HO', grup: 'isi', awal: 'Tidak Terdaftar dan Sudah Mutasi Keluar' },
+      { k: 'kondisiUnit', label: 'Konsumen membeli mobil', grup: 'isi', awal: 'Baru', saran: ['Baru', 'Bekas'] },
+      { k: 'estimasi', label: 'Estimasi BPKB keluar', grup: 'isi', awal: '3 hari', ph: '3 hari' },
+    ],
+    blok: [
+      { t: 'kop', baris: ['{judul}', '{nomor}'], tebal: [true, true], garis: [true, false], kiri: true },
+      { t: 'info', tebalLabel: true, garis: true, kolom2: 3900, baris: [
+        ['Kepada', `Bpk. ${P.hendrik}\t- Operation Director\nBpk. ${P.herwin}\t- Risk Management Division Head\nBpk. ${P.iwan}\t- Operation Div Head\nIbu ${P.priskila}\t- Operation Management Dept. Head\nBpk. ${P.boy}\t- NDS Strategic & Development Dept. Head\nBpk. ${P.moga}\t- BU Head Jateng Utara\nIbu ${P.geri}\t- Area Operation Manager\nIbu Untik Hartanti\t- AMM MobilKu\nBpk. ${P.aji}\t- Branch Head Kendal\nIbu Dyah Pamungkas P\t- BOH Kendal`],
+        ['Dari', `${NIKO}\t- BMH MobilKu Kendal`],
+        ['Tanggal', '{tanggal:panjang}'],
+        ['Cabang', 'Kendal'],
+        ['Perihal', '{perihal}'],
+      ] },
+      { t: 'approval' },
+      { t: 'tabel', judul: 'Review OMD', kepala: ['Approval Review', 'Jabatan', 'Approval Status', 'Approval Date'], lebar: [2400, 2400, 2820, 1980],
+        baris: [[P.priskila, 'OMD Dept Head', '', '']] },
+      { t: 'p', teks: 'Latar Belakang', tebal: true, spasi: 40 },
+      { t: 'p', teks: 'Pada hari {tanggal:hari}, tanggal {tanggal:panjang} Cabang Kendal terdapat aplikasi MobilKu take over dengan kronologis sebagai berikut :', kiri: 360, spasi: 60 },
+      { t: 'daftar', kiri: 720, isi: [
+        'Status Cek absah HO {statusAbsah}. Kondisi Konsumen membeli mobil {kondisiUnit} dari Leasing {fincoy} dan belum pernah melakukan pelunasan di {fincoy}.',
+        'Akan dilakukan cek fisik absah setempat saat BPKB sudah keluar yaitu estimasi {estimasi} setelah dilakukan pelunasan dari WOM.',
+        'Sehingga Internal Memo ini diperuntukan agar proses aplikasi tetap bisa berjalan sampai dengan proses Go Live dengan dokumen Cek Absah Setempat menyusul.',
+      ] },
+      { t: 'p', teks: ' ', spasi: 0 },
+      { t: 'p', teks: 'Berikut data kendaraan kons a.n {nama} :', kiri: 1080, spasi: 40 },
+      { t: 'data', keys: ['app', 'ph', 'nopol', 'unit', 'rangka', 'mesin', 'tahun', 'stnk'], kiri: 1080, lebarLabel: 2900 },
+      { t: 'p', teks: 'Tujuan', tebal: true, spasi: 40 },
+      { t: 'daftar', kiri: 360, isi: ['Proses aplikasi tetap bisa berjalan sampai dengan proses Go Live dengan dokumen Cek Absah Setempat menyusul.'] },
+      { t: 'p', teks: ' ', spasi: 120 },
+      { t: 'p', teks: 'Permohonan', tebal: true, spasi: 40 },
+      { t: 'daftar', kiri: 360, isi: ['Dapat dilakukan proses absah setempat saat BPKB sudah keluar yaitu estimasi {estimasi} setelah dilakukan pelunasan dari WOM.'] },
+      { t: 'p', teks: ' ', spasi: 120 },
+      { t: 'p', teks: 'Demikian Berita Acara Ini dibuat dengan sebenarnya, untuk dipergunakan sebagaimana mestinya', spasi: 120 },
+      { t: 'halaman' },
+      { t: 'lampiran', judul: '*) LAMPIRAN', nomor: true },
+    ],
+    lampiran: ['CEK ABSAH', 'STNK', 'SAKPOLE', 'KTP PEMOHON', 'FORM PERNYATAAN TAKE OVER', 'SURAT PERNYATAAN KONSUMEN', 'Hasil Gesek Noka & Nosin', 'Hasil cek Samsat oleh Biro Jasa Wom', 'FORM 511', 'HISTORY APPROVAL'],
   },
   {
     id: 'tidak-revisi-stnk', nama: 'BA Tidak Revisi Alamat STNK',
@@ -463,7 +541,7 @@ export function noUrutBerikut(list: Surat[]): string {
 export type SelApproval = { teks: string; rowSpan?: number; lanjut?: boolean };
 export type BlokJadi =
   | { t: 'kop'; baris: { teks: string; tebal: boolean; garis: boolean }[]; besar: boolean; kiri: boolean }
-  | { t: 'info'; baris: [string, string][]; tebalLabel: boolean; garis: boolean }
+  | { t: 'info'; baris: [string, string][]; tebalLabel: boolean; garis: boolean; kolom2: number }
   | { t: 'approval'; judul?: string; fill?: string; tengah: boolean; lebar: number[]; kepala: string[]; kepalaGabung: number; kepalaTebal: boolean; peranTebal: boolean; baris: SelApproval[][] }
   | { t: 'p'; teks: string; tebal: boolean; kiri: number; spasi: number; tengah: boolean }
   | { t: 'bagian'; no: string; judul: string; kiri: number }
@@ -486,11 +564,12 @@ export function susunSurat(s: Surat): BlokJadi[] {
         const baris = b.baris.flatMap((x, i) => isiTeks(x, s).split('\n').map((teks) => ({ teks, tebal: b.tebal ? b.tebal[i] !== false : true, garis: garis(i) })));
         return { t: 'kop', baris, besar: !!b.besar, kiri: !!b.kiri };
       }
-      case 'info': return { t: 'info', baris: b.baris.map(([l, v]) => [l, isiTeks(v, s)]), tebalLabel: !!b.tebalLabel, garis: !!b.garis };
+      case 'info': return { t: 'info', baris: b.baris.map(([l, v]) => [l, isiTeks(v, s)]), tebalLabel: !!b.tebalLabel, garis: !!b.garis, kolom2: b.kolom2 || 3600 };
+      case 'tabel': return { t: 'approval', judul: b.judul, fill: b.fill, tengah: true, lebar: b.lebar, kepala: b.kepala, kepalaGabung: 1, kepalaTebal: true, peranTebal: false, baris: b.baris.map((r) => r.map((x) => ({ teks: isiTeks(x, s, '') }))) };
       case 'approval': {
         const nilai = (k: Kolom, r: { peran?: string; nama: string; jabatan: string }, niko: boolean) =>
           k === 'peran' ? r.peran || '' : k === 'nama' ? isiTeks(r.nama, s, '') : k === 'jabatan' ? isiTeks(r.jabatan, s, '')
-            : !niko ? '' : k === 'status' ? s.approval : k === 'tanggal' ? tglFormat(s.tglApproval, a.tgl) : s.ket;
+            : !niko ? '' : k === 'status' ? s.approval : k === 'tanggal' ? tglFormat(s.tglApproval, a.tgl) : isiTeks(s.ket, s);
         const semua = [{ r: a.pembuat, niko: true }, ...a.penyetuju.map((r) => ({ r, niko: false }))];
         const baris = semua.map(({ r, niko }, i) => a.kolom.map(([k]): SelApproval => {
           if (k !== 'peran') return { teks: nilai(k, r, niko) };

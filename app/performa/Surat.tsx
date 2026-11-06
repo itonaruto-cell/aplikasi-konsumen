@@ -294,10 +294,10 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
             <button key={v || 'kosong'} onClick={() => set('approval', v)} aria-pressed={s.approval === v} className={`min-h-10 rounded-full px-4 text-[13px] font-bold ${s.approval === v ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-neutral-100 dark:bg-neutral-800'}`}>{v || 'Kosong'}</button>
           ))}
         </div>
-        <div className={`grid gap-3 ${adaKet ? 'grid-cols-2' : ''}`}>
+        <div className="grid gap-3">
           <Isian label="Tanggal"><input type="date" value={s.tglApproval} onChange={(e) => set('tglApproval', e.target.value)} className={input} /></Isian>
-          {adaKet && <Isian label={labelKet}><input value={s.ket} onChange={(e) => set('ket', e.target.value)} className={input} /></Isian>}
         </div>
+        {adaKet && <Isian label={labelKet}><textarea value={isiTeks(s.ket, s)} onChange={(e) => set('ket', e.target.value)} rows={2} aria-label={labelKet} className={`${FIELD} py-2.5 leading-relaxed`} /></Isian>}
         <p className="mt-3 text-[12px] leading-relaxed text-neutral-500">Baris lain tetap kosong untuk diisi masing-masing: {a.penyetuju.map((p) => `${isiTeks(p.nama, s)} (${isiTeks(p.jabatan, s)})`).join(', ')}.</p>
       </Bagian>
 
