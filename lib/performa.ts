@@ -1,9 +1,9 @@
 import { sheetsApi } from './sheets-api';
 import type { Performa, Peringkat } from './performa-types';
-import { rankSnapshot, todayJkt } from './performa-calc';
+import { rankSnapshot, tglTarikan, todayJkt } from './performa-calc';
 import { rapikanPerforma } from './sales-brand';
 import { simpanArsip } from './performa-arsip';
-import { bacaTabel, TAB_CAIR, TAB_OI } from './tarikan-data';
+import { bacaTabel, kolomCair, TAB_CAIR, TAB_OI, type Tabel } from './tarikan-data';
 import { bulanData } from './performa-kosong';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
@@ -142,6 +142,16 @@ export async function savePerforma(data: Performa) {
   return { before, after: rank, dilewati: false as const };
 }
 
+// Bulan TGL GL terbaru (yang tidak melewati hari ini) di tab CAIR = bulan data pantauan yang sebenarnya
+export function bulanDariTarikan(t: Tabel | null, today = todayJkt()): string {
+  if (!t?.r.length) return '';
+  const k = kolomCair(t.h, t.r);
+  if (k.tgl < 0) return '';
+  let maks = '';
+  for (const b of t.r) { const d = tglTarikan(b[k.tgl] || ''); if (d && d <= today && d > maks) maks = d; }
+  return maks.slice(0, 7);
+}
+
 export async function loadPerforma(): Promise<Performa | null> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.data;
   await ensureTab();
@@ -157,7 +167,8 @@ export async function loadPerforma(): Promise<Performa | null> {
   }
   if (data) {
     const kemarin = kemarinOf(parseSnaps(rows[0]?.[1]), todayJkt());
-    data = { ...data, riwayat: kemarin ? { kemarin } : undefined };
+    const bulanTarikan = await bacaTabel(TAB_CAIR).then(bulanDariTarikan).catch(() => '');
+    data = { ...data, riwayat: kemarin ? { kemarin } : undefined, ...(bulanTarikan ? { bulanTarikan } : {}) };
   }
   cache = { at: Date.now(), data };
   return data;
