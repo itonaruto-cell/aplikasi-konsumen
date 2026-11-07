@@ -83,6 +83,7 @@ export type Performa = {
   cabang: string;
   arsip?: string;           // ditambahkan server: YYYY-MM kalau ini data arsip bulan lalu (hanya dibaca)
   menunggu?: string;        // ditambahkan server: YYYY-MM file pantauan yang masih terkirim; bulan berjalan ditampilkan kosong
+  aktivitasLama?: string;   // ditambahkan server: YYYY-MM kalau visit/maintain yang terkirim masih bulan lalu (ikut dikosongkan)
   updated: string | null;   // tanggal "UPDATE PER" di sheet
   dikirim: string;          // waktu kiriman terakhir dari Apps Script (ISO)
   bulan: { lalu: string; ini: string };
