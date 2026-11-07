@@ -3,7 +3,7 @@ import type { Performa, Peringkat } from './performa-types';
 import { bulanAktivitas, rankSnapshot, todayJkt } from './performa-calc';
 import { rapikanPerforma } from './sales-brand';
 import { simpanArsip } from './performa-arsip';
-import { bacaTabel, TAB_CAIR, TAB_OI } from './tarikan-data';
+import { bacaTabel, kolomCair, TAB_CAIR, TAB_OI, type Tabel } from './tarikan-data';
 import { bulanData } from './performa-kosong';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
@@ -63,6 +63,10 @@ export function bawaRekapLama(baru: Performa, lama: Performa | null, sekarang = 
 // sehingga terkirim angka kosong. Kalau kiriman sebelumnya di bulan yang sama ada isinya, kiriman kosong diabaikan
 // dan angka terakhir yang benar tetap tampil. Awal bulan baru (bulan berbeda) tetap diterima walau masih nol.
 const adaAngka = (v?: { ini?: number | null } | null) => typeof v?.ini === 'number' && v.ini > 0;
+export const aktivitasLebihBaru = (baru: Performa, lama: Performa | null) => {
+  const a = bulanAktivitas(baru), b = bulanAktivitas(lama);
+  return !!a && !!b && a > b;
+};
 export function isiSales(d: Performa | null): boolean {
   if (!d) return false;
   if (adaAngka(d.cabangTotal?.amount) || adaAngka(d.cabangTotal?.unit)) return true;
@@ -70,10 +74,34 @@ export function isiSales(d: Performa | null): boolean {
 }
 export function kirimanKosong(baru: Performa, lama: Performa | null): boolean {
   if (!lama || !isiSales(lama) || isiSales(baru)) return false;
+  // Aktivitas (visit/maintain) sudah bulan yang lebih baru = file pantauan bulan baru yang sales-nya memang masih nol
+  if (aktivitasLebihBaru(baru, lama)) return false;
   const bulanSama = bulanData(baru) && bulanData(lama)
     ? bulanData(baru) === bulanData(lama)
     : !!baru.bulan?.ini && baru.bulan.ini === lama.bulan?.ini;
   return bulanSama || !bulanData(baru);
+}
+
+// Bulan TGL GL terbanyak di tab CAIR (kosong kalau tidak terbaca). Tanggal: 2026-11-03, 03/11/2026, 3-Nov-2026, serial.
+const KODE_BLN = [/^JAN/, /^FEB/, /^MAR/, /^APR/, /^(MEI|MAY)/, /^JUN/, /^JUL/, /^(AGU|AGS|AUG)/, /^SEP/, /^(OKT|OCT)/, /^NOV/, /^(DES|DEC)/];
+function bulanTgl(v: string): string {
+  const s = String(v || '').trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-\d{1,2}/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}`;
+  m = s.match(/^\d{1,2}[/.-](\d{1,2})[/.-](\d{4})/);
+  if (m && Number(m[1]) <= 12) return `${m[2]}-${m[1].padStart(2, '0')}`;
+  m = s.match(/^\d{1,2}[\s-]+([A-Za-z]+)[\s-]+(\d{4})/);
+  if (m) { const i = KODE_BLN.findIndex((r) => r.test(m![1].toUpperCase())); if (i >= 0) return `${m[2]}-${String(i + 1).padStart(2, '0')}`; }
+  if (/^\d{5}(\.\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5).toISOString().slice(0, 7);
+  return '';
+}
+function bulanTabel(t: Tabel | null): string {
+  if (!t?.r.length) return '';
+  const k = kolomCair(t.h, t.r);
+  if (k.tgl < 0) return '';
+  const n = new Map<string, number>();
+  for (const r of t.r) { const b = bulanTgl(r[k.tgl] || ''); if (b) n.set(b, (n.get(b) || 0) + 1); }
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
 }
 
 // Simpan data (dan tab CAIR & DATA_OI saat ini) sebagai arsip bulan data itu. Gagal tidak menghentikan proses lain.
@@ -90,8 +118,12 @@ export async function arsipkan(d: Performa, paksa = false) {
   try {
     await simpanArsip(b, 'performa', { ...d, riwayat: undefined });
     const [cair, oi] = await Promise.all([bacaTabel(TAB_CAIR).catch(() => null), bacaTabel(TAB_OI).catch(() => null)]);
-    if (cair) await simpanArsip(b, 'cair', cair);
-    if (oi) await simpanArsip(b, 'oi', oi);
+    // Tab tarikan bisa sudah berisi bulan lain (dikirim dari file bulan baru): jangan timpa arsip tarikan bulan ini
+    const bt = bulanTabel(cair);
+    if (!bt || bt === b) {
+      if (cair) await simpanArsip(b, 'cair', cair);
+      if (oi) await simpanArsip(b, 'oi', oi);
+    }
     return true;
   } catch (err) { console.error('Gagal menyimpan arsip bulan', b, err); return false; }
 }
@@ -110,7 +142,7 @@ export async function savePerforma(data: Performa) {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   const lama = await bacaMentah(api, spreadsheetId);
   // Bulan berganti: simpan dulu data bulan sebelumnya (termasuk daftar konsumen, konsumen cair, data OI) ke arsip
-  if (lama && isiSales(lama) && bulanData(lama) && bulanData(data) && bulanData(lama) !== bulanData(data)) {
+  if (lama && isiSales(lama) && ((bulanData(lama) && bulanData(data) && bulanData(lama) !== bulanData(data)) || aktivitasLebihBaru(data, lama))) {
     await arsipkan(lama);
   }
   if (kirimanKosong(data, lama)) {
