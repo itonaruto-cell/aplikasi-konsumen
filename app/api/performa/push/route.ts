@@ -34,9 +34,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { before, after, dilewati } = await savePerforma(data);
-    if (dilewati) {
-      return NextResponse.json({ ok: true, dilewati: true, pesan: 'Kiriman kosong diabaikan (file pantauan mungkin sedang diperbarui). Angka terakhir tetap dipakai.' });
+    const hasil = await savePerforma(data);
+    const { before, after } = hasil;
+    if (hasil.dilewati) {
+      return NextResponse.json({ ok: true, dilewati: true, pesan: hasil.alasan === 'bulan-lalu'
+        ? 'Kiriman dari file pantauan bulan lalu diabaikan (data bulan baru sudah masuk). Hapus jadwal Apps Script yang masih membaca file bulan lalu.'
+        : 'Kiriman kosong diabaikan (file pantauan mungkin sedang diperbarui). Angka terakhir tetap dipakai.' });
     }
     // Notifikasi HP: yang naik peringkat amount & yang disalip
     let notif = 0;
