@@ -10,6 +10,10 @@
     {
       "path": "/api/cron/pengingat-fu",
       "schedule": "0 8 * * 1-6"
+    },
+    {
+      "path": "/api/cron/bagi-prospek",
+      "schedule": "0 0 * * 1-6"
     }
   ]
 }
