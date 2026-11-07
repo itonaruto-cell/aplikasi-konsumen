@@ -429,7 +429,9 @@ export function cekData(data: Performa, now = new Date()): CekData {
   // Bulan baru ditampilkan kosong karena file pantauan bulan ini belum tersambung
   if (data.menunggu) return {
     tingkat: 'telat', sebab: 'bulan', bulanData: data.menunggu, bedaBulan: true,
-    teks: `Sales ${namaBulan(today)} belum masuk: tabel sales di file pantauan masih angka ${namaBulan(data.menunggu)} (judul kolom bulan belum diganti). Visit & maintain ${namaBulan(today)} tetap tampil. Sales ${namaBulan(data.menunggu)} bisa dibuka di Saya › Performa bulan lalu.`,
+    teks: data.aktivitasLama
+      ? `Data ${namaBulan(today)} belum masuk: yang terkirim masih file pantauan ${namaBulan(data.menunggu)} (sales & aktivitas). Sambungkan Apps Script ke file ${namaBulan(today)}. Data ${namaBulan(data.menunggu)} bisa dibuka di Saya › Performa bulan lalu.`
+      : `Sales ${namaBulan(today)} belum masuk: tabel sales di file pantauan masih angka ${namaBulan(data.menunggu)} (judul kolom bulan belum diganti). Visit & maintain ${namaBulan(today)} tetap tampil. Sales ${namaBulan(data.menunggu)} bisa dibuka di Saya › Performa bulan lalu.`,
   };
   const bulanD = bulanData(data) || null;
   const bedaBulan = !!bulanD && bulanD < today.slice(0, 7);

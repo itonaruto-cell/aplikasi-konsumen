@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '../../../lib/session';
 import { getRole } from '../../../lib/access';
 import { arsipkan, isiSales, loadPerforma } from '../../../lib/performa';
-import { bulanBasi, kosongkanBulan } from '../../../lib/performa-kosong';
+import { kosongkanBulan, perluDikosongkan } from '../../../lib/performa-kosong';
 import { bacaArsip } from '../../../lib/performa-arsip';
 import { rapikanPerforma } from '../../../lib/sales-brand';
 import type { Performa } from '../../../lib/performa-types';
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     if (!data) return NextResponse.json({ kosong: true }, { headers: { 'Cache-Control': 'no-store' } });
     // Sudah ganti bulan tapi file pantauan bulan ini belum tersambung: tampilkan bulan berjalan kosong
     // (data bulan lalu ada di arsip, diperbarui otomatis tiap pagi oleh cron cek-data)
-    if (bulanBasi(data)) {
+    if (perluDikosongkan(data)) {
       // Data akhir bulan lalu disimpan ke arsip (sekali per kiriman) supaya arsip berisi angka terakhir
       if (isiSales(data) && sudahArsip !== data.dikirim) { sudahArsip = data.dikirim; await arsipkan(data); }
       return NextResponse.json(kosongkanBulan(data), { headers: { 'Cache-Control': 'no-store' } });
