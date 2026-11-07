@@ -211,8 +211,15 @@ function TambahSheet({ c, me, tgl, hariIni, sudah, reloadKey, onClose, onSaved }
   // Saran dari data yang sudah ada: MA pegangan, konsumen prioritas, bahan survey
   const saran: Saran[] = useMemo(() => {
     if (jenis === 'maintain') {
-      return [...(me?.maintain?.list || [])].sort((a, b) => a.f - b.f || a.n.localeCompare(b.n))
-        .map((m) => ({ siapa: m.n, lokasi: '', ket: m.f ? `${m.f}× bulan ini${m.job ? ` · ${m.job}` : ''}` : `Belum dimaintain bulan ini${m.job ? ` · ${m.job}` : ''}` }));
+      const ket = (f: number, job: string, pic = '') => [pic, f ? `${f}× bulan ini` : 'Belum dimaintain bulan ini', job].filter(Boolean).join(' · ');
+      const milik = me?.maintain?.list || [];
+      if (milik.length) {
+        return [...milik].sort((a, b) => a.f - b.f || a.n.localeCompare(b.n)).map((m) => ({ siapa: m.n, lokasi: '', ket: ket(m.f, m.job) }));
+      }
+      // Bukan pemegang MA (owner / BMH / SPV): semua MA cabang, dengan nama PIC-nya
+      const semua = Object.values(c?.data.aktivitas?.ma || {}).flat();
+      return semua.sort((a, b) => a.f - b.f || a.n.localeCompare(b.n))
+        .map((m) => ({ siapa: m.n, lokasi: '', ket: ket(m.f, m.job, m.pic ? `PIC ${shortName(m.pic)}` : '') }));
     }
     if (jenis === 'visit' && c) {
       const brand = ((me && brandOf(me)) || 'semua') as BrandKey;
