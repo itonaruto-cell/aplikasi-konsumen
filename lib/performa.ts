@@ -67,6 +67,9 @@ export const aktivitasLebihBaru = (baru: Performa, lama: Performa | null) => {
   const a = bulanAktivitas(baru), b = bulanAktivitas(lama);
   return !!a && !!b && a > b;
 };
+const positif = (v: unknown) => typeof v === 'number' && v > 0;
+const adaKerangka = (d: Performa) => [d.cabangTotal?.unit, d.cabangTotal?.amount, ...(d.orang || []).flatMap((o) => [o.unit, o.amount])]
+  .some((x) => positif(x?.lalu) || positif(x?.target));
 export function isiSales(d: Performa | null): boolean {
   if (!d) return false;
   if (adaAngka(d.cabangTotal?.amount) || adaAngka(d.cabangTotal?.unit)) return true;
@@ -76,6 +79,9 @@ export function kirimanKosong(baru: Performa, lama: Performa | null): boolean {
   if (!lama || !isiSales(lama) || isiSales(baru)) return false;
   // Aktivitas (visit/maintain) sudah bulan yang lebih baru = file pantauan bulan baru yang sales-nya memang masih nol
   if (aktivitasLebihBaru(baru, lama)) return false;
+  // Tabel sales terbaca (ada angka bulan lalu atau target) tapi bulan ini masih nol = awal bulan, bukan sheet yang
+  // gagal dihitung (kalau gagal, semua kolom ikut kosong)
+  if (adaKerangka(baru)) return false;
   const bulanSama = bulanData(baru) && bulanData(lama)
     ? bulanData(baru) === bulanData(lama)
     : !!baru.bulan?.ini && baru.bulan.ini === lama.bulan?.ini;
