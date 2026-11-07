@@ -1,9 +1,9 @@
 import { sheetsApi } from './sheets-api';
 import type { Performa, Peringkat } from './performa-types';
-import { rankSnapshot, tglTarikan, todayJkt } from './performa-calc';
+import { bulanAktivitas, rankSnapshot, todayJkt } from './performa-calc';
 import { rapikanPerforma } from './sales-brand';
 import { simpanArsip } from './performa-arsip';
-import { bacaTabel, kolomCair, TAB_CAIR, TAB_OI, type Tabel } from './tarikan-data';
+import { bacaTabel, TAB_CAIR, TAB_OI } from './tarikan-data';
 import { bulanData } from './performa-kosong';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
@@ -77,9 +77,16 @@ export function kirimanKosong(baru: Performa, lama: Performa | null): boolean {
 }
 
 // Simpan data (dan tab CAIR & DATA_OI saat ini) sebagai arsip bulan data itu. Gagal tidak menghentikan proses lain.
-export async function arsipkan(d: Performa) {
+// Hanya kalau seluruh isinya memang bulan itu: aktivitas terakhir di bulan yang sama dengan angka sales
+// (file bulan baru yang sales-nya belum diganti tapi aktivitasnya sudah bulan baru tidak menimpa arsip).
+// paksa = owner menyimpan arsip secara manual.
+export const bolehArsip = (d: Performa) => {
+  const b = bulanData(d), akt = bulanAktivitas(d);
+  return !!b && (akt ? akt === b : String(d.updated || '').slice(0, 7) === b);
+};
+export async function arsipkan(d: Performa, paksa = false) {
   const b = bulanData(d);
-  if (!b) return false;
+  if (!b || (!paksa && !bolehArsip(d))) return false;
   try {
     await simpanArsip(b, 'performa', { ...d, riwayat: undefined });
     const [cair, oi] = await Promise.all([bacaTabel(TAB_CAIR).catch(() => null), bacaTabel(TAB_OI).catch(() => null)]);
@@ -142,16 +149,6 @@ export async function savePerforma(data: Performa) {
   return { before, after: rank, dilewati: false as const };
 }
 
-// Bulan TGL GL terbaru (yang tidak melewati hari ini) di tab CAIR = bulan data pantauan yang sebenarnya
-export function bulanDariTarikan(t: Tabel | null, today = todayJkt()): string {
-  if (!t?.r.length) return '';
-  const k = kolomCair(t.h, t.r);
-  if (k.tgl < 0) return '';
-  let maks = '';
-  for (const b of t.r) { const d = tglTarikan(b[k.tgl] || ''); if (d && d <= today && d > maks) maks = d; }
-  return maks.slice(0, 7);
-}
-
 export async function loadPerforma(): Promise<Performa | null> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.data;
   await ensureTab();
@@ -167,8 +164,7 @@ export async function loadPerforma(): Promise<Performa | null> {
   }
   if (data) {
     const kemarin = kemarinOf(parseSnaps(rows[0]?.[1]), todayJkt());
-    const bulanTarikan = await bacaTabel(TAB_CAIR).then(bulanDariTarikan).catch(() => '');
-    data = { ...data, riwayat: kemarin ? { kemarin } : undefined, ...(bulanTarikan ? { bulanTarikan } : {}) };
+    data = { ...data, riwayat: kemarin ? { kemarin } : undefined };
   }
   cache = { at: Date.now(), data };
   return data;
