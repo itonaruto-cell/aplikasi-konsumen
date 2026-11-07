@@ -26,6 +26,6 @@ export async function POST(req: NextRequest) {
   if ((await getRole(s.email)) !== 'owner') return NextResponse.json({ error: 'Khusus owner.' }, { status: 403 });
   const data = await loadPerforma();
   if (!data || !isiSales(data)) return NextResponse.json({ error: 'Belum ada data untuk diarsipkan.' }, { status: 400 });
-  const ok = await arsipkan(data);
+  const ok = await arsipkan(data, true);
   return ok ? NextResponse.json({ ok: true, bulan: bulanData(data) }) : NextResponse.json({ error: 'Arsip gagal disimpan.' }, { status: 500 });
 }
