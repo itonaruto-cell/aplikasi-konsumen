@@ -390,18 +390,27 @@ export function staleInfo(data: Performa, now = new Date()): string {
 /* ---------- Data pantauan: masih bulan lalu / kiriman berhenti ---------- */
 const NAMA_BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 export const namaBulan = (ym: string) => NAMA_BULAN[Number(String(ym).slice(5, 7)) - 1] || '';
-// Bulan data yang sebenarnya (YYYY-MM). Kolom "bulan ini" di sheet (mis. OKT) lebih dipercaya daripada
-// tanggal UPDATE PER: file pantauan baru hasil salin bisa ber-UPDATE PER 1 November padahal angkanya masih Oktober.
-const KODE_BULAN = [/^JAN/, /^FEB/, /^MAR/, /^APR/, /^(MEI|MAY)/, /^JUN/, /^JUL/, /^(AGU|AGS|AUG)/, /^SEP/, /^(OKT|OCT)/, /^NOV/, /^(DES|DEC)/];
-export function bulanData(d: Pick<Performa, 'updated' | 'bulan'> | null | undefined): string {
+// Bulan data yang sebenarnya (YYYY-MM). Judul kolom bulan di sheet (SEP/OKT) tidak dipakai karena sering tidak
+// diganti, dan UPDATE PER selalu "kemarin" walaupun angkanya masih salinan bulan lalu. Yang dipakai: bulan TGL GL
+// terbaru di tab tarikan (bulanTarikan, ditempel server); kalau tarikan kosong, bulan UPDATE PER.
+export function bulanData(d: Pick<Performa, 'updated' | 'bulanTarikan'> | null | undefined): string {
+  if (d?.bulanTarikan && /^\d{4}-\d{2}$/.test(d.bulanTarikan)) return d.bulanTarikan;
   const upd = String(d?.updated || '').slice(0, 7);
-  if (!/^\d{4}-\d{2}$/.test(upd)) return '';
-  const label = String(d?.bulan?.ini || '').trim().toUpperCase();
-  const i = KODE_BULAN.findIndex((r) => r.test(label));
-  if (i < 0) return upd;
-  const mUpd = Number(upd.slice(5, 7));
-  const tahun = Number(upd.slice(0, 4)) - (i + 1 > mUpd ? 1 : 0);   // mis. label DES, UPDATE PER Januari
-  return `${tahun}-${String(i + 1).padStart(2, '0')}`;
+  return /^\d{4}-\d{2}$/.test(upd) ? upd : '';
+}
+
+// Tanggal di tarikan → YYYY-MM-DD. Menerima 2026-11-03, 03/11/2026, 3-Nov-2026, 3 November 2026, serial Excel.
+const KODE_BULAN = [/^JAN/, /^FEB/, /^MAR/, /^APR/, /^(MEI|MAY)/, /^JUN/, /^JUL/, /^(AGU|AGS|AUG)/, /^SEP/, /^(OKT|OCT)/, /^NOV/, /^(DES|DEC)/];
+export function tglTarikan(v: string): string {
+  const s = String(v || '').trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[\s-]+([A-Za-z]+)[\s-]+(\d{4})/);
+  if (m) { const i = KODE_BULAN.findIndex((r) => r.test(m![2].toUpperCase())); if (i >= 0) return `${m[3]}-${String(i + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  if (/^\d{5}(\.\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5).toISOString().slice(0, 10);
+  return '';
 }
 
 export type CekData = {
