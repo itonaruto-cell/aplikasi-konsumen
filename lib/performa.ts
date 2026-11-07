@@ -147,15 +147,18 @@ export async function savePerforma(data: Performa) {
   const api = sheets();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   const lama = await bacaMentah(api, spreadsheetId);
+  // UPDATE PER kosong (mis. file pantauan bulan baru yang tabel sales-nya belum terisi): pakai tanggal hari ini
+  if (!data.updated) data = { ...data, updated: todayJkt() };
   // Bulan berganti: simpan dulu data bulan sebelumnya (termasuk daftar konsumen, konsumen cair, data OI) ke arsip
   if (lama && isiSales(lama) && ((bulanData(lama) && bulanData(data) && bulanData(lama) !== bulanData(data)) || aktivitasLebihBaru(data, lama))) {
     await arsipkan(lama);
   }
   if (kirimanKosong(data, lama)) {
-    console.warn('Kiriman performa kosong diabaikan; data terakhir tetap dipakai.', { updated: data.updated, lama: lama?.updated });
+    console.warn('Kiriman performa kosong diabaikan; data terakhir tetap dipakai.', { updated: data.updated, bulan: data.bulan, lama: lama?.updated, lamaBulan: lama?.bulan });
     return { before: undefined, after: undefined, dilewati: true as const };
   }
   data = rapikanPerforma({ ...bawaRekapLama(data, lama), riwayat: undefined });
+  console.info('Kiriman performa diterima.', JSON.stringify({ updated: data.updated, bulan: data.bulan, sales: isiSales(data), aktivitas: bulanAktivitas(data), orang: data.orang?.length, blok: data.blok?.length }));
   const json = JSON.stringify(data);
   const chunks: string[][] = [];
   for (let i = 0; i < json.length; i += CHUNK) chunks.push([json.slice(i, i + CHUNK)]);
