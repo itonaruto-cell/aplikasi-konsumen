@@ -164,7 +164,8 @@ export async function savePerforma(data: Performa) {
     return { before: undefined, after: undefined, dilewati: true as const, alasan: 'kosong' as const };
   }
   data = rapikanPerforma({ ...bawaRekapLama(data, lama), riwayat: undefined });
-  console.info('Kiriman performa diterima.', JSON.stringify({ updated: data.updated, bulan: data.bulan, sales: isiSales(data), aktivitas: bulanAktivitas(data), orang: data.orang?.length, blok: data.blok?.length }));
+  console.info('Kiriman performa diterima.', JSON.stringify({ updated: data.updated, bulan: data.bulan, sales: isiSales(data), aktivitas: bulanAktivitas(data), orang: data.orang?.length, blok: data.blok?.length,
+    konsumen: Object.fromEntries(Object.entries(data.aktivitas?.konsumen || {}).map(([b, l]) => [b, [1, 2, 3].map((p) => l.filter((k) => k.p === p).length)])) }));
   const json = JSON.stringify(data);
   const chunks: string[][] = [];
   for (let i = 0; i < json.length; i += CHUNK) chunks.push([json.slice(i, i + CHUNK)]);
