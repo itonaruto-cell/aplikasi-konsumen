@@ -23,7 +23,7 @@ import Kejar from './performa/Kejar';
 import type { Jenis as JenisLaporan } from './performa/Laporan';
 const Laporan = lazy(() => import('./performa/Laporan'));
 import { posisiKosong } from '../lib/kesehatan-data';
-import { PIC_TAMBAHAN } from '../lib/posisi-isi';
+import { NAMA_OWNER, PIC_TAMBAHAN, TIM_TETAP, gabungTim } from '../lib/posisi-isi';
 import { aturBulanArsip } from '../lib/arsip-aktif';
 import { namaBulan } from '../lib/performa-calc';
 const ProspekPage = lazy(() => import('./performa/Prospek'));
@@ -255,8 +255,10 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   // Owner adalah SPV: tidak ikut ditagih plan, bukan pilihan PIC survey, dan tidak punya hitungan insentif perorangan
   const spv = akun.role === 'owner' ? me : null;
   // Pilihan PIC survey di Bahan survey: anggota Mobilku dari pantauan, ditambah PIC_TAMBAHAN (Agus & Yoga, Motorku)
-  const tim = useMemo(() => (data?.orang || []).filter((o) => o !== spv && !posisiKosong(o.nama)
-    && (brandOf(o) === 'mobilku' || String(o.nama).toUpperCase().split(/\s+/).some((w) => PIC_TAMBAHAN.includes(w)))).map((o) => o.nama), [data, spv]);
+  const tim = useMemo(() => gabungTim((data?.orang || []).filter((o) => o !== spv && !posisiKosong(o.nama)
+    && (brandOf(o) === 'mobilku' || String(o.nama).toUpperCase().split(/\s+/).some((w) => PIC_TAMBAHAN.includes(w)))).map((o) => o.nama), TIM_TETAP), [data, spv]);
+  // PIC survey: tim + Niko (owner juga bisa jadi PIC survey)
+  const timSurvey = useMemo(() => gabungTim(tim, [...TIM_TETAP, spv?.nama || NAMA_OWNER]), [tim, spv]);
   // Yang ditagih plan aktivitas: semua anggota di pantauan (Mobilku dan Motorku), kecuali owner sendiri
   const staf = useMemo(() => (data?.orang || []).filter((o) => o !== spv).map((o) => ({ nama: o.nama, brand: brandOf(o) })), [data, spv]);
   const myStreak = c && me ? streak(c, me.nama) : 0;
@@ -371,9 +373,9 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
   const halaman = (k: Page): ReactNode => (
     k === 'cari' ? (cari ? cari(reloadKey) : null) : k === 'aktivitas' ? (aktivitas ? aktivitas(reloadKey) : null)
-          : k === 'bahan' ? <BahanSurvey akun={akun} me={me} tim={tim} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFoto={() => { setLapAwal('bahan'); go('laporan'); }} />
+          : k === 'bahan' ? <BahanSurvey akun={akun} me={me} tim={timSurvey} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFoto={() => { setLapAwal('bahan'); go('laporan'); }} />
           : k === 'insentif' ? <Insentif c={c} me={me} akun={akun} reloadKey={reloadKey} onBahan={() => go('bahan')} />
-          : k === 'plan' ? <Plan c={c} me={me} akun={akun} tim={tim} staf={staf} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFotoBahan={() => { setLapAwal('bahan'); go('laporan'); }} />
+          : k === 'plan' ? <Plan c={c} me={me} akun={akun} tim={timSurvey} staf={staf} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} onInsentif={() => go('insentif')} onFotoBahan={() => { setLapAwal('bahan'); go('laporan'); }} />
           : k === 'inject' ? <InjectP3 akun={akun} cabang={data?.cabang || 'KENDAL'} reloadKey={reloadKey} />
           : loading && !data ? (
           <div className="space-y-3 px-4 pt-4">
