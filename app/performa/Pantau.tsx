@@ -392,7 +392,7 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
       <Sec title="Visit prioritas" right="ketuk untuk nama">
         <div className="grid grid-cols-3 gap-2 px-4">
           {pv.map((x, i) => (
-            <button key={i} disabled={!kons.length} onClick={() => push({ t: 'kList', title: `Konsumen P${i + 1} ${B.label}`, sub: 'Ketuk nama untuk detail', items: kons, mode: 'cabang', p0: (i + 1) as 1 })}
+            <button key={i} disabled={!kons.length} onClick={() => push({ t: 'kList', title: `Konsumen prioritas ${B.label}`, sub: 'Ketuk nama untuk detail', items: kons, mode: 'cabang', p0: (i + 1) as 1 })}
               className="flex flex-col gap-2 rounded-2xl border border-neutral-200 p-3 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
               <span className="flex items-baseline justify-between"><b className="text-[15px]">P{i + 1}</b><span className="text-xs text-neutral-500">{x.tot} data</span></span>
               <span className="text-2xl font-bold leading-none">{x.tot - x.bl}<span className="text-[13px] font-medium text-neutral-500">/{x.tot}</span></span>
