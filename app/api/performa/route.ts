@@ -5,6 +5,7 @@ import { arsipkan, isiSales, loadPerforma } from '../../../lib/performa';
 import { kosongkanBulan, perluDikosongkan } from '../../../lib/performa-kosong';
 import { bacaArsip } from '../../../lib/performa-arsip';
 import { rapikanPerforma } from '../../../lib/sales-brand';
+import { lengkapiNamaKonsumen } from '../../../lib/performa-nama';
 import type { Performa } from '../../../lib/performa-types';
 
 export const dynamic = 'force-dynamic';
@@ -25,9 +26,10 @@ export async function GET(req: NextRequest) {
       // UPDATE PER file salinan bisa sudah tanggal bulan berikutnya: pakai akhir bulan arsip supaya label bulan benar
       const [y, m] = bulan.split('-').map(Number);
       const updated = String(a.updated || '').slice(0, 7) === bulan ? a.updated : new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-      return NextResponse.json({ ...rapikanPerforma({ ...a, updated }), arsip: bulan }, { headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json({ ...(await lengkapiNamaKonsumen(rapikanPerforma({ ...a, updated }))), arsip: bulan }, { headers: { 'Cache-Control': 'no-store' } });
     }
-    const data = await loadPerforma();
+    const mentah = await loadPerforma();
+    const data = mentah && await lengkapiNamaKonsumen(mentah).catch(() => mentah);
     if (!data) return NextResponse.json({ kosong: true }, { headers: { 'Cache-Control': 'no-store' } });
     // Sudah ganti bulan tapi file pantauan bulan ini belum tersambung: tampilkan bulan berjalan kosong
     // (data bulan lalu ada di arsip, diperbarui otomatis tiap pagi oleh cron cek-data)
