@@ -37,16 +37,17 @@ export type Approval = {
 type Teks = string; // boleh berisi {kunci} / {kunci:format} dan **tebal**
 export type Blok =
   | { t: 'kop'; baris: Teks[]; garis?: boolean | boolean[]; tebal?: boolean[]; besar?: boolean; kiri?: boolean }
+  | { t: 'kopLogo'; judul: string; baris: [string, Teks][] }   // logo WOM Finance di kiri, judul + "label : nilai" di kanan
   | { t: 'info'; baris: [string, Teks][]; tebalLabel?: boolean; garis?: boolean; kolom2?: number }   // \t di nilai = kolom kedua (posisi kolom2 twip)
   | { t: 'tabel'; judul?: string; kepala: string[]; baris: Teks[][]; lebar: number[]; fill?: string }   // tabel tetap, mis. Review OMD
   | { t: 'approval' }
   | { t: 'p'; teks: Teks; tebal?: boolean; kiri?: number; spasi?: number; tengah?: boolean }
   | { t: 'bagian'; no: string; judul: string; kiri?: number }
-  | { t: 'daftar'; isi: Teks[]; kiri?: number }
+  | { t: 'daftar'; isi: Teks[]; kiri?: number; tebal?: boolean; tambahLampiran?: boolean }   // tambahLampiran: judul lampiran ikut didaftar
   | { t: 'data'; keys: string[]; nomorPertama?: boolean; tebal?: boolean; kiri?: number; lebarLabel?: number }
   | { t: 'dataBaris'; keys: string[]; kiri?: number; lebarLabel?: number }   // isian per baris, bernomor 1., 2., …
   | { t: 'halaman' }
-  | { t: 'lampiran'; judul?: string; nomor: boolean };
+  | { t: 'lampiran'; judul?: string; nomor: boolean; tautan?: { teks: Teks; url: Teks } };   // tautan = poin 1 berupa link (mis. folder survey)
 export type TemplateSurat = {
   id: string; nama: string; ringkas: string; sk?: string;
   font: string; fontKop?: string; sz: number; szTabel: number; kertas: 'letter' | 'a4'; margin?: number;
@@ -407,8 +408,54 @@ export const TEMPLATE_SURAT: TemplateSurat[] = [
     ],
     lampiran: [],
   },
+  {
+    id: 'ba-bcp', nama: 'BA BCP MobilKu',
+    ringkas: 'Aplikasi diproses lewat BCP karena sistem error (mis. MSS tidak bisa submit pre survey)',
+    font: 'Arial', sz: 20, szTabel: 20, kertas: 'letter', margin: 1440,
+    judul: 'BERITA ACARA BCP',
+    perihal: 'BA BCP KENDAL - MOBILKU - {nama:upper}',
+    approval: {
+      kolom: [['peran', ''], ['nama', 'NAMA'], ['jabatan', 'JABATAN'], ['status', 'APPROVAL'], ['tanggal', 'TGL APPROVE'], ['ket', 'NOTE']],
+      lebar: [1215, 1695, 1710, 1335, 1590, 3015], tengah: true, kepalaTebal: true,
+      pembuat: { peran: 'Dibuat Oleh', nama: P.aji, jabatan: 'Branch Head' },
+      penyetuju: [
+        { peran: 'Disetujui oleh', nama: 'Untik Hartanti', jabatan: 'AMM MobilKu' },
+        { peran: 'Disetujui oleh', nama: P.azza, jabatan: 'Area AMU & Credit Manager' },
+        { peran: 'Diketahui Oleh', nama: P.moga, jabatan: 'BU Head Jateng Utara' },
+      ],
+      status: ['Submitted', ''], tgl: 'panjang', tglHariIni: true, ketAwal: 'BCP Error Sistem Nasional',
+    },
+    isian: [
+      { k: 'tglKejadian', label: 'Tanggal error', jenis: 'tanggal', grup: 'isi' },
+      { k: 'kronologi', label: 'Kronologi error', jenis: 'panjang', grup: 'isi',
+        awal: 'MSS mengalami eror tidak dapat muncul KTP secara otomatis. Sehingga aplikasi MSS tidak dapat submit pre survey. Sudah dilakukan koordinasi dengan tim mobile survey namun belum tersolvedkan dan diarahkan BCP.' },
+      { k: 'nama', label: 'Nama Konsumen', besar: true },
+      { k: 'soa', label: 'Sumber Order', besar: true, saran: ['BOOKING MANDIRI', 'AGENT', 'WALK IN', 'CHANNEL MEDIATOR', 'DIRECT MARKETING'] },
+      { k: 'status', label: 'Status Konsumen', besar: true, saran: ['REPEAT ORDER CUSTOMER', 'NEW CUSTOMER'] },
+      { k: 'rating', label: 'Rating Customer', besar: true, awal: 'NORMAL' },
+      { k: 'mao', label: 'Nama MAO', besar: true },
+      { k: 'linkFolder', label: 'Link folder survey (lampiran 1)', ph: 'https://drive.google.com/drive/folders/…' },
+    ],
+    blok: [
+      { t: 'kopLogo', judul: 'PT. WOM FINANCE', baris: [['Bussines Unit', 'Jateng Utara'], ['Cabang', 'Kendal'], ['Tanggal', '{tanggal:panjang}']] },
+      { t: 'p', teks: 'PT Wahana Ottomitra Multiartha, Tbk', tebal: true },
+      { t: 'approval' },
+      { t: 'p', teks: 'Pada hari ini' },
+      { t: 'p', teks: 'Pada tanggal {tglKejadian:panjang}, {kronologi}' },
+      { t: 'data', keys: ['nama', 'soa', 'status', 'rating', 'mao'], kiri: 720, lebarLabel: 2880 },
+      { t: 'p', teks: 'Lampiran', tebal: true },
+      { t: 'daftar', isi: ['FILE FOLDER SURVEY'], tambahLampiran: true, tebal: true, kiri: 0 },
+      { t: 'p', teks: ' ' },
+      { t: 'p', teks: 'Demikian Berita Acara ini dibuat untuk dipergunakan dengan sebaik-baiknya.' },
+      { t: 'halaman' },
+      { t: 'lampiran', judul: 'LAMPIRAN', nomor: true, tautan: { teks: '{nama:upper}', url: '{linkFolder}' } },
+    ],
+    lampiran: ['Bukti error MSS'],
+  },
 ];
 export const templateSurat = (id: string) => TEMPLATE_SURAT.find((t) => t.id === id) || TEMPLATE_SURAT[0];
+/** Template yang mencetak nomor surat (BA BCP misalnya tidak bernomor). */
+export const pakaiNomor = (t: TemplateSurat) => [JSON.stringify(t.blok), t.perihal, t.namaFile || ''].some((x) => x.includes('{nomor}'));
 
 /* ---------- Format ---------- */
 const ROMAWI = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
@@ -540,14 +587,15 @@ export function noUrutBerikut(list: Surat[]): string {
 export type SelApproval = { teks: string; rowSpan?: number; lanjut?: boolean };
 export type BlokJadi =
   | { t: 'kop'; baris: { teks: string; tebal: boolean; garis: boolean }[]; besar: boolean; kiri: boolean }
+  | { t: 'kopLogo'; judul: string; baris: [string, string][] }
   | { t: 'info'; baris: [string, string][]; tebalLabel: boolean; garis: boolean; kolom2: number }
   | { t: 'approval'; judul?: string; fill?: string; tengah: boolean; lebar: number[]; kepala: string[]; kepalaGabung: number; kepalaTebal: boolean; peranTebal: boolean; baris: SelApproval[][] }
   | { t: 'p'; teks: string; tebal: boolean; kiri: number; spasi: number; tengah: boolean }
   | { t: 'bagian'; no: string; judul: string; kiri: number }
-  | { t: 'daftar'; isi: string[]; kiri: number }
+  | { t: 'daftar'; isi: string[]; kiri: number; tebal: boolean }
   | { t: 'data'; baris: [string, string, string][]; tebal: boolean; kiri: number; lebarLabel: number }
   | { t: 'halaman' }
-  | { t: 'lampiran'; judul: string; nomor: boolean; isi: LampiranSurat[] };
+  | { t: 'lampiran'; judul: string; nomor: boolean; isi: LampiranSurat[]; tautan?: { teks: string; url: string } };
 
 export function susunSurat(s: Surat): BlokJadi[] {
   const t = templateSurat(s.template);
@@ -563,6 +611,7 @@ export function susunSurat(s: Surat): BlokJadi[] {
         const baris = b.baris.flatMap((x, i) => isiTeks(x, s).split('\n').map((teks) => ({ teks, tebal: b.tebal ? b.tebal[i] !== false : true, garis: garis(i) })));
         return { t: 'kop', baris, besar: !!b.besar, kiri: !!b.kiri };
       }
+      case 'kopLogo': return { t: 'kopLogo', judul: b.judul, baris: b.baris.map(([l, v]) => [l, isiTeks(v, s)]) };
       case 'info': return { t: 'info', baris: b.baris.map(([l, v]) => [l, isiTeks(v, s)]), tebalLabel: !!b.tebalLabel, garis: !!b.garis, kolom2: b.kolom2 || 3600 };
       case 'tabel': return { t: 'approval', judul: b.judul, fill: b.fill, tengah: true, lebar: b.lebar, kepala: b.kepala, kepalaGabung: 1, kepalaTebal: true, peranTebal: false, baris: b.baris.map((r) => r.map((x) => ({ teks: isiTeks(x, s, '') }))) };
       case 'approval': {
@@ -581,7 +630,10 @@ export function susunSurat(s: Surat): BlokJadi[] {
       }
       case 'p': return { t: 'p', teks: isiTeks(b.teks, s), tebal: !!b.tebal, kiri: b.kiri || 0, spasi: b.spasi ?? 0, tengah: !!b.tengah };
       case 'bagian': return { t: 'bagian', no: b.no, judul: b.judul, kiri: b.kiri ?? 0 };
-      case 'daftar': return { t: 'daftar', isi: b.isi.map((x) => isiTeks(x, s)), kiri: b.kiri ?? 720 };
+      case 'daftar': return {
+        t: 'daftar', kiri: b.kiri ?? 720, tebal: !!b.tebal,
+        isi: [...b.isi.map((x) => isiTeks(x, s)), ...(b.tambahLampiran ? s.lampiran.map((l) => l.judul.trim()).filter(Boolean) : [])],
+      };
       case 'data': return {
         t: 'data', tebal: !!b.tebal, kiri: b.kiri || 0, lebarLabel: b.lebarLabel || 2200,
         baris: b.keys.map((k, i) => [b.nomorPertama && i === 0 ? '1.' : '', t.isian.find((x) => x.k === k)?.label || k, nilaiIsian(s, k)]),
@@ -591,7 +643,10 @@ export function susunSurat(s: Surat): BlokJadi[] {
         baris: barisTerisi(s).flatMap((r, i) => b.keys.map((k, j): [string, string, string] => [j === 0 ? `${i + 1}.` : '', t.baris?.isian.find((x) => x.k === k)?.label || k, nilaiBaris(t, r, k)])),
       };
       case 'halaman': return { t: 'halaman' };
-      case 'lampiran': return { t: 'lampiran', judul: b.judul || 'Lampiran', nomor: b.nomor, isi: s.lampiran };
+      case 'lampiran': return {
+        t: 'lampiran', judul: b.judul || 'Lampiran', nomor: b.nomor, isi: s.lampiran,
+        ...(b.tautan ? { tautan: { teks: isiTeks(b.tautan.teks, s), url: isiTeks(b.tautan.url, s, '') } } : {}),
+      };
     }
   });
 }

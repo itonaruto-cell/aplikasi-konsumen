@@ -409,7 +409,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             {k === 'mutasi' && <RekapMutasi />}
             {k === 'proyeksi' && <ProyeksiPage c={c} me={me} akun={akun} onFoto={() => { setLapAwal('proyeksi'); go('laporan'); }} />}
             {k === 'report' && <ReportSurveyPage akun={akun} reloadKey={reloadKey} onBanding={() => go('banding')} onBcp={() => go('bcp')} />}
-            {k === 'bcp' && <BcpPage akun={akun} reloadKey={reloadKey} />}
+            {k === 'bcp' && <BcpPage akun={akun} reloadKey={reloadKey} onBaBcp={() => go('surat')} />}
             {k === 'banding' && <BandingPage akun={akun} reloadKey={reloadKey} />}
             {k === 'surat' && <SuratPage akun={akun} reloadKey={reloadKey} />}
             {k === 'alatpdf' && <AlatPdf />}
