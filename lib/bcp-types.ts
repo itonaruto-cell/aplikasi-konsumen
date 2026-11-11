@@ -194,6 +194,12 @@ export function bcpDariReport(b: Bcp, r: ReportSurvey, timpa = false): { b: Bcp;
   return { b: x, n };
 }
 
+/** Isian BA BCP (menu Surat) dari format BCP. */
+export const dataBaBcp = (b: Bcp): Record<string, string> => ({
+  nama: b.nama.trim().toUpperCase(), soa: b.soa.trim().toUpperCase(),
+  status: b.jenisKonsumen === 'Repeat Order' ? 'REPEAT ORDER CUSTOMER' : b.jenisKonsumen === 'New Customer' ? 'NEW CUSTOMER' : '',
+  mao: b.mao.trim().toUpperCase(), linkFolder: b.linkFolder.trim(),
+});
 export const ringkasBcp = (b: Bcp) => [b.unit, b.pencairan ? `Rp ${b.pencairan.toLocaleString('id-ID')}` : '', b.jenisAplikasi].filter(Boolean).join(' · ');
 export { labaOf };
 

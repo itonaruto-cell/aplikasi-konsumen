@@ -3,21 +3,25 @@ import { zip, esc } from './xlsx-mini';
 import { NIKO_NAMA, potongTebal, perihalSurat, susunSurat, templateSurat, type BlokJadi, type Surat } from './surat-types';
 
 export type FotoDocx = { data: Uint8Array; ext: 'jpeg' | 'png'; w: number; h: number; ket: string; lampiran: number };
+export type LogoDocx = { data: Uint8Array; ext: 'jpeg' | 'png'; w: number; h: number };
+/** Logo kop (blok kopLogo) yang perlu diunduh dulu sebelum file Word dibuat. */
+export const URL_LOGO = '/template/logo-wom.png';
+export const perluLogo = (s: Surat) => templateSurat(s.template).blok.some((b) => b.t === 'kopLogo');
 export const TIPE_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 const enc = new TextEncoder();
 const EMU = 914400; // per inci
 
-type Run = { t: string; b?: boolean; i?: boolean; u?: boolean; sz?: number; font?: string; tab?: boolean; br?: boolean };
+type Run = { t: string; b?: boolean; i?: boolean; u?: boolean; sz?: number; font?: string; tab?: boolean; br?: boolean; warna?: string };
 type ParOpt = { jc?: 'left' | 'center' | 'both'; left?: number; hanging?: number; after?: number; before?: number; pageBreak?: boolean; keepNext?: boolean; tabs?: number[]; garisBawah?: boolean };
 
 function buat(fontUtama: string) {
   const run = (x: Run) => {
     const f = x.font || fontUtama;
-    const rpr = `<w:rPr><w:rFonts w:ascii="${f}" w:hAnsi="${f}" w:cs="${f}" w:eastAsia="${f}"/>${x.b ? '<w:b/><w:bCs/>' : ''}${x.i ? '<w:i/>' : ''}${x.u ? '<w:u w:val="single"/>' : ''}${x.sz ? `<w:sz w:val="${x.sz}"/><w:szCs w:val="${x.sz}"/>` : ''}</w:rPr>`;
+    const rpr = `<w:rPr><w:rFonts w:ascii="${f}" w:hAnsi="${f}" w:cs="${f}" w:eastAsia="${f}"/>${x.b ? '<w:b/><w:bCs/>' : ''}${x.i ? '<w:i/>' : ''}${x.warna ? `<w:color w:val="${x.warna}"/>` : ''}${x.u ? '<w:u w:val="single"/>' : ''}${x.sz ? `<w:sz w:val="${x.sz}"/><w:szCs w:val="${x.sz}"/>` : ''}</w:rPr>`;
     return `<w:r>${rpr}${x.br ? '<w:br/>' : ''}${x.tab ? '<w:tab/>' : ''}<w:t xml:space="preserve">${esc(x.t)}</w:t></w:r>`;
   };
-  const par = (runs: Run[] | string, o: ParOpt = {}) => {
+  const par = (runs: Run[] | string, o: ParOpt = {}, mentah = '') => {
     const ppr = [
       o.pageBreak ? '<w:pageBreakBefore/>' : '',
       o.keepNext ? '<w:keepNext/>' : '',
@@ -27,7 +31,7 @@ function buat(fontUtama: string) {
       o.left || o.hanging ? `<w:ind w:left="${o.left || 0}" w:hanging="${o.hanging || 0}"/>` : '',
       `<w:jc w:val="${o.jc || 'both'}"/>`,
     ].join('');
-    const isi = typeof runs === 'string' ? run({ t: runs }) : runs.map(run).join('');
+    const isi = (typeof runs === 'string' ? run({ t: runs }) : runs.map(run).join('')) + mentah;
     return `<w:p><w:pPr>${ppr}</w:pPr>${isi}</w:p>`;
   };
   // Teks beberapa baris (\n) dalam satu paragraf
@@ -37,25 +41,36 @@ function buat(fontUtama: string) {
 
 const garis = (v: 'single' | 'nil') => ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map((k) => `<w:${k} w:val="${v}"${v === 'single' ? ' w:sz="4" w:space="0" w:color="000000"' : ''}/>`).join('');
 
-function gambar(rid: string, n: number, f: FotoDocx, lebarHalaman: number): string {
-  const maxW = Math.min(6.0, lebarHalaman) * EMU, maxH = 4.3 * EMU; // dua foto per halaman
+function gambarInline(rid: string, n: number, f: { w: number; h: number; ext: string }, maxW: number, maxH: number): string {
   const k = Math.min(maxW / f.w, maxH / f.h);
   const cx = Math.round(f.w * k), cy = Math.round(f.h * k);
-  return `<w:p><w:pPr><w:spacing w:before="120" w:after="60"/><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Gambar ${n}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${n}" name="foto${n}.${f.ext}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+  return `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Gambar ${n}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${n}" name="foto${n}.${f.ext}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>`;
+}
+function gambar(rid: string, n: number, f: FotoDocx, lebarHalaman: number): string {
+  // dua foto per halaman
+  return `<w:p><w:pPr><w:spacing w:before="120" w:after="60"/><w:jc w:val="center"/></w:pPr><w:r>${gambarInline(rid, n, f, Math.min(6.0, lebarHalaman) * EMU, 4.3 * EMU)}</w:r></w:p>`;
 }
 
-export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: string[] } {
+export function documentXml(s: Surat, fotos: FotoDocx[], logo?: LogoDocx | null): { xml: string; rels: string[] } {
   const t = templateSurat(s.template);
-  const { par, baris } = buat(t.font);
+  const { par, baris, run } = buat(t.font);
   const a4 = t.kertas === 'a4';
   const margin = t.margin || (a4 ? 1134 : 1440);
   const lebarTeks = (a4 ? 11906 : 12240) - 2 * margin;
   const rels: string[] = [];
   const isi: string[] = [];
   let halamanBaru = false;
-  const p = (runs: Run[] | string, o: ParOpt = {}) => { isi.push(par(runs, { ...o, pageBreak: o.pageBreak || halamanBaru })); halamanBaru = false; };
-  let nFoto = 0;
+  const p = (runs: Run[] | string, o: ParOpt = {}, mentah = '') => { isi.push(par(runs, { ...o, pageBreak: o.pageBreak || halamanBaru }, mentah)); halamanBaru = false; };
+  let nFoto = 0, nLink = 0;
   const blok = susunSurat(s);
+  // Teks bertaut (mis. nama konsumen → folder survey); tanpa alamat jadi teks biasa
+  const tautan = (teks: string, url: string, b = false) => {
+    const u = url.trim();
+    if (!/^https?:\/\//i.test(u)) return run({ t: teks, b });
+    nLink++;
+    rels.push(`<Relationship Id="rIdLink${nLink}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${esc(u)}" TargetMode="External"/>`);
+    return `<w:hyperlink r:id="rIdLink${nLink}" w:history="1">${run({ t: teks, b, u: true, warna: '1155CC' })}</w:hyperlink>`;
+  };
 
   const tabelApproval = (b: Extract<BlokJadi, { t: 'approval' }>) => {
     const total = b.lebar.reduce((x, y) => x + y, 0);
@@ -92,6 +107,24 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
       case 'kop':
         b.baris.forEach((x, i) => p([{ t: x.teks, b: x.tebal, u: x.garis, sz: b.besar ? t.sz + 4 : undefined, font: t.fontKop }], { jc: b.kiri ? 'left' : 'center', after: i === b.baris.length - 1 ? 240 : 60 }));
         break;
+      case 'kopLogo': {
+        // Tabel tanpa garis: logo di kiri, judul + "label : nilai" di kanan (seperti kop BA cabang)
+        const wLogo = 2050, wTeks = lebarTeks - wLogo;
+        let sLogo = '';
+        if (logo) {
+          rels.push(`<Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo.${logo.ext}"/>`);
+          sLogo = `<w:r>${gambarInline('rIdLogo', 900, logo, 1.3 * EMU, 0.85 * EMU)}</w:r>`;
+        }
+        const tab = 1700;
+        const kanan = [
+          par([{ t: b.judul }], { jc: 'left' }),
+          ...b.baris.map(([l, v]) => par([{ t: l }, { t: `: ${v}`, tab: true }], { jc: 'left', tabs: [tab] })),
+        ].join('');
+        const tc = (w: number, x: string) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:vAlign w:val="top"/></w:tcPr>${x}</w:tc>`;
+        isi.push(`<w:tbl><w:tblPr><w:tblW w:w="${lebarTeks}" w:type="dxa"/><w:tblBorders>${garis('nil')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${wLogo}"/><w:gridCol w:w="${wTeks}"/></w:tblGrid><w:tr>${tc(wLogo, par([], { jc: 'left' }, sLogo))}${tc(wTeks, kanan)}</w:tr></w:tbl>`);
+        p('', { after: 120 });
+        break;
+      }
       case 'info': {
         const tab = 1700, kol2 = tab + 140 + b.kolom2;
         // "nama\tjabatan" → kolom kedua rata di satu posisi tab
@@ -107,14 +140,17 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
       case 'approval': tabelApproval(b); break;
       case 'p': p(baris(b.teks, { b: b.tebal }), { jc: b.tengah ? 'center' : 'both', left: b.kiri, after: b.spasi, before: 0 }); break;
       case 'bagian': p([{ t: b.no, b: true }, { t: b.judul, b: true, tab: true }], { left: b.kiri + 720, hanging: 360, tabs: [b.kiri + 720], before: 200, after: 60, keepNext: true }); break;
-      case 'daftar': b.isi.forEach((x, i) => p([{ t: `${i + 1}.` }, { t: x, tab: true }], { left: b.kiri + 360, hanging: 360, tabs: [b.kiri + 360], after: 40 })); break;
+      case 'daftar': b.isi.forEach((x, i) => p([{ t: `${i + 1}.`, b: b.tebal }, { t: x, tab: true, b: b.tebal }], { left: b.kiri + 360, hanging: 360, tabs: [b.kiri + 360], after: 40 })); break;
       case 'data': tabelData(b); break;
       case 'halaman': halamanBaru = true; break;
       case 'lampiran':
         if (b.judul) p([{ t: b.judul, b: true }], { after: 160, keepNext: true });
+        // Poin 1 berupa tautan (mis. folder survey), foto lampiran mulai poin 2
+        const geser = b.tautan ? 1 : 0;
+        if (b.tautan) p([{ t: '1.' }, { t: '', tab: true }], { left: 720, hanging: 360, tabs: [720], after: 60, jc: 'left' }, tautan(b.tautan.teks, b.tautan.url));
         b.isi.forEach((l, li) => {
           const judul = l.judul.trim();
-          if (judul || b.nomor) p(b.nomor ? [{ t: `${li + 1}.`, b: true }, { t: judul || `Lampiran ${li + 1}`, b: true, tab: true }] : [{ t: `${judul} :`, b: true }],
+          if (judul || b.nomor) p(b.nomor ? [{ t: `${li + 1 + geser}.`, b: true }, { t: judul || `Lampiran ${li + 1 + geser}`, b: true, tab: true }] : [{ t: `${judul} :`, b: true }],
             { left: b.nomor ? 720 : 0, hanging: b.nomor ? 360 : 0, tabs: b.nomor ? [720] : undefined, before: li ? 240 : 0, after: 60, keepNext: true, jc: 'left' });
           for (const f of fotos.filter((x) => x.lampiran === li)) {
             nFoto++;
@@ -133,9 +169,9 @@ export function documentXml(s: Surat, fotos: FotoDocx[]): { xml: string; rels: s
   return { xml, rels };
 }
 
-export function buatDocxSurat(s: Surat, fotos: FotoDocx[]): Uint8Array {
+export function buatDocxSurat(s: Surat, fotos: FotoDocx[], logo?: LogoDocx | null): Uint8Array {
   const t = templateSurat(s.template);
-  const { xml, rels } = documentXml(s, fotos);
+  const { xml, rels } = documentXml(s, fotos, logo);
   const F = t.font;
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${F}" w:hAnsi="${F}" w:cs="${F}" w:eastAsia="${F}"/><w:sz w:val="${t.sz}"/><w:szCs w:val="${t.sz}"/><w:lang w:val="id-ID"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style><w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>`;
@@ -158,6 +194,7 @@ export function buatDocxSurat(s: Surat, fotos: FotoDocx[]): Uint8Array {
     { name: 'word/settings.xml', data: enc.encode(settings) },
     { name: 'word/_rels/document.xml.rels', data: enc.encode(docRels) },
   ];
+  if (logo && rels.some((r) => r.includes('rIdLogo'))) files.push({ name: `word/media/logo.${logo.ext}`, data: logo.data });
   let n = 0;
   s.lampiran.forEach((_, li) => { for (const f of fotos.filter((x) => x.lampiran === li)) { n++; files.push({ name: `word/media/foto${n}.${f.ext}`, data: f.data }); } });
   return zip(files);

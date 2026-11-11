@@ -2,13 +2,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   JENIS_APLIKASI, JENIS_CAIR, JENIS_KONSUMEN, KEPEMILIKAN, TUJUAN, bawaanMao, bcpBaru, bcpDariReport, bersihOf, cariReportBcp,
-  noteDariReport, omzetBulanOf, rapikanBcp, ringkasBcp, teksBcp, type Bcp, type PhBcp,
+  dataBaBcp, noteDariReport, omzetBulanOf, rapikanBcp, ringkasBcp, teksBcp, type Bcp, type PhBcp,
 } from '../../lib/bcp-types';
 import { rapikanReport, type ReportSurvey } from '../../lib/report-survey';
 import { AngkaInput, FIELD } from './form';
 import { Bagian, Isian, Pilih } from './bagian';
 import { Ico } from './parts';
-import { KUNCI_BUKA_BCP, daftarBcp, simpanBcpDariReport } from './bcp-dari-report';
+import { KUNCI_BA_BCP, KUNCI_BUKA_BCP, daftarBcp, simpanBcpDariReport } from './bcp-dari-report';
 import { useOverlay } from '../overlay';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
@@ -55,7 +55,7 @@ function Penghasilan({ judul, p, onChange }: { judul: string; p: PhBcp; onChange
   );
 }
 
-function Editor({ awal, reports, onTutup, onSimpan }: { awal: Bcp; reports: ReportSurvey[]; onTutup: () => void; onSimpan: (b: Bcp) => void }) {
+function Editor({ awal, reports, onTutup, onSimpan, onBaBcp }: { awal: Bcp; reports: ReportSurvey[]; onTutup: () => void; onSimpan: (b: Bcp) => void; onBaBcp?: () => void }) {
   useOverlay(true, onTutup);
   const [b, setB] = useState<Bcp>(awal);
   const [simpan, setSimpan] = useState<'' | 'menyimpan' | 'tersimpan' | 'gagal'>(awal.id ? 'tersimpan' : '');
@@ -225,6 +225,11 @@ function Editor({ awal, reports, onTutup, onSimpan }: { awal: Bcp; reports: Repo
       </Bagian>
 
       <Bagian judul="Link" sub={[b.linkBa && 'BA BCP', b.linkFolder && 'folder'].filter(Boolean).join(' · ') || 'Link BA BCP & folder'}>
+        {onBaBcp && (
+          <button onClick={() => { try { sessionStorage.setItem(KUNCI_BA_BCP, JSON.stringify(dataBaBcp(terakhir.current))); } catch { /* abaikan */ } onBaBcp(); }} disabled={!b.nama.trim()}
+            className="mb-1 min-h-11 w-full rounded-xl border border-neutral-300 text-[14px] font-semibold disabled:opacity-40 dark:border-neutral-700">Buat BA BCP (Word) dari data ini</button>
+        )}
+        <p className="text-[12px] leading-snug text-neutral-500">BA BCP dibuat di menu Surat (nama, SOA, status, MAO & link folder ikut terisi). Unggah file Word-nya ke Drive, lalu tempel link-nya di bawah.</p>
         <Isian label="Link BA BCP"><input value={b.linkBa} onChange={(e) => set('linkBa', e.target.value.trim())} type="url" inputMode="url" placeholder="https://" className={IN} /></Isian>
         <Isian label="Link folder"><input value={b.linkFolder} onChange={(e) => set('linkFolder', e.target.value.trim())} type="url" inputMode="url" placeholder="https://drive.google.com/…" className={IN} /></Isian>
       </Bagian>
@@ -245,7 +250,7 @@ function Editor({ awal, reports, onTutup, onSimpan }: { awal: Bcp; reports: Repo
   );
 }
 
-export default function BcpPage({ akun, reloadKey = 0 }: { akun: Akun; reloadKey?: number }) {
+export default function BcpPage({ akun, reloadKey = 0, onBaBcp }: { akun: Akun; reloadKey?: number; onBaBcp?: () => void }) {
   const [list, setList] = useState<Bcp[] | null>(null);
   const [reports, setReports] = useState<ReportSurvey[]>([]);
   const [err, setErr] = useState('');
@@ -282,7 +287,7 @@ export default function BcpPage({ akun, reloadKey = 0 }: { akun: Akun; reloadKey
     setProses('');
   };
 
-  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} reports={reports} onTutup={() => { setBuka(null); muat(); }} onSimpan={simpanLokal} />;
+  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} reports={reports} onTutup={() => { setBuka(null); muat(); }} onSimpan={simpanLokal} onBaBcp={onBaBcp} />;
   const q = cari.trim().toUpperCase();
   const tampil = (list || []).filter((b) => !q || `${b.nama} ${b.mao} ${b.unit}`.toUpperCase().includes(q));
   // Report 6C 1EP 30 hari terakhir yang belum punya format BCP

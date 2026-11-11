@@ -1,12 +1,14 @@
 'use client';
 // Surat IM / Berita Acara dari template SK: kalimat baku tetap, yang diubah hanya kop, baris "Dibuat oleh",
 // isian yang berubah tiap konsumen, dan foto lampiran. Hasilnya file Word (.docx) dengan susunan format kantor.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  TEMPLATE_SURAT, barisKosong, isiTeks, namaFileSurat, noUrutBerikut, nomorSurat, perihalSurat, potongTebal, rapikanSurat, ribuan, sinkronBaris, suratBaru, susunSurat, templateSurat,
+  TEMPLATE_SURAT, barisKosong, isiTeks, pakaiNomor, namaFileSurat, noUrutBerikut, nomorSurat, perihalSurat, potongTebal, rapikanSurat, ribuan, sinkronBaris, suratBaru, susunSurat, templateSurat,
   type BlokJadi, type FotoSurat, type IsianData, type Surat, type TemplateSurat,
 } from '../../lib/surat-types';
-import { TIPE_DOCX, buatDocxSurat, type FotoDocx } from '../../lib/surat-docx';
+import { TIPE_DOCX, URL_LOGO, buatDocxSurat, perluLogo, type FotoDocx, type LogoDocx } from '../../lib/surat-docx';
+import { dataBaBcp, samaNama, type Bcp } from '../../lib/bcp-types';
+import { KUNCI_BA_BCP, daftarBcp } from './bcp-dari-report';
 import { todayJkt } from '../../lib/performa-calc';
 import { useOverlay } from '../overlay';
 import { KUNCI_SURAT_BUKA, suratTerbuka } from '../../lib/surat-buka';
@@ -39,9 +41,18 @@ async function ambilFoto(f: FotoSurat, lampiran: number): Promise<FotoDocx | nul
   } catch { return null; }
 }
 
+async function ambilLogo(): Promise<LogoDocx | null> {
+  try {
+    const r = await fetch(URL_LOGO);
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    const bm = await createImageBitmap(blob);
+    return { data: new Uint8Array(await blob.arrayBuffer()), ext: blob.type === 'image/jpeg' ? 'jpeg' : 'png', w: bm.width, h: bm.height };
+  } catch { return null; }
+}
 async function simpanFile(s: Surat, fotos: FotoDocx[], bagikan: boolean) {
   const nama = `${namaFileSurat(s)}.docx`;
-  const bytes = buatDocxSurat(s, fotos);
+  const bytes = buatDocxSurat(s, fotos, perluLogo(s) ? await ambilLogo() : null);
   const file = new File([bytes.buffer as ArrayBuffer], nama, { type: TIPE_DOCX });
   if (bagikan && navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file], title: nama }); return; } catch (e) { if ((e as Error)?.name === 'AbortError') return; }
@@ -70,6 +81,16 @@ function HalamanSurat({ s }: { s: Surat }) {
       {isi.map((b, i) => {
         switch (b.t) {
           case 'kop': return <div key={i} className={`mb-3 ${b.kiri ? 'text-left' : 'text-center'}`} style={{ fontFamily: t.fontKop }}>{b.baris.map((x, j) => <p key={j} className={`${x.tebal ? 'font-bold' : ''} ${x.garis ? 'underline' : ''} ${b.besar ? 'text-[12px]' : ''}`}>{x.teks}</p>)}</div>;
+          case 'kopLogo': return (
+            <div key={i} className="mb-3 flex items-start gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={URL_LOGO} alt="Logo" className="w-[22%] shrink-0" />
+              <table><tbody>
+                <tr><td colSpan={2}>{b.judul}</td></tr>
+                {b.baris.map(([l, v]) => <tr key={l}><td className="pr-6 align-top">{l}</td><td className="align-top">: {v}</td></tr>)}
+              </tbody></table>
+            </div>
+          );
           case 'info': return (
             <div key={i} className={b.garis ? 'mb-4 border-b-2 border-black pb-2' : ''}>
               <table className="mb-3"><tbody>{b.baris.map(([l, v]) => <tr key={l}><td className={`w-[90px] align-top ${b.tebalLabel ? 'font-bold' : ''}`}>{l}</td><td className="w-3 align-top">:</td><td className="align-top">
@@ -89,7 +110,7 @@ function HalamanSurat({ s }: { s: Surat }) {
           );
           case 'p': return <p key={i} className={`text-justify ${b.tengah ? 'text-center' : ''}`} style={{ marginLeft: tw(b.kiri), marginBottom: b.spasi / 20 }}><Teks teks={b.teks} tebal={b.tebal} /></p>;
           case 'bagian': return <p key={i} className="mt-3 font-bold" style={{ marginLeft: tw(b.kiri + 360) }}>{b.no}&nbsp;&nbsp;{b.judul}</p>;
-          case 'daftar': return <ol key={i} className="list-decimal text-justify" style={{ paddingLeft: tw(b.kiri + 360) }}>{b.isi.map((x, j) => <li key={j}>{x}</li>)}</ol>;
+          case 'daftar': return <ol key={i} className={`list-decimal text-justify ${b.tebal ? 'font-bold' : ''}`} style={{ paddingLeft: tw(b.kiri + 360) }}>{b.isi.map((x, j) => <li key={j}>{x}</li>)}</ol>;
           case 'data': return (
             <table key={i} className="mb-3" style={{ marginLeft: tw(b.kiri) }}><tbody>
               {b.baris.map(([no, l, v], j) => <tr key={j} className={b.tebal ? 'font-bold' : ''}>{b.baris.some((r) => r[0]) && <td className="w-6 align-top">{no}</td>}<td className="align-top" style={{ width: (b.lebarLabel / 1440) * 72 }}>{l}</td><td className="w-3 align-top">:</td><td className="align-top">{v}</td></tr>)}
@@ -98,9 +119,14 @@ function HalamanSurat({ s }: { s: Surat }) {
           case 'lampiran': return (
             <div key={i}>
               {b.judul && <p className="font-bold">{b.judul}</p>}
+              {b.tautan && (
+                <p className="mt-2 pl-[5%]">1.&nbsp;&nbsp;{/^https?:\/\//i.test(b.tautan.url)
+                  ? <a href={b.tautan.url} target="_blank" rel="noreferrer" className="text-[#1155CC] underline">{b.tautan.teks}</a>
+                  : <>{b.tautan.teks} <span className="text-[9.5px] italic text-red-700">(link folder belum diisi)</span></>}</p>
+              )}
               {b.isi.map((l, li) => (
                 <div key={li} className={`mt-2 ${b.nomor ? 'pl-[5%]' : ''}`}>
-                  {(b.nomor || l.judul.trim()) && <p className="font-bold">{b.nomor ? `${li + 1}.\u00a0\u00a0${l.judul}` : `${l.judul} :`}</p>}
+                  {(b.nomor || l.judul.trim()) && <p className="font-bold">{b.nomor ? `${li + 1 + (b.tautan ? 1 : 0)}.\u00a0\u00a0${l.judul}` : `${l.judul} :`}</p>}
                   {l.foto.map((f) => (
                     <figure key={f.id} className="mt-2 text-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -207,6 +233,25 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
     return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', pergi); };
   }, [kirim]);
 
+  // BA BCP: isian diambil dari Format BCP dengan nama konsumen yang sama
+  const [bcps, setBcps] = useState<Bcp[]>([]);
+  useEffect(() => { if (s.template === 'ba-bcp') daftarBcp().then(setBcps).catch(() => {}); }, [s.template]);
+  const bcp = useMemo(() => (s.data.nama?.trim() ? bcps.find((b) => samaNama(b.nama, s.data.nama || '')) || null : null), [bcps, s.data.nama]);
+  const pakaiBcp = (b: Bcp, timpa: boolean, otomatis = false) => {
+    const lama = terakhir.current.data;
+    const isi = Object.entries(dataBaBcp(b)).filter(([k, v]) => v && v !== (lama[k] || '') && (timpa || !(lama[k] || '').trim()));
+    if (!isi.length) { if (!otomatis) setPesan('Isian sudah sama dengan format BCP.'); return; }
+    ganti((x) => ({ ...x, data: { ...x.data, ...Object.fromEntries(isi) } }));
+    setPesan(`${isi.length} isian diambil dari format BCP ${b.nama}.`);
+  };
+  const sudahOtoBcp = useRef(false);
+  useEffect(() => {
+    if (sudahOtoBcp.current || !bcps.length) return;
+    sudahOtoBcp.current = true;
+    const b = bcps.find((y) => samaNama(y.nama, terakhir.current.data.nama || ''));
+    if (b) pakaiBcp(b, false, true);
+  }, [bcps]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const tambahFoto = async (li: number, files: File[]) => {
     const baru: FotoSurat[] = [];
     for (const [i, f] of files.entries()) {
@@ -261,6 +306,7 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
   const nFoto = s.lampiran.reduce((a, l) => a + l.foto.length, 0);
   const status = simpan === 'menyimpan' ? 'Menyimpan…' : simpan === 'tersimpan' ? 'Tersimpan' : simpan === 'gagal' ? 'Gagal tersimpan' : adaNama ? 'Belum tersimpan' : 'Isi nama konsumen dulu';
   const input = `${FIELD} min-h-11`;
+  const bernomor = pakaiNomor(t);
 
   return (
     <div className="px-4 pb-40 pt-3">
@@ -270,7 +316,7 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
       </div>
       <p className="mt-1 text-[13px] text-neutral-500">{[t.nama, t.sk].filter(Boolean).join(' · ')}</p>
 
-      <Bagian judul="Kop surat" sub={`${t.perihalDiKop ? `${perihalSurat(s)} · ` : ''}${nomorSurat(s)}`}>
+      <Bagian judul="Kop surat" sub={`${t.perihalDiKop ? `${perihalSurat(s)} · ` : ''}${bernomor ? nomorSurat(s) : isiTeks('{tanggal:panjang}', s)}`}>
         {t.blok.some((b) => b.t === 'kop') && <Isian label="Judul" hint={s.judul.includes('\n') ? 'Satu baris kop per baris.' : undefined}>
           {s.judul.includes('\n')
             ? <textarea value={s.judul} onChange={(e) => set('judul', e.target.value.toUpperCase())} rows={2} aria-label="Judul" className={`${FIELD} py-2.5`} />
@@ -280,12 +326,12 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
           <input value={perihalSurat(s)} onChange={(e) => ganti((x) => ({ ...x, perihal: e.target.value, perihalOtomatis: false }))} aria-label="Perihal surat" className={input} />
         </Isian>
         {!s.perihalOtomatis && <button onClick={() => ganti((x) => ({ ...x, perihal: '', perihalOtomatis: true }))} className="mt-1 min-h-10 text-[13px] font-semibold underline">Ikuti nama konsumen lagi</button>}
-        <div className="mt-3 grid grid-cols-[5.5rem_1fr] gap-3">
+        {bernomor && <div className="mt-3 grid grid-cols-[5.5rem_1fr] gap-3">
           <Isian label="No. urut"><input value={s.noUrut} onChange={(e) => set('noUrut', e.target.value.replace(/[^0-9A-Za-z.-]/g, ''))} inputMode="numeric" placeholder="308" className={input} /></Isian>
           <Isian label="Kode"><input value={s.kode} onChange={(e) => set('kode', e.target.value.toUpperCase())} className={input} /></Isian>
-        </div>
-        <Isian label="Tanggal surat" hint="Bulan (romawi) dan tahun nomor surat diambil dari tanggal ini."><input type="date" value={s.tanggal} onChange={(e) => set('tanggal', e.target.value)} className={input} /></Isian>
-        <p className="mt-3 rounded-xl bg-neutral-100 px-3 py-2 text-center text-[13px] font-bold dark:bg-neutral-900" aria-label="Nomor surat">{nomorSurat(s)}</p>
+        </div>}
+        <Isian label="Tanggal surat" hint={bernomor ? 'Bulan (romawi) dan tahun nomor surat diambil dari tanggal ini.' : undefined}><input type="date" value={s.tanggal} onChange={(e) => set('tanggal', e.target.value)} className={input} /></Isian>
+        {bernomor && <p className="mt-3 rounded-xl bg-neutral-100 px-3 py-2 text-center text-[13px] font-bold dark:bg-neutral-900" aria-label="Nomor surat">{nomorSurat(s)}</p>}
       </Bagian>
 
       <Bagian judul="Dibuat oleh" sub={`${a.pembuat.nama} · ${a.pembuat.jabatan} · ${s.approval || '–'}`}>
@@ -327,6 +373,23 @@ function Editor({ awal, onTutup, onSimpan }: { awal: Surat; onTutup: () => void;
 
       {isianData.length > 0 && (
         <Bagian judul="Data konsumen" sub={[s.data.nama, s.data.app].filter(Boolean).join(' · ') || `${isianData.length} isian`}>
+          {s.template === 'ba-bcp' && (bcp ? (
+            <div className="mb-3 rounded-2xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/40">
+              <p className="text-[13px] font-bold text-blue-900 dark:text-blue-200">Terhubung dengan format BCP</p>
+              <p className="mt-0.5 text-[13px] leading-snug text-blue-900/80 dark:text-blue-200/80">{[bcp.nama, bcp.soa, bcp.jenisKonsumen, bcp.mao].filter(Boolean).join(' · ')}</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button onClick={() => pakaiBcp(bcp, false)} className="min-h-10 rounded-xl bg-white text-[13px] font-semibold text-blue-900 dark:bg-blue-900 dark:text-white">Isi yang kosong</button>
+                <button onClick={() => pakaiBcp(bcp, true)} className="min-h-10 rounded-xl border border-blue-300 text-[13px] font-semibold text-blue-900 dark:border-blue-800 dark:text-blue-200">Timpa dari BCP</button>
+              </div>
+            </div>
+          ) : !s.data.nama?.trim() && bcps.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">Ambil dari format BCP</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {bcps.slice(0, 6).map((b) => <button key={b.id} onClick={() => pakaiBcp(b, true)} className="min-h-9 rounded-full bg-blue-50 px-3 text-[13px] font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200">{b.nama}</button>)}
+              </div>
+            </div>
+          ))}
           {isianData.map((d) => kolomIsian(d))}
         </Bagian>
       )}
@@ -413,6 +476,18 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
   useEffect(() => {
     if (pulih.current || list === null) return;
     pulih.current = true;
+    // Dari Format BCP ("Buat BA BCP"): buka BA BCP konsumen itu, atau buat baru dengan isiannya
+    let dariBcp: Record<string, string> | null = null;
+    try { dariBcp = JSON.parse(sessionStorage.getItem(KUNCI_BA_BCP) || 'null'); sessionStorage.removeItem(KUNCI_BA_BCP); } catch { /* abaikan */ }
+    if (dariBcp?.nama) {
+      const ada = list.find((y) => y.template === 'ba-bcp' && samaNama(y.data.nama || '', dariBcp!.nama));
+      if (ada) setBuka(ada);
+      else {
+        const b = suratBaru('ba-bcp', { id: idSuratBaru(), tanggal: todayJkt() });
+        setBuka({ ...b, data: { ...b.data, ...Object.fromEntries(Object.entries(dariBcp).filter(([, v]) => v)) } });
+      }
+      return;
+    }
     const x = suratTerbuka();
     if (!x) return;
     if (x.id.startsWith('ent_')) {
@@ -437,7 +512,7 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
   };
   const baru = (template: string) => {
     const contoh = list?.find((x) => x.template === template);
-    setBuka(suratBaru(template, { id: idSuratBaru(), tanggal: todayJkt(), noUrut: noBerikut(), kode: contoh?.kode || 'MKT-KENDAL' }));
+    setBuka(suratBaru(template, { id: idSuratBaru(), tanggal: todayJkt(), noUrut: pakaiNomor(templateSurat(template)) ? noBerikut() : '', kode: contoh?.kode || 'MKT-KENDAL' }));
   };
   const baruEnt = () => {
     const contoh = entList[0];
@@ -515,7 +590,7 @@ export default function SuratPage({ akun, reloadKey = 0 }: { akun: Akun; reloadK
             <li key={s.id} className="flex items-center border-b border-neutral-200 last:border-0 dark:border-neutral-800">
               <button onClick={() => setBuka(s)} className="flex min-h-16 min-w-0 flex-1 flex-col justify-center px-4 py-2 text-left active:bg-neutral-50 dark:active:bg-neutral-900">
                 <span className="truncate text-[15px] font-bold">{s.data.nama || '(tanpa nama)'}</span>
-                <span className="truncate text-[12px] text-neutral-500">{[templateSurat(s.template).nama, nomorSurat(s), `${s.lampiran.reduce((a, l) => a + l.foto.length, 0)} foto`].join(' · ')}</span>
+                <span className="truncate text-[12px] text-neutral-500">{[templateSurat(s.template).nama, pakaiNomor(templateSurat(s.template)) ? nomorSurat(s) : isiTeks('{tanggal:panjang}', s), `${s.lampiran.reduce((a, l) => a + l.foto.length, 0)} foto`].join(' · ')}</span>
               </button>
               <button onClick={() => hapus(s)} aria-label={`Hapus surat ${s.data.nama}`} className="flex h-12 w-12 shrink-0 items-center justify-center text-neutral-400"><Ico n="x" className="h-4 w-4" sw={2} /></button>
             </li>

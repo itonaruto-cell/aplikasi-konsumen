@@ -3,6 +3,8 @@ import { bawaanMao, bcpBaru, bcpDariReport, cariBcp, rapikanBcp, type Bcp } from
 import type { ReportSurvey } from '../../lib/report-survey';
 
 export const KUNCI_BUKA_BCP = 'bcp-buka';
+// Format BCP → BA BCP di menu Surat (isian dibawa lewat sessionStorage)
+export const KUNCI_BA_BCP = 'surat-dari-bcp';
 export async function daftarBcp(): Promise<Bcp[]> {
   const res = await fetch('/api/bcp', { cache: 'no-store' });
   const j = await res.json().catch(() => null);
