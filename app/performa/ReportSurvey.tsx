@@ -1,12 +1,15 @@
 'use client';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { bandingBaru, rapikanBanding, type Banding } from '../../lib/banding-types';
 import { cariBanding, isiDariReport } from '../../lib/banding-report';
 import { PENGAJUAN, REKOMENDASI, UNSUR, fmtPersen, hitungKapasitas, labaOf, rapikanReport, reportBaru, teksWa, type Penghasilan, type ReportSurvey } from '../../lib/report-survey';
 import { todayJkt } from '../../lib/performa-calc';
 import { AngkaInput, FIELD } from './form';
+import { Bagian, Isian, Pilih } from './bagian';
 import { Ico } from './parts';
 import { useOverlay } from '../overlay';
+import { cariBcp } from '../../lib/bcp-types';
+import { daftarBcp, simpanBcpDariReport } from './bcp-dari-report';
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
 const TA = `${FIELD} py-2.5 leading-relaxed`;
@@ -14,44 +17,7 @@ const PROGRAM = ['Normal Kilat', 'RO Super', 'NC Super', 'Take Over Super', 'Pre
 const STATUS = ['NC', 'RO', 'AO', 'Top Up'];
 const tglId = (iso: string) => (iso ? new Date(iso + 'T00:00:00Z').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
 
-function Bagian({ judul, sub, children, buka = true }: { judul: string; sub?: string; children: ReactNode; buka?: boolean }) {
-  const [open, setOpen] = useState(buka);
-  return (
-    <section className="mt-3 rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
-      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-h-14 w-full items-center gap-3 px-4 text-left">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-bold">{judul}</span>
-          {sub && <span className="block truncate text-[12px] text-neutral-500">{sub}</span>}
-        </span>
-        <Ico n="down" className={`h-4 w-4 shrink-0 text-neutral-400 transition ${open ? 'rotate-180' : ''}`} sw={2} />
-      </button>
-      {open && <div className="border-t border-neutral-200 px-4 pb-4 pt-3 dark:border-neutral-800">{children}</div>}
-    </section>
-  );
-}
-function Isian({ label, hint, children, grup = false }: { label: string; hint?: string; children: ReactNode; grup?: boolean }) {
-  // Pilihan tombol tidak boleh dibungkus <label> (ketukan di label akan menekan tombol pertama)
-  const Tag = grup ? 'div' : 'label';
-  return (
-    <Tag className="mt-3 block first:mt-0">
-      <span className="block text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">{label}</span>
-      {hint && <span className="block text-[12px] leading-snug text-neutral-500">{hint}</span>}
-      <span className="mt-1 block">{children}</span>
-    </Tag>
-  );
-}
-function Pilih({ opsi, value, onChange, label }: { opsi: readonly string[]; value: string; onChange: (v: string) => void; label: string }) {
-  return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
-      {opsi.map((o) => (
-        <button key={o} onClick={() => onChange(value === o ? '' : o)} aria-pressed={value === o}
-          className={`min-h-9 rounded-full px-3 text-[13px] font-semibold ${value === o ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-neutral-100 dark:bg-neutral-800'}`}>{o}</button>
-      ))}
-    </div>
-  );
-}
-
-function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; onTutup: () => void; onSimpan: (r: ReportSurvey) => void; onBanding?: () => void }) {
+function Editor({ awal, onTutup, onSimpan, onBanding, onBcp, akunBcp }: { awal: ReportSurvey; onTutup: () => void; onSimpan: (r: ReportSurvey) => void; onBanding?: () => void; onBcp?: () => void; akunBcp: { email: string; nama: string } }) {
   useOverlay(true, onTutup);
   const [r, setR] = useState<ReportSurvey>(awal);
   const [simpan, setSimpan] = useState<'' | 'menyimpan' | 'tersimpan' | 'gagal'>(awal.id ? 'tersimpan' : '');
@@ -117,6 +83,26 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
       if (!res.ok) throw new Error(j?.error || 'Form banding gagal disimpan.');
       onBanding?.();
     } catch (e) { setPesan((e as Error).message); }
+  };
+
+  // Format BCP konsumen yang sama: dilengkapi dari report ini (isian BCP tidak ditimpa), atau dibuat baru
+  const [bcpAda, setBcpAda] = useState(false);
+  const [bcpProses, setBcpProses] = useState(false);
+  useEffect(() => {
+    if (!onBcp || !r.nama.trim()) return;
+    let batal = false;
+    const t = setTimeout(() => { daftarBcp().then((l) => { if (!batal) setBcpAda(!!cariBcp(r, l)); }).catch(() => {}); }, 600);
+    return () => { batal = true; clearTimeout(t); };
+  }, [r.nama, onBcp]); // eslint-disable-line react-hooks/exhaustive-deps
+  const jadiBcp = async () => {
+    setPesan(''); setBcpProses(true);
+    try {
+      // Simpan report dulu supaya BCP tertaut ke report ini
+      const h = r.id && simpan === 'tersimpan' ? r : await kirim(terakhir.current);
+      await simpanBcpDariReport({ ...terakhir.current, ...(h ? { id: h.id } : {}) }, akunBcp);
+      onBcp?.();
+    } catch (e) { setPesan((e as Error).message); }
+    setBcpProses(false);
   };
 
   const kap = hitungKapasitas(r);
@@ -209,6 +195,11 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
             {bandingAda ? 'Lengkapi form banding (F-761) yang sudah ada' : 'Buat form banding (F-761) dari report ini'}
           </button>
         )}
+        {onBcp && (
+          <button onClick={jadiBcp} disabled={!r.nama.trim() || bcpProses} className="mt-2 min-h-11 w-full rounded-xl border border-neutral-300 text-[14px] font-semibold disabled:opacity-40 dark:border-neutral-700">
+            {bcpProses ? 'Menyiapkan format BCP…' : bcpAda ? 'Lengkapi format BCP yang sudah ada' : 'Buat format BCP dari report ini'}
+          </button>
+        )}
       </Bagian>
 
       {pesan && <p role="status" className="mt-3 rounded-xl bg-neutral-100 px-3 py-2 text-[13px] dark:bg-neutral-900">{pesan}</p>}
@@ -223,7 +214,7 @@ function Editor({ awal, onTutup, onSimpan, onBanding }: { awal: ReportSurvey; on
   );
 }
 
-export default function ReportSurveyPage({ akun, reloadKey = 0, onBanding }: { akun: Akun; reloadKey?: number; onBanding?: () => void }) {
+export default function ReportSurveyPage({ akun, reloadKey = 0, onBanding, onBcp }: { akun: Akun; reloadKey?: number; onBanding?: () => void; onBcp?: () => void }) {
   const [list, setList] = useState<ReportSurvey[] | null>(null);
   const [err, setErr] = useState('');
   const [buka, setBuka] = useState<ReportSurvey | null>(null);
@@ -246,7 +237,7 @@ export default function ReportSurveyPage({ akun, reloadKey = 0, onBanding }: { a
     if (res.ok) setList((l) => (l || []).filter((x) => x.id !== r.id));
   };
 
-  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} onTutup={() => { setBuka(null); muat(); }} onSimpan={simpanLokal} onBanding={onBanding} />;
+  if (buka) return <Editor key={buka.id || 'baru'} awal={buka} onTutup={() => { setBuka(null); muat(); }} onSimpan={simpanLokal} onBanding={onBanding} onBcp={onBcp} akunBcp={{ email: akun.email, nama: akun.perfName || akun.name || '' }} />;
   const q = cari.trim().toUpperCase();
   const tampil = (list || []).filter((r) => !q || `${r.nama} ${r.appNo} ${r.surveyor}`.toUpperCase().includes(q));
   return (
