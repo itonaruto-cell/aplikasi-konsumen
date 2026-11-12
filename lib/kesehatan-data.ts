@@ -18,6 +18,17 @@ const jamLalu = (iso: string, now: Date) => {
 const BRAND: Record<string, string> = { mobilku: 'Mobilku', motorku: 'Motorku', cabang: 'Cabang' };
 const kolom = (b: Blok, re: RegExp) => b.h.findIndex((h) => re.test(String(h ?? '')));
 
+/** Jumlah konsumen P1–P3 di daftar (tab AKTIVITAS RO) dibanding Grand Total tabel Status visit per prioritas.
+ *  Daftar lebih sedikit = Apps Script membaca kolom yang salah (kolom di tab AKTIVITAS RO bergeser). */
+export function selisihDaftar(data: Performa, brand: string): { p: number; daftar: number; total: number }[] {
+  const sv = (data.blok || []).find((b) => b.s === brand && /^status visit$/i.test(b.t));
+  const gt = sv?.r.find((r) => /^grand\s*total$/i.test(String(r[0] ?? '').trim()));
+  const kons = data.aktivitas?.konsumen?.[brand] || [];
+  if (!gt) return [];
+  return [1, 2, 3].map((p) => ({ p, daftar: kons.filter((k) => k.p === p).length, total: isNum(gt[p]) ? (gt[p] as number) : 0 }))
+    .filter((x) => x.total > 0 && x.daftar < x.total);
+}
+
 // Posisi CMO/MAO yang belum terisi orang (baris "MAO MOTOR", "CMO MOBIL" di pantauan)
 export const posisiKosong = (nama: string) => /^(CMO|MAO)\s+(MOTOR|MOBIL)(KU)?$/i.test(String(nama || '').trim());
 
@@ -102,7 +113,15 @@ export function periksaData(data: Performa | null | undefined, now = new Date())
     }
   }
 
-  // 5. Posisi kosong (info)
+  // 5. Daftar konsumen P1–P3 tidak lengkap (kolom tab AKTIVITAS RO bergeser)
+  for (const brand of ['mobilku', 'motorku']) {
+    const kurang = selisihDaftar(data, brand);
+    if (kurang.length) out.push({ id: `daftar-${brand}`, judul: `Daftar konsumen prioritas ${BRAND[brand]}`, tingkat: 'bahaya',
+      isi: `Nama yang terbaca baru ${kurang.map((x) => `P${x.p} ${x.daftar} dari ${x.total}`).join(', ')} (angka dari tabel Status visit).`,
+      saran: 'Kolom di tab AKTIVITAS RO bergeser dari huruf kolom yang dibaca Apps Script. Pasang file PerbaikanRO di Apps Script pantauan, lalu jalankan kirimPerformaLengkap.' });
+  }
+
+  // 6. Posisi kosong (info)
   const kosong = (data.orang || []).filter((o) => posisiKosong(o.nama)).map((o) => o.nama);
   if (kosong.length) out.push({ id: 'posisi', judul: 'Posisi kosong', tingkat: 'aman',
     isi: `${kosong.join(', ')} belum terisi orang. Di laporan ditandai "Posisi kosong".` });
