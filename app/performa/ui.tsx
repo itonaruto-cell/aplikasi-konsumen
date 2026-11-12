@@ -137,7 +137,7 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
 export type View =
   | { t: 'orang'; o: Orang }
   | { t: 'maList'; title: string; sub: string; items: MaFull[] }
-  | { t: 'kList'; title: string; sub: string; items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string }
+  | { t: 'kList'; title: string; sub: string; items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string; seharusnya?: Record<number, number> }
   | { t: 'ma'; m: MaFull }
   | { t: 'k'; k: KonsumenFull; pic?: string }
   | { t: 'oi'; nama?: string }
@@ -178,7 +178,7 @@ function MaListView({ items, push }: { items: MaFull[]; push: Push }) {
 }
 
 /* ---------- Daftar konsumen ---------- */
-function KListView({ items, mode, p0, pic, push }: { items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string; push: Push }) {
+function KListView({ items, mode, p0, pic, push, seharusnya }: { items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string; push: Push; seharusnya?: Record<number, number> }) {
   const [p, setP] = useState<'0' | '1' | '2' | '3'>(String(p0) as '0');
   const [visit, setVisit] = useState<'belum' | 'sudah'>(mode === 'orang' ? 'sudah' : 'belum');
   const [temu, setTemu] = useState<'semua' | 'bertemu' | 'tidak'>('semua');
@@ -196,6 +196,9 @@ function KListView({ items, mode, p0, pic, push }: { items: KonsumenFull[]; mode
     .filter((x) => !ql || `${x.k.n} ${x.k.k} ${x.k.nk || ''}`.toLowerCase().includes(ql))
     .sort((a, b) => a.k.n.localeCompare(b.k.n));
   const count = (n: number) => items.filter((k) => !n || k.p === n).length;
+  // Daftar lebih sedikit dari tabel Status visit: nama sisanya belum terbaca dari sheet
+  const kurang = Object.entries(seharusnya || {}).map(([x, tot]) => ({ p: Number(x), tot, ada: count(Number(x)) }))
+    .filter((x) => (p === '0' || x.p === Number(p)) && x.ada < x.tot);
 
   return (
     <>
@@ -211,6 +214,11 @@ function KListView({ items, mode, p0, pic, push }: { items: KonsumenFull[]; mode
           <Seg value={temu} onChange={setTemu}
             options={[['semua', `Semua (${sudahVisit.length})`], ['bertemu', `Bertemu (${bertemu.length})`], ['tidak', `Belum bertemu (${tidak.length})`]]} />
         </div>
+      )}
+      {kurang.length > 0 && (
+        <p role="status" className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[13px] leading-snug text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+          Baru {kurang.map((x) => `${x.ada} dari ${x.tot} konsumen P${x.p}`).join(', ')} yang namanya terbaca dari sheet. Kolom tab AKTIVITAS RO bergeser, jadi Apps Script perlu diperbaiki (lihat Kesehatan data).
+        </p>
       )}
       {inP.length > 8 && <SearchBox value={q} onChange={setQ} placeholder="Cari nama, kecamatan, atau no kontrak" />}
       <ul className="mt-3 divide-y divide-neutral-100 rounded-2xl border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
@@ -538,7 +546,7 @@ export function Sheet({ stack, data, rankOf, push, pop, close }: {
               {view.t === 'kList' && (<>
                 <p className="text-lg font-semibold">{view.title}</p>
                 <p className="mb-3 text-sm text-neutral-500">{view.sub}</p>
-                <KListView items={view.items} mode={view.mode} p0={view.p0} pic={view.pic} push={push} />
+                <KListView items={view.items} mode={view.mode} p0={view.p0} pic={view.pic} push={push} seharusnya={view.seharusnya} />
               </>)}
               {view.t === 'k' && <KDetail k={view.k} pic={view.pic} />}
               {view.t === 'ma' && <MaDetail m={view.m} />}
