@@ -1,6 +1,6 @@
 'use client';
 // Alat PDF serba guna, semuanya diproses di HP (file konsumen tidak diunggah ke mana pun):
-// JPG → PDF, gabung, PDF → JPG, pisah, putar, kompres, buka password.
+// JPG → PDF, gabung, PDF → JPG, pisah, putar, kompres, buka password, kecilkan JPG.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { buatPdfFoto } from '../../lib/pdf-foto';
 import { ambilHalaman, bukaPdf, gabungPdf, muatPdfLib, PdfTerkunci, pdfDariRender, putarHalaman, renderJpeg, thumbnail } from './pdf-alat';
@@ -9,7 +9,7 @@ import { FIELD } from './form';
 import { Ico } from './parts';
 import { useOverlay } from '../overlay';
 
-type Alat = 'jpg2pdf' | 'gabung' | 'pdf2jpg' | 'pisah' | 'putar' | 'kompres' | 'buka';
+type Alat = 'jpg2pdf' | 'gabung' | 'pdf2jpg' | 'pisah' | 'putar' | 'kompres' | 'kecilJpg' | 'buka';
 const ALAT: { k: Alat; judul: string; sub: string; ikon: string; warna: string }[] = [
   { k: 'jpg2pdf', judul: 'JPG ke PDF', sub: 'Foto jadi 1 PDF', ikon: '🖼️', warna: 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200' },
   { k: 'gabung', judul: 'Gabung PDF', sub: 'Beberapa PDF jadi 1', ikon: '🗂️', warna: 'bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-200' },
@@ -17,6 +17,7 @@ const ALAT: { k: Alat; judul: string; sub: string; ikon: string; warna: string }
   { k: 'pisah', judul: 'Pisah PDF', sub: 'Ambil halaman tertentu', ikon: '✂️', warna: 'bg-orange-50 text-orange-800 dark:bg-orange-950/40 dark:text-orange-200' },
   { k: 'putar', judul: 'Putar PDF', sub: 'Halaman miring / terbalik', ikon: '🔄', warna: 'bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200' },
   { k: 'kompres', judul: 'Kecilkan PDF', sub: 'Ukuran file lebih kecil', ikon: '🗜️', warna: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' },
+  { k: 'kecilJpg', judul: 'Kecilkan JPG', sub: 'Foto di bawah batas KB', ikon: '🪶', warna: 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200' },
   { k: 'buka', judul: 'Buka password', sub: 'Hapus password PDF', ikon: '🔓', warna: 'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200' },
 ];
 
@@ -366,7 +367,144 @@ function KompresPdf() {
   );
 }
 
-/* ---------- 7. Buka password ---------- */
+/* ---------- 7. Kecilkan JPG ---------- */
+// Foto diperkecil sampai di bawah batas ukuran (mis. batas unggah 200 KB): kualitas JPEG dicari setinggi mungkin
+// yang masih muat; kalau di kualitas terendah masih kebesaran, resolusinya diturunkan bertahap.
+const BATAS_KB = [1024, 500, 300, 200, 100] as const;
+const labelKb = (kb: number) => (kb >= 1024 ? `${kb / 1024} MB` : `${kb} KB`);
+async function bacaGambar(file: File): Promise<{ img: CanvasImageSource; w: number; h: number; tutup: () => void }> {
+  try {
+    const bm = await createImageBitmap(file);
+    return { img: bm, w: bm.width, h: bm.height, tutup: () => bm.close() };
+  } catch {
+    const url = URL.createObjectURL(file);
+    try {
+      const i = await new Promise<HTMLImageElement>((ok, no) => { const x = new Image(); x.onload = () => ok(x); x.onerror = no; x.src = url; });
+      return { img: i, w: i.naturalWidth, h: i.naturalHeight, tutup: () => URL.revokeObjectURL(url) };
+    } catch { URL.revokeObjectURL(url); throw new Error('Format foto tidak bisa dibaca (mis. HEIC). Ubah dulu ke JPG.'); }
+  }
+}
+const keBlob = (cv: HTMLCanvasElement, q: number) => new Promise<Blob>((ok, no) => cv.toBlob((b) => (b ? ok(b) : no(new Error('Foto gagal diproses.'))), 'image/jpeg', q));
+async function kecilkanFoto(file: File, target: number): Promise<{ blob: Blob; w: number; h: number }> {
+  const g = await bacaGambar(file);
+  try {
+    if (!g.w || !g.h) throw new Error('Foto rusak.');
+    let sisi = Math.min(Math.max(g.w, g.h), 2560);
+    let terkecil: { blob: Blob; w: number; h: number } | null = null;
+    for (let n = 0; n < 10; n++) {
+      const k = sisi / Math.max(g.w, g.h);
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(g.w * k)); cv.height = Math.max(1, Math.round(g.h * k));
+      const c = cv.getContext('2d')!;
+      c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height);
+      c.drawImage(g.img, 0, 0, cv.width, cv.height);
+      const jadi = (blob: Blob) => ({ blob, w: cv.width, h: cv.height });
+      const terbaik = await keBlob(cv, 0.92);
+      if (terbaik.size <= target) return jadi(terbaik);
+      let lo = 0.4, hi = 0.92, muat: Blob | null = null;
+      const bawah = await keBlob(cv, lo);
+      if (bawah.size <= target) {
+        muat = bawah;
+        for (let i = 0; i < 5; i++) { const m = (lo + hi) / 2; const b = await keBlob(cv, m); if (b.size <= target) { muat = b; lo = m; } else hi = m; }
+        return jadi(muat);
+      }
+      if (!terkecil || bawah.size < terkecil.blob.size) terkecil = jadi(bawah);
+      if (sisi <= 400) break;
+      sisi = Math.max(400, Math.round(sisi * Math.min(0.85, Math.sqrt(target / bawah.size) * 0.95)));
+    }
+    return terkecil!;
+  } finally { g.tutup(); }
+}
+type HasilJpg = { id: string; nama: string; awal: number; file: File; url: string; w: number; h: number; tetap: boolean };
+function KecilkanJpg() {
+  const [kb, setKb] = useState<number>(200);
+  const [kbSendiri, setKbSendiri] = useState('');
+  const [list, setList] = useState<HasilJpg[]>([]);
+  const [sibuk, setSibuk] = useState('');
+  const [pesan, setPesan] = useState('');
+  const semua = useRef<HasilJpg[]>([]);
+  semua.current = list;
+  useEffect(() => () => semua.current.forEach((f) => URL.revokeObjectURL(f.url)), []);
+  const batas = Number(kbSendiri) > 0 ? Math.min(20_480, Number(kbSendiri)) : kb;
+  const proses = async (files: File[]) => {
+    setPesan('');
+    // Sedikit di bawah batas supaya lolos baik batas 1 KB = 1000 maupun 1024 byte
+    const target = Math.floor(batas * 1024 * 0.97);
+    const baru: HasilJpg[] = [];
+    let gagal = 0;
+    for (const [i, f] of files.entries()) {
+      setSibuk(`Mengecilkan foto ${i + 1}/${files.length}…`);
+      try {
+        const dasarNama = f.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, ' ').trim() || `Foto ${i + 1}`;
+        // JPG yang sudah di bawah batas tidak diubah (kualitas tetap)
+        if (/^image\/jpe?g$/i.test(f.type) && f.size <= target) {
+          const bm = await bacaGambar(f); const w = bm.w, h = bm.h; bm.tutup();
+          baru.push({ id: idAcak(i), nama: f.name, awal: f.size, file: f, url: URL.createObjectURL(f), w, h, tetap: true });
+          continue;
+        }
+        const r = await kecilkanFoto(f, target);
+        const file = new File([r.blob], `${dasarNama} - ${labelKb(batas).replace(' ', '')}.jpg`, { type: 'image/jpeg' });
+        baru.push({ id: idAcak(i), nama: f.name, awal: f.size, file, url: URL.createObjectURL(file), w: r.w, h: r.h, tetap: false });
+      } catch (e) { gagal++; setPesan(`${f.name}: ${(e as Error).message || 'gagal diproses'}`); }
+    }
+    setSibuk('');
+    setList((x) => [...x, ...baru]);
+    const lewat = baru.filter((x) => x.file.size > target).length;
+    if (lewat) setPesan(`${lewat} foto masih di atas ${labelKb(batas)} walau sudah dikecilkan maksimal.`);
+    else if (baru.length && !gagal) setPesan(`${baru.length} foto siap, semua di bawah ${labelKb(batas)}. Tekan Simpan / bagikan.`);
+  };
+  const hapus = (id: string) => setList((x) => { const y = x.find((f) => f.id === id); if (y) URL.revokeObjectURL(y.url); return x.filter((f) => f.id !== id); });
+  const bersihkan = () => { list.forEach((f) => URL.revokeObjectURL(f.url)); setList([]); setPesan(''); };
+  const totalAwal = list.reduce((a, f) => a + f.awal, 0), totalAkhir = list.reduce((a, f) => a + f.file.size, 0);
+  return (
+    <Kotak>
+      <p className="text-[13px] font-semibold text-neutral-600 dark:text-neutral-300">Batas ukuran per foto</p>
+      <div role="group" aria-label="Batas ukuran per foto" className="mt-1.5 flex flex-wrap gap-1.5">
+        {BATAS_KB.map((x) => (
+          <button key={x} onClick={() => { setKb(x); setKbSendiri(''); }} aria-pressed={!kbSendiri && kb === x} disabled={!!sibuk}
+            className={`min-h-10 rounded-full px-3.5 text-[14px] font-semibold ${!kbSendiri && kb === x ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-neutral-100 dark:bg-neutral-800'}`}>{labelKb(x)}</button>
+        ))}
+        <label className="flex min-h-10 items-center gap-1 rounded-full bg-neutral-100 pl-3 pr-1 text-[14px] dark:bg-neutral-800">
+          <input value={kbSendiri} onChange={(e) => setKbSendiri(e.target.value.replace(/\D/g, '').slice(0, 5))} inputMode="numeric" placeholder="lain" aria-label="Batas ukuran sendiri dalam KB"
+            className="w-14 bg-transparent font-semibold outline-none placeholder:font-normal" />
+          <span className="pr-2 text-neutral-500">KB</span>
+        </label>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <div className="flex-1"><PilihFile label="+ Galeri" accept="image/*" multiple onPilih={proses} sibuk={!!sibuk} aria="Pilih foto dari galeri untuk dikecilkan" /></div>
+        <label className={`inline-flex min-h-12 flex-1 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 text-[14px] font-semibold dark:border-neutral-700 ${sibuk ? 'pointer-events-none opacity-50' : ''}`}>
+          + Kamera
+          <input type="file" accept="image/*" capture="environment" className="sr-only" aria-label="Ambil foto dengan kamera untuk dikecilkan"
+            onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ''; if (fs.length) proses(fs); }} />
+        </label>
+      </div>
+      <p className="mt-2 text-[12px] leading-snug text-neutral-500">Foto dikecilkan sampai di bawah {labelKb(batas)} dengan kualitas setinggi mungkin. Foto JPG yang sudah di bawah batas dibiarkan apa adanya.</p>
+      {list.length > 0 && (<>
+        <ul className="mt-3 space-y-1.5">
+          {list.map((f) => (
+            <li key={f.id} className="flex items-center gap-2 rounded-xl bg-neutral-100 px-2 py-1.5 dark:bg-neutral-900">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={f.url} alt="" className="h-11 w-11 shrink-0 rounded-md object-cover" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold">{f.nama}</span>
+                <span className="block text-[12px] text-neutral-500">
+                  {f.tetap ? `${mb(f.awal)} · sudah di bawah batas` : <>{mb(f.awal)} → <b className={f.file.size > batas * 1024 ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>{mb(f.file.size)}</b></>} · {f.w}×{f.h}
+                </span>
+              </span>
+              <button onClick={() => hapus(f.id)} disabled={!!sibuk} aria-label={`Hapus ${f.nama}`} className="h-9 w-8 rounded-lg text-[15px] text-red-700 disabled:opacity-25 dark:text-red-400">✕</button>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[12px] text-neutral-500">Total {mb(totalAwal)} → {mb(totalAkhir)}{totalAwal > totalAkhir ? ` (${Math.round((1 - totalAkhir / totalAwal) * 100)}% lebih kecil)` : ''}</p>
+        <Tombol onClick={() => kirimFile(list.map((f) => f.file))} disabled={!!sibuk}>Simpan / bagikan {list.length} foto</Tombol>
+        <Tombol onClick={bersihkan} disabled={!!sibuk} utama={false}>Kosongkan daftar</Tombol>
+      </>)}
+      <Status sibuk={sibuk} pesan={pesan} />
+    </Kotak>
+  );
+}
+
+/* ---------- 8. Buka password ---------- */
 function BukaPassword() {
   const [sibuk, setSibuk] = useState('');
   const [pesan, setPesan] = useState('');
@@ -402,7 +540,7 @@ export default function AlatPdf() {
       <button onClick={() => setAlat(null)} className="flex min-h-11 items-center gap-1 rounded-xl pr-3 text-[14px] font-semibold"><Ico n="left" className="h-5 w-5" sw={2} />Semua alat PDF</button>
       <h2 className="mt-1 text-[20px] font-bold tracking-tight">{a.ikon} {a.judul}</h2>
       {a.k === 'jpg2pdf' ? <JpgKePdf /> : a.k === 'gabung' ? <GabungPdf /> : a.k === 'pdf2jpg' ? <PdfKeJpg /> : a.k === 'pisah' ? <PisahPdf />
-        : a.k === 'putar' ? <PutarPdf /> : a.k === 'kompres' ? <KompresPdf /> : <BukaPassword />}
+        : a.k === 'putar' ? <PutarPdf /> : a.k === 'kompres' ? <KompresPdf /> : a.k === 'kecilJpg' ? <KecilkanJpg /> : <BukaPassword />}
     </div>
   );
   return (

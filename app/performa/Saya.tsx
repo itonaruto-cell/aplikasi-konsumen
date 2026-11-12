@@ -35,7 +35,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
       { judul: 'Report survey (6C + 1E + 1P)', sub: 'Hasil survey per unsur, salin langsung ke WA', ico: ico('list'), on: onReport },
       { judul: 'Format aplikasi BCP', sub: 'Data aplikasi + Note MAO dari 6C 1EP, salin ke WA', ico: ico('edit'), on: onBcp },
       { judul: 'PDF berkas survey', sub: 'Foto per kategori → PDF, bagikan sekaligus ke WA', ico: ico('share'), on: onPdf },
-      { judul: 'Alat PDF', sub: 'JPG↔PDF, gabung, pisah, putar, kecilkan, buka password', ico: ico('share'), on: onAlatPdf },
+      { judul: 'Alat PDF', sub: 'JPG↔PDF, gabung, pisah, putar, kecilkan PDF & JPG, buka password', ico: ico('share'), on: onAlatPdf },
       { judul: 'Rekap mutasi rekening', sub: 'PDF Mandiri / BCA / BRI / BNI → kredit per bulan & rata-rata, ke WA', ico: ico('chart'), on: onMutasi },
       { judul: 'Form banding (F-761)', sub: 'Reason, analisa 6C, SWOT & foto → Excel untuk G Suite', ico: ico('edit'), on: onBanding },
       { judul: 'Surat IM / berita acara', sub: 'IM SAKPOLE, Copcan ubah POT, Take Over, Tidak revisi STNK → Word', ico: ico('list'), on: onSurat },
