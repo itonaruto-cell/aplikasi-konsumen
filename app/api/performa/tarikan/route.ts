@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { secretOk } from '../../../../lib/secret';
-import { rapikanTabel, simpanTabel, TAB_CAIR, TAB_OI } from '../../../../lib/tarikan-data';
+import { kolomCair, rapikanTabel, simpanTabel, TAB_CAIR, TAB_OI } from '../../../../lib/tarikan-data';
 import { lupakanKonsumen } from '../../../../lib/konsumen-db';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,13 @@ export async function POST(req: NextRequest) {
   const cair = body?.cair ? rapikanTabel(body.cair) : null;
   const oi = body?.oi ? rapikanTabel(body.oi) : null;
   if (!cair && !oi) return NextResponse.json({ error: 'Tidak ada data cair / OI.' }, { status: 400 });
+  if (cair) {
+    // Cek kolom tanggal cair (untuk jatuh tempo): judul kolom tanggal + contoh isinya (tanpa data pribadi)
+    const k = kolomCair(cair.h, cair.r);
+    const kolTgl = cair.h.map((x, i) => [x, i] as const).filter(([x]) => /TGL|TANGGAL|DATE|PROCEED|DISB|CAIR|GO ?LIVE|\bGL\b/i.test(x));
+    console.info('Tarikan cair diterima.', JSON.stringify({ kolom: cair.h.length, baris: cair.r.length, tgl: k.tgl >= 0 ? `${k.tgl}:${cair.h[k.tgl]}` : null,
+      kandidat: kolTgl.map(([x, i]) => ({ i, judul: x, contoh: cair.r.slice(0, 3).map((b) => b[i] || '') })) }));
+  }
   try {
     if (cair) { await simpanTabel(TAB_CAIR, cair); lupakanKonsumen(); }
     if (oi) await simpanTabel(TAB_OI, oi);

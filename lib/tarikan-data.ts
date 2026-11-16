@@ -59,7 +59,7 @@ export async function bacaTabel(tab: string): Promise<Tabel | null> {
   if (c && Date.now() - c.at < CACHE_MS) return c.t;
   let t: Tabel | null = null;
   try {
-    const res = await sheetsApi().spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: `${tab}!A1:CZ` });
+    const res = await sheetsApi().spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: `${tab}!A1:ZZ` });
     const v = (res.data.values || []) as unknown[][];
     if (v.length >= 2) {
       const h = (v[1] || []).map(teks);
@@ -117,7 +117,7 @@ function kolomTeks(h: string[], r: string[][], pola: RegExp[], bukanJenis = fals
 // Pencarian kolom dari isinya, kalau judulnya tidak dikenali
 const MERK = /\b(TOYOTA|HONDA|DAIHATSU|SUZUKI|MITSUBISHI|NISSAN|DATSUN|ISUZU|WULING|HYUNDAI|MAZDA|KIA|CHEVROLET|FORD|BMW|MERCEDES|YAMAHA|KAWASAKI|TVS|VESPA|PIAGGIO|CHERY|DFSK|MG|HINO|AVANZA|XENIA|BRIO|JAZZ|BEAT|VARIO|NMAX|SCOOPY|MIO|ERTIGA|SIGRA|CALYA|AYLA|AGYA|INNOVA|RUSH|TERIOS|XPANDER|LIVINA|GRAN ?MAX|L300|CARRY|FORTUNER|PAJERO|HRV|HR-V|CRV|CR-V|MOBILIO|BRV|BR-V|YARIS|VIOS|ALTIS|CAMRY|ALPHARD|VELOZ|RAIZE|ROCKY|TERIOS|LUXIO|APV|ERTIGA|SWIFT|IGNIS|BALENO|XL7|S-PRESSO|KONA|CRETA|STARGAZER|CONFERO|ALMAZ|CORTEZ|AIR ?EV|PANTHER|ELF|TRAGA|COLT|CANTER|FUSO|DUTRO|DYNA|HILUX|TRITON|NAVARA|D-MAX|PCX|ADV|CBR|KLX|AEROX|LEXI|FREEGO|GENIO|SUPRA|REVO|SONIC|SATRIA|NEX|ADDRESS|FAZZIO|XMAX|R15|VIXION|GRAND ?NEW|ALL ?NEW|NEW)\b/;
 const PERUSAHAAN = /^(PT|CV)\b\.?\s*\S|\s(PT|CV)\.?$/;
-const TANGGAL = /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$|^\d{4}-\d{2}-\d{2}|^\d{1,2}[ -](JAN|FEB|MAR|APR|MEI|MAY|JUN|JUL|AGU|AUG|SEP|OKT|OCT|NOV|DES|DEC)/i;
+const TANGGAL = /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}(\s+\d{1,2}[:.]\d{2}.*)?$|^\d{4}-\d{2}-\d{2}|^\d{1,2}[ -](JAN|FEB|MAR|APR|MEI|MAY|JUN|JUL|AGU|AUG|SEP|OKT|OCT|NOV|NOP|DES|DEC)|^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.? \d{1,2},? \d{4}/i;
 function kolomIsi(h: string[], r: string[][], cocok: RegExp, minimal: number, kecuali: number[] = [], judulDulu?: RegExp): number {
   let terbaik = -1, skor = 0;
   h.forEach((judul, j) => {
@@ -157,7 +157,7 @@ function kolomCairJudul(h: string[], r: string[][] = []) {
     unit: kolomTeks(h, r, [/^(NAMA )?(MERK|MEREK)$/, /^(TYPE|TIPE) UNIT/, /^(MERK|MEREK)/, /^UNIT$/, /^(ASSET|ASET) (NAME|NAMA|DESC|TYPE|TIPE)/, /^OBJEK/, /^(TYPE|TIPE|MODEL)$/,
       /(TYPE|TIPE|MODEL|VARIAN|VARIANT)/, /(ASSET|ASET|OBJEK|OBJECT|KENDARAAN|UNIT|MOBIL|MOTOR) ?(DESC|DESKRIPSI|DESCRIPTION|NAME|NAMA|DETAIL)?/, /DESKRIPSI|DESCRIPTION/], true),
     pokok: cariKolom(h, [/^POKOK HTG$/, /POKOK HTG/, /POKOK HUTANG/, /^AMM?OUNT$/, /^PENCAIRAN$/]),
-    tgl: cariKolom(h, [/^TGL GL$/, /^(TGL|TANGGAL) GO ?LIVE$/, /^TGL JUAL$/, /TGL.*(GOLIVE|GO LIVE|CAIR|KONTRAK|AGREEMENT)/, /TANGGAL.*(GOLIVE|GO LIVE|CAIR|KONTRAK)/, /(GOLIVE|GO LIVE) DATE/, /AGREEMENT DATE/, /^TGL$/, /^TANGGAL$/]),
+    tgl: cariKolom(h, [/^TGL GL$/, /^(TGL|TANGGAL) GO ?LIVE$/, /^TGL JUAL$/, /^(TGL|TANGGAL) (PROCEED|PENJUALAN|DISB)/, /PROCEED DATE|DISBURSE?(MENT)? DATE/, /TGL.*(GOLIVE|GO LIVE|CAIR|KONTRAK|AGREEMENT)/, /TANGGAL.*(GOLIVE|GO LIVE|CAIR|KONTRAK)/, /(GOLIVE|GO LIVE) DATE/, /AGREEMENT DATE/, /^TGL$/, /^TANGGAL$/]),
     kec: cariKolom(h, [/^KECAMATAN$/]),
     kel: cariKolom(h, [/^KELURAHAN$/, /^DESA$/]),
     produk: cariKolom(h, [/^BRAND$/, /^PRODUK$/, /^PRODUCT$/, /^NAMA PRODUK$/]),

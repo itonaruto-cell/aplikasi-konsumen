@@ -15,6 +15,11 @@ const tahun = (y: number) => (y < 100 ? 2000 + y : y);
  *  Tanggal angka a/b/yyyy dibaca hari/bulan; kalau bisa dua-duanya, dipilih yang bulannya sama dengan bulanHint (YYYY-MM). */
 export function bacaTgl(v: string, bulanHint = ''): Tgl | null {
   const s = String(v || '').trim();
+  // Waktu UTC (mis. 2026-11-11T17:00:00.000Z) → tanggal Jakarta
+  if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+    const x = new Date(s);
+    if (isFinite(x.getTime())) { const [y, mm, d] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(x).split('-').map(Number); return { y, m: mm, d }; }
+  }
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) { const t = { y: +m[1], m: +m[2], d: +m[3] }; return sah(t.y, t.m, t.d) ? t : null; }
   m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b/);
@@ -32,6 +37,13 @@ export function bacaTgl(v: string, bulanHint = ''): Tgl | null {
     const i = KODE_BLN.findIndex((r) => r.test(m![2].toUpperCase().replace(/^NOP/, 'NOV').replace(/^PEB/, 'FEB')));
     const t = { y: tahun(+m[3]), m: i + 1, d: +m[1] };
     return i >= 0 && sah(t.y, t.m, t.d) ? t : null;
+  }
+  // Nov 12, 2026 · November 12 2026 · Thu Nov 12 2026
+  m = s.match(/^(?:[A-Za-z]{3,},?\s+)?([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if (m) {
+    const i = KODE_BLN.findIndex((r) => r.test(m![1].toUpperCase().replace(/^NOP/, 'NOV').replace(/^PEB/, 'FEB')));
+    const t = { y: +m[3], m: i + 1, d: +m[2] };
+    if (i >= 0 && sah(t.y, t.m, t.d)) return t;
   }
   if (/^\d{5}(\.\d+)?$/.test(s)) {
     const x = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5);
