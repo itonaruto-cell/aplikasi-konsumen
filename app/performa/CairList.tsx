@@ -125,8 +125,8 @@ export function CairList({ brand, sumber0, flag, orang, push }: { brand?: 'mobil
 export function CairDetail({ it }: { it: CairItem }) {
   const jt = jtCair(it, bulanDilihat());
   const baris: [string, string][] = [['No kontrak', it.kontrak], ['No cust', it.cust], ['No app', it.app], ['CMO', it.cmo], ['Unit', it.unit],
-    ['Pokok hutang', it.pokok ? rpPenuh(it.pokok) : ''], ['Angsuran', it.ekstra?.angsuran ? rpPenuh(angka(it.ekstra.angsuran)) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''],
-    ['Tahun unit', it.ekstra?.tahun || ''], ['Nopol', it.ekstra?.nopol || ''], ['LTV', it.ekstra?.ltv ? `${it.ekstra.ltv.replace(/%$/, '')}%` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', jt ? fmtTgl(jt.cair) : it.tgl], ['Jatuh tempo', jt ? `Setiap tgl ${dd(jt.tgl)}` : ''], ['Angsuran ke-1', jt ? fmtTgl(jt.pertama) : ''], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
+    ['Nominal pencairan', it.cair ? rpPenuh(it.cair) : ''], ['Pokok hutang', it.pokok ? rpPenuh(it.pokok) : ''], ['Angsuran', it.ekstra?.angsuran ? rpPenuh(angka(it.ekstra.angsuran)) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''],
+    ['Tahun unit', it.ekstra?.tahun || ''], ['Nopol', it.ekstra?.nopol || ''], ['LTV', it.ekstra?.ltv ? `${it.ekstra.ltv.replace(/%$/, '')}%` : ''], ['Product offering', it.offering || ''], ['Tanggal jual', jt ? fmtTgl(jt.cair) : it.tglJual || it.tgl], ['Jatuh tempo', jt ? `Setiap tgl ${dd(jt.tgl)}` : ''], ['Angsuran ke-1', jt ? fmtTgl(jt.pertama) : ''], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
     ['Brand', it.brand === 'motorku' ? 'Motorku' : it.brand === 'mobilku' ? 'Mobilku' : '']];
   if (it.sumber === 'Booking Mandiri' && it.brand !== 'motorku') {
     const f = feeBookingMandiri(it);
@@ -142,8 +142,8 @@ export function CairDetail({ it }: { it: CairItem }) {
           </div>
         ))}
       </dl>
-      {jt ? <p className="mt-1 text-[12px] leading-snug text-neutral-500">Jatuh tempo dihitung dari tanggal cair sesuai ketentuan: tgl 1–3 → tgl 03, 4–20 → tanggal sama, 21–22 → 19, 23–25 → 20 (bulan berikutnya); 26–28 → 03, 29–30 → 04, 31 → 05 (dua bulan berikutnya).</p>
-        : <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-300">{it.tgl ? `Tanggal cair "${it.tgl}" belum bisa dibaca` : 'Kolom tanggal cair belum terbaca dari tab tarikan sales'}, jadi jatuh tempo belum bisa dihitung.</p>}
+      {jt ? <p className="mt-1 text-[12px] leading-snug text-neutral-500">Jatuh tempo dihitung dari TGL JUAL (tanggal penjualan di sistem) sesuai ketentuan: tgl 1–3 → tgl 03, 4–20 → tanggal sama, 21–22 → 19, 23–25 → 20 (bulan berikutnya); 26–28 → 03, 29–30 → 04, 31 → 05 (dua bulan berikutnya).</p>
+        : <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-300">{it.tglJual || it.tgl ? `Tanggal jual "${it.tglJual || it.tgl}" belum bisa dibaca` : 'Kolom TGL JUAL belum terbaca dari tab tarikan sales'}, jadi jatuh tempo belum bisa dihitung.</p>}
       <PesanKonsumen it={it} />
     </>
   );

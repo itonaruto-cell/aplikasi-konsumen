@@ -3,6 +3,8 @@ export type CairItem = {
   nama: string; kontrak: string; cust: string; app: string; cmo: string; unit: string;
   pokok: number; tgl: string; brand: 'mobilku' | 'motorku' | ''; sumber: string;
   offering?: string; tenor?: number; flag?: string;
+  tglJual?: string;   // TGL JUAL (tanggal penjualan di sistem, dasar jatuh tempo)
+  cair?: number;      // NOMINAL PENCAIRAN (dana yang diterima konsumen)
   ekstra?: { angsuran: string; tahun: string; nopol: string; ltv: string };
 };
 export type DataCair = { ada: boolean; sumber?: string; dikirim?: string; list: CairItem[]; adaSumber?: boolean; kolom?: Record<string, string>; semuaKolom?: string[]; error?: string };

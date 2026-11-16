@@ -321,6 +321,9 @@ export function daftarCair(t: Tabel | null): CairItem[] {
   const sel = (b: string[], i: number) => (i >= 0 ? (b[i] || '').trim() : '');
   // Semua kolom SOA (SOA, SOA 2, ...): kalau salah satunya perusahaan (PT/CV) → Aggregator
   const semuaSoa = [...new Set([...t.h.map((x, i) => (/\bSO[AR]\b|SO[AR] ?\d|SOURCE OF APP/.test(N(x)) ? i : -1)), k.soa])].filter((i) => i >= 0);
+  // Tanggal penjualan di sistem (dasar jatuh tempo) & nominal pencairan untuk pesan ke konsumen
+  const kJual = cariKolom(t.h, [/^TGL JUAL$/, /^(TGL|TANGGAL) (PENJUALAN|PROCEED)/, /PROCEED DATE/, /^TANGGAL JUAL$/]);
+  const kCairNom = cariKolom(t.h, [/^NOMINAL PENCAIRAN$/, /^(NILAI|JUMLAH) PENCAIRAN$/, /^NOMINAL CAIR$/]);
   const out: CairItem[] = [];
   for (const b of t.r) {
     const nama = sel(b, k.nama), kontrak = sel(b, k.kontrak);
@@ -333,6 +336,7 @@ export function daftarCair(t: Tabel | null): CairItem[] {
       brand: /MOTOR/.test(jenis) ? 'motorku' : /MOBIL/.test(jenis) ? 'mobilku' : '',
       sumber: sumberOrder(sel(b, k.sumber), sel(b, k.offering), semuaSoa.map((i) => sel(b, i)).join(' | ')),
       offering: sel(b, k.offering), tenor: Math.round(angka(sel(b, k.tenor))) || 0, flag: rapikanFlag(sel(b, k.flag)),
+      tglJual: sel(b, kJual), cair: angka(sel(b, kCairNom)) || 0,
       ekstra: (() => { const e = ekstraCair(t.h, b, k, []); return { angsuran: e.ANGSURAN || '', tahun: e['TAHUN UNIT'] || '', nopol: e.NOPOL || '', ltv: e.LTV || '' }; })(),
     });
   }
