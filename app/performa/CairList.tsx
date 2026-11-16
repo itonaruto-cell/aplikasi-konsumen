@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { SearchBox, Chev, rp, type Push } from './ui';
-import { brandOf, keyOf } from '../../lib/performa-calc';
+import { brandOf, keyOf, todayJkt } from '../../lib/performa-calc';
+import { URL_TATA_CARA, dd, fmtTgl, jtCair, pesanKontrak } from '../../lib/jatuh-tempo';
 import { angka, kunciFlag, kunciSumber, type CairItem, type DataCair } from '../../lib/cair-types';
 import type { Orang } from '../../lib/performa-types';
 import { feeBookingMandiri } from '../../lib/fee-bm';
@@ -25,6 +26,8 @@ export function ambilCair(paksa = false): Promise<DataCair> {
 }
 
 const rpPenuh = (n: number) => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
+// Bulan data yang sedang dilihat, untuk membaca tanggal cair 11/12 sebagai 12 Nov (bukan 11 Des)
+const bulanDilihat = () => bulanArsip() || todayJkt().slice(0, 7);
 const kataNama = (s: string) => keyOf(s).split(' ').filter(Boolean);
 // Brand dari tab tarikan; kalau kosong, dari brand CMO-nya di pantauan
 export function brandItem(it: CairItem, orang: Orang[]): 'mobilku' | 'motorku' | '' {
@@ -106,7 +109,7 @@ export function CairList({ brand, sumber0, flag, orang, push }: { brand?: 'mobil
                     {it.flag && <span className={`shrink-0 rounded-full px-2 py-px text-[11px] font-bold ${it.flag === 'Normal' ? 'bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300'}`}>{it.flag}</span>}
                     {it.sumber && <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-px text-[11px] font-bold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{it.sumber}</span>}
                   </span>
-                  <span className="block truncate text-[12px] text-neutral-500">{[it.cmo, it.unit, it.tgl].filter(Boolean).join(' · ')}</span>
+                  <span className="block truncate text-[12px] text-neutral-500">{[it.cmo, it.unit, it.tgl, (() => { const jt = jtCair(it, bulanDilihat()); return jt ? `JT tgl ${dd(jt.tgl)}` : ''; })()].filter(Boolean).join(' · ')}</span>
                 </span>
                 {it.pokok > 0 && <span className="shrink-0 text-[13px] font-semibold">{rp(it.pokok).replace('Rp ', '')}</span>}
                 <Chev />
@@ -120,23 +123,87 @@ export function CairList({ brand, sumber0, flag, orang, push }: { brand?: 'mobil
 }
 
 export function CairDetail({ it }: { it: CairItem }) {
+  const jt = jtCair(it, bulanDilihat());
   const baris: [string, string][] = [['No kontrak', it.kontrak], ['No cust', it.cust], ['No app', it.app], ['CMO', it.cmo], ['Unit', it.unit],
     ['Pokok hutang', it.pokok ? rpPenuh(it.pokok) : ''], ['Angsuran', it.ekstra?.angsuran ? rpPenuh(angka(it.ekstra.angsuran)) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''],
-    ['Tahun unit', it.ekstra?.tahun || ''], ['Nopol', it.ekstra?.nopol || ''], ['LTV', it.ekstra?.ltv ? `${it.ekstra.ltv.replace(/%$/, '')}%` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
+    ['Tahun unit', it.ekstra?.tahun || ''], ['Nopol', it.ekstra?.nopol || ''], ['LTV', it.ekstra?.ltv ? `${it.ekstra.ltv.replace(/%$/, '')}%` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Jatuh tempo', jt ? `Setiap tgl ${dd(jt.tgl)}` : ''], ['Angsuran ke-1', jt ? fmtTgl(jt.pertama) : ''], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
     ['Brand', it.brand === 'motorku' ? 'Motorku' : it.brand === 'mobilku' ? 'Mobilku' : '']];
   if (it.sumber === 'Booking Mandiri' && it.brand !== 'motorku') {
     const f = feeBookingMandiri(it);
     baris.push(['Fee Booking Mandiri', f.persen === null ? `– (${f.dasar})` : `${f.persen.toLocaleString('id-ID')}% = ${rpPenuh(f.nominal)} · ${f.dasar}`]);
   }
   return (
-    <dl className="divide-y divide-neutral-200 dark:divide-neutral-800">
-      {baris.filter(([, v]) => v).map(([l, v]) => (
-        <div key={l} className="flex justify-between gap-4 py-2.5 text-sm">
-          <dt className="shrink-0 text-neutral-500">{l}</dt>
-          <dd className="text-right font-medium break-words">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl className="divide-y divide-neutral-200 dark:divide-neutral-800">
+        {baris.filter(([, v]) => v).map(([l, v]) => (
+          <div key={l} className="flex justify-between gap-4 py-2.5 text-sm">
+            <dt className="shrink-0 text-neutral-500">{l}</dt>
+            <dd className="text-right font-medium break-words">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {jt ? <p className="mt-1 text-[12px] leading-snug text-neutral-500">Jatuh tempo dihitung dari tanggal cair sesuai ketentuan: tgl 1–3 → tgl 03, 4–20 → tanggal sama, 21–22 → 19, 23–25 → 20 (bulan berikutnya); 26–28 → 03, 29–30 → 04, 31 → 05 (dua bulan berikutnya).</p>
+        : <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-300">Tanggal cair belum terbaca, jatuh tempo belum bisa dihitung.</p>}
+      <PesanKonsumen it={it} />
+    </>
+  );
+}
+
+/* ---------- Pesan detail kontrak + tata cara pembayaran untuk konsumen ---------- */
+function PesanKonsumen({ it }: { it: CairItem }) {
+  const [teks, setTeks] = useState(() => pesanKontrak(it, bulanDilihat()));
+  const [pesan, setPesan] = useState('');
+  const [sibuk, setSibuk] = useState(false);
+  const gambar = async () => {
+    const r = await fetch(URL_TATA_CARA);
+    if (!r.ok) throw new Error('gambar');
+    return new File([await r.blob()], 'Tata Cara Pembayaran Angsuran WOM Finance.jpg', { type: 'image/jpeg' });
+  };
+  const unduh = (f: File) => {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement('a');
+    a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 15_000);
+  };
+  const salin = async (diam = false) => {
+    try { await navigator.clipboard.writeText(teks); if (!diam) setPesan('Teks tersalin. Tempel di chat WhatsApp konsumen.'); return true; }
+    catch { if (!diam) setPesan('Tidak bisa menyalin otomatis. Tekan lama teks di atas lalu Salin.'); return false; }
+  };
+  // Gambar + teks sekaligus (teks jadi keterangan gambar di WhatsApp)
+  const kirim = async (denganTeks: boolean) => {
+    setSibuk(true); setPesan('');
+    try {
+      const f = await gambar();
+      const data: ShareData = denganTeks ? { files: [f], text: teks } : { files: [f] };
+      if (navigator.canShare?.(data)) {
+        try { await navigator.share(data); } catch (e) { if ((e as Error)?.name !== 'AbortError') throw e; }
+      } else {
+        const ok = denganTeks ? await salin(true) : false;
+        unduh(f);
+        setPesan(denganTeks ? `HP ini tidak bisa membagikan gambar + teks sekaligus. Gambar diunduh${ok ? ' & teks sudah disalin' : ''}: kirim gambarnya ke konsumen, lalu tempel teksnya.` : 'Gambar diunduh.');
+      }
+    } catch { setPesan('Gambar tata cara pembayaran gagal dimuat. Coba lagi.'); }
+    finally { setSibuk(false); }
+  };
+  return (
+    <section className="mt-5 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800">
+      <p className="text-[15px] font-bold">Pesan untuk konsumen</p>
+      <p className="text-[12px] text-neutral-500">Detail kontrak + Tata Cara Pembayaran Angsuran. Teks bisa diubah dulu sebelum dikirim.</p>
+      <textarea value={teks} onChange={(e) => setTeks(e.target.value)} rows={12} aria-label="Teks pesan untuk konsumen"
+        className="mt-2 w-full rounded-xl border border-neutral-300 bg-[#E7FFDB] p-2.5 text-[13px] leading-relaxed text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-400 dark:border-neutral-700 dark:bg-[#0B3B2C] dark:text-neutral-100" />
+      <div className="mt-2 flex items-center gap-2.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={URL_TATA_CARA} alt="Tata Cara Pembayaran Angsuran WOM Finance" className="h-16 w-12 shrink-0 rounded-md border border-neutral-200 object-cover object-top dark:border-neutral-700" />
+        <span className="text-[12px] leading-snug text-neutral-500">Gambar Tata Cara Pembayaran Angsuran ikut terkirim bersama teks.</span>
+      </div>
+      <button onClick={() => kirim(true)} disabled={sibuk} className="mt-3 min-h-12 w-full rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white disabled:opacity-50">{sibuk ? 'Menyiapkan…' : 'Kirim teks + gambar'}</button>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button onClick={() => salin()} className="min-h-11 rounded-xl border border-neutral-300 text-[14px] font-semibold dark:border-neutral-700">Salin teks</button>
+        <button onClick={() => kirim(false)} disabled={sibuk} className="min-h-11 rounded-xl border border-neutral-300 text-[14px] font-semibold disabled:opacity-50 dark:border-neutral-700">Kirim gambar saja</button>
+      </div>
+      {teks !== pesanKontrak(it, bulanDilihat()) && <button onClick={() => setTeks(pesanKontrak(it, bulanDilihat()))} className="mt-2 min-h-10 text-[13px] font-semibold underline">Kembalikan teks awal</button>}
+      {pesan && <p role="status" className="mt-2 rounded-xl bg-neutral-100 px-3 py-2 text-[13px] dark:bg-neutral-900">{pesan}</p>}
+    </section>
   );
 }
 
