@@ -32,9 +32,11 @@ export function bacaTgl(v: string, bulanHint = ''): Tgl | null {
   if (m) {
     const a = +m[1], b = +m[2], y = tahun(+m[3]);
     const dm = sah(y, b, a) ? { y, m: b, d: a } : null, md = sah(y, a, b) ? { y, m: a, d: b } : null;
-    if (dm && md && bulanHint) {
-      const kunci = (t: Tgl) => `${t.y}-${String(t.m).padStart(2, '0')}`;
-      if (kunci(md) === bulanHint && kunci(dm) !== bulanHint) return md;
+    // Dua-duanya mungkin (mis. 11/5/2026): pilih yang bulannya paling dekat dengan bulan data (tarikan G Suite = bulan/tanggal/tahun)
+    const h = bulanHint.match(/^(\d{4})-(\d{2})$/);
+    if (dm && md && h) {
+      const jarak = (t: Tgl) => Math.abs(t.y * 12 + t.m - (+h[1] * 12 + +h[2]));
+      return jarak(md) < jarak(dm) ? md : dm;
     }
     return dm || md;
   }
@@ -69,8 +71,9 @@ export const dd = (n: number) => String(n).padStart(2, '0');
 export const fmtTgl = (t: Tgl) => `${dd(t.d)} ${BLN_PENDEK[t.m - 1]} ${t.y}`;
 
 /** Jatuh tempo untuk satu konsumen cair (null kalau tanggal cair tidak terbaca). */
-export function jtCair(it: Pick<CairItem, 'tgl'>, bulanHint = '') {
-  const t = bacaTgl(it.tgl, bulanHint);
+export function jtCair(it: Pick<CairItem, 'tgl' | 'tglJual'>, bulanHint = '') {
+  // TGL JUAL (tanggal penjualan di sistem) lebih dulu; TGL GL tarikan hanya berisi tanggal
+  const t = bacaTgl(it.tglJual || '', bulanHint) || bacaTgl(it.tgl, bulanHint);
   return t ? { cair: t, ...jatuhTempo(t) } : null;
 }
 
@@ -95,7 +98,7 @@ export function pesanKontrak(it: CairItem, bulanHint = '', now = new Date()): st
     '',
     'Berikut kami kirimkan detail kontrak pembiayaan WOM Finance : ',
     `Nomor kontrak : ${it.kontrak || '-'}`,
-    `Pencairan : ${ribu(it.pokok)}`,
+    `Pencairan : ${ribu(it.cair || it.pokok)}`,
     `Angsuran : ${ribu(angka(it.ekstra?.angsuran || ''))}`,
     `Tenor : ${it.tenor || '-'}`,
     `Jatuh tempo : setiap tgl ${jt ? dd(jt.tgl) : '-'}`,
