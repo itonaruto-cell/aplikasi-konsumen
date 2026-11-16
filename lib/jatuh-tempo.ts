@@ -11,10 +11,16 @@ export const BLN_PENDEK = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu
 const sah = (y: number, m: number, d: number) => y > 1900 && m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(y, m, 0)).getUTCDate();
 const tahun = (y: number) => (y < 100 ? 2000 + y : y);
 
-/** Baca tanggal cair dari tab tarikan: 2026-11-03, 03/11/2026, 3-Nov-2026, 3 Nopember 2026, serial Excel.
+/** Baca tanggal cair dari tab tarikan: 13 (tanggal saja, bulan dari bulanHint), 2026-11-03, 03/11/2026, 3-Nov-2026, 3 Nopember 2026, serial Excel.
  *  Tanggal angka a/b/yyyy dibaca hari/bulan; kalau bisa dua-duanya, dipilih yang bulannya sama dengan bulanHint (YYYY-MM). */
 export function bacaTgl(v: string, bulanHint = ''): Tgl | null {
   const s = String(v || '').trim();
+  // Tarikan sales G Suite: kolom TGL hanya berisi tanggal (mis. "13"); bulan & tahun = bulan data tarikan
+  if (/^\d{1,2}$/.test(s)) {
+    const b = bulanHint.match(/^(\d{4})-(\d{2})$/);
+    const t = b ? { y: +b[1], m: +b[2], d: +s } : null;
+    return t && sah(t.y, t.m, t.d) ? t : null;
+  }
   // Waktu UTC (mis. 2026-11-11T17:00:00.000Z) → tanggal Jakarta
   if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
     const x = new Date(s);
