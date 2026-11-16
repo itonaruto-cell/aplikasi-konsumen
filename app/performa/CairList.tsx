@@ -143,7 +143,7 @@ export function CairDetail({ it }: { it: CairItem }) {
         ))}
       </dl>
       {jt ? <p className="mt-1 text-[12px] leading-snug text-neutral-500">Jatuh tempo dihitung dari tanggal cair sesuai ketentuan: tgl 1–3 → tgl 03, 4–20 → tanggal sama, 21–22 → 19, 23–25 → 20 (bulan berikutnya); 26–28 → 03, 29–30 → 04, 31 → 05 (dua bulan berikutnya).</p>
-        : <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-300">Tanggal cair belum terbaca, jatuh tempo belum bisa dihitung.</p>}
+        : <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-300">{it.tgl ? `Tanggal cair "${it.tgl}" belum bisa dibaca` : 'Kolom tanggal cair belum terbaca dari tab tarikan sales'}, jadi jatuh tempo belum bisa dihitung.</p>}
       <PesanKonsumen it={it} />
     </>
   );
