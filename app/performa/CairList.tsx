@@ -126,7 +126,7 @@ export function CairDetail({ it }: { it: CairItem }) {
   const jt = jtCair(it, bulanDilihat());
   const baris: [string, string][] = [['No kontrak', it.kontrak], ['No cust', it.cust], ['No app', it.app], ['CMO', it.cmo], ['Unit', it.unit],
     ['Pokok hutang', it.pokok ? rpPenuh(it.pokok) : ''], ['Angsuran', it.ekstra?.angsuran ? rpPenuh(angka(it.ekstra.angsuran)) : ''], ['Tenor', it.tenor ? `${it.tenor} bulan` : ''],
-    ['Tahun unit', it.ekstra?.tahun || ''], ['Nopol', it.ekstra?.nopol || ''], ['LTV', it.ekstra?.ltv ? `${it.ekstra.ltv.replace(/%$/, '')}%` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', it.tgl], ['Jatuh tempo', jt ? `Setiap tgl ${dd(jt.tgl)}` : ''], ['Angsuran ke-1', jt ? fmtTgl(jt.pertama) : ''], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
+    ['Tahun unit', it.ekstra?.tahun || ''], ['Nopol', it.ekstra?.nopol || ''], ['LTV', it.ekstra?.ltv ? `${it.ekstra.ltv.replace(/%$/, '')}%` : ''], ['Product offering', it.offering || ''], ['Tanggal cair', jt ? fmtTgl(jt.cair) : it.tgl], ['Jatuh tempo', jt ? `Setiap tgl ${dd(jt.tgl)}` : ''], ['Angsuran ke-1', jt ? fmtTgl(jt.pertama) : ''], ['Sumber order', it.sumber], ['Flag approval', it.flag || ''],
     ['Brand', it.brand === 'motorku' ? 'Motorku' : it.brand === 'mobilku' ? 'Mobilku' : '']];
   if (it.sumber === 'Booking Mandiri' && it.brand !== 'motorku') {
     const f = feeBookingMandiri(it);
