@@ -4,6 +4,7 @@
 // Disimpan terpisah di tab BLOK_SHEET lalu digabung ke data performa saat dibaca (judul sama → menggantikan blok lama).
 import { sheetsApi } from './sheets-api';
 import type { Blok, Performa } from './performa-types';
+import { bulanData } from './performa-calc';
 
 export const TAB_BLOK = 'BLOK_SHEET';
 const CHUNK = 40_000, CACHE_MS = 60_000;
@@ -69,12 +70,23 @@ export async function bacaBlokSheet(): Promise<BlokSheet | null> {
   return x;
 }
 
+// Bulan file pantauan dari namanya, mis. "PANTAUAN CABANG KENDAL NOVEMBER 2026 (APP)" → 2026-11
+const NAMA_BLN = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
+function bulanSumber(s: string): string {
+  const u = s.toUpperCase();
+  const i = NAMA_BLN.findIndex((n) => new RegExp(`\\b${n}\\b`).test(u));
+  const y = u.match(/\b(20\d{2})\b/);
+  return i >= 0 && y ? `${y[1]}-${String(i + 1).padStart(2, '0')}` : '';
+}
+
 /** Gabungkan tabel BlokSheet ke data performa: judul sama menggantikan blok lama, judul baru ditambahkan.
- *  Hanya kalau dikirim berdekatan dengan kiriman performa (file & bulan yang sama). */
+ *  Hanya kalau dari file bulan yang sama (dari nama file), atau — kalau bulannya tidak terbaca — dikirim ≤ 3 hari berdekatan. */
 export function gabungBlok(d: Performa, x: BlokSheet | null): Performa {
   if (!x?.blok.length) return d;
+  const bs = bulanSumber(x.sumber), bd = bulanData(d);
   const beda = Math.abs(new Date(x.dikirim).getTime() - new Date(d.dikirim).getTime());
-  if (!isFinite(beda) || beda > 6 * 3600_000) return d;
+  const cocok = bs && bd ? bs === bd : isFinite(beda) && beda <= 3 * 86400_000;
+  if (!cocok) { console.warn('BlokSheet tidak digabung.', JSON.stringify({ sumber: x.sumber, bs, bd, blok: x.dikirim, performa: d.dikirim })); return d; }
   const kunci = (b: Blok) => `${b.s}|${b.t.toLowerCase()}`;
   const baru = new Map(x.blok.map((b) => [kunci(b), b]));
   const lama = (d.blok || []).map((b) => baru.get(kunci(b)) || b);

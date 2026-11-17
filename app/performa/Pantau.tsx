@@ -437,23 +437,26 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
       {sSoa ? (
         <Sec title="Sales by SOA" right="ketuk untuk konsumen">
           <div className="border-t border-neutral-200 dark:border-neutral-800">
-            {sSoa.soa.map((x) => (
-              <button key={x.n} onClick={() => push({ t: 'cair', brand: b, sumber: x.n })} aria-label={`${x.n}: lihat konsumen cair`}
-                className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-neutral-200 px-4 py-2 text-left text-sm active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                <span className="min-w-0 flex-1 font-semibold">{x.n}</span>
-                <span className="text-right"><b>{isNum(x.unit) ? angka(x.unit) : '–'}</b><span className="text-neutral-500"> unit</span>
-                  <span className="block text-xs text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span></span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-2.5 grid grid-cols-3 gap-2 px-4">
-            {[sSoa.total, sSoa.target, sSoa.m1].map((x) => (
-              <span key={x.n} className="flex flex-col rounded-2xl bg-neutral-100 p-2.5 dark:bg-neutral-900">
-                <span className="text-xs text-neutral-500">{x.n}</span>
-                <b className="text-lg leading-tight">{isNum(x.unit) ? `${angka(x.unit)} unit` : '–'}</b>
-                <span className="text-xs text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span>
-              </span>
-            ))}
+            {[...sSoa.soa, ...(sSoa.total ? [{ ...sSoa.total, n: 'Total' }] : [])].map((x) => {
+              const total = x.n === 'Total';
+              const isi = (
+                <>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block ${total ? 'font-bold' : 'font-semibold'}`}>{x.n}</span>
+                    <span className="block text-xs text-neutral-500">
+                      Bln lalu {isNum(x.unitLalu) ? `${angka(x.unitLalu)} unit` : '–'}{isNum(x.amountLalu) ? ` · ${rp(x.amountLalu)}` : ''}
+                      {isNum(x.targetUnit) && x.targetUnit > 0 ? ` · target ${angka(x.targetUnit)}` : ''}
+                    </span>
+                  </span>
+                  <span className="text-right"><b>{isNum(x.unit) ? angka(x.unit) : '–'}</b><span className="text-neutral-500"> unit</span>
+                    <span className="block text-xs text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span></span>
+                </>
+              );
+              const cls = 'flex min-h-14 w-full items-center justify-between gap-3 border-b border-neutral-200 px-4 py-2 text-left text-sm last:border-0 dark:border-neutral-800';
+              return total ? <div key={x.n} className={`${cls} bg-neutral-50 dark:bg-neutral-900`}>{isi}</div> : (
+                <button key={x.n} onClick={() => push({ t: 'cair', brand: b, sumber: x.n })} aria-label={`${x.n}: lihat konsumen cair`} className={`${cls} active:bg-neutral-50 dark:active:bg-neutral-900`}>{isi}</button>
+              );
+            })}
           </div>
           {!sSoa.terisi && <p className="mx-4 mt-2 text-xs text-neutral-500">Tabel SALES BY SOA ACC/AMM di sheet belum terisi angka.</p>}
         </Sec>
@@ -518,7 +521,7 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
           </div>
           {!dSoa.terisi && <p className="mx-4 mt-2 text-xs text-neutral-500">Tabel DETAIL SOA MA ACC/AMM di sheet belum terisi angka.</p>}
         </Sec>
-      ) : soa.length > 0 && (
+      ) : !data.blokSheet && soa.length > 0 && (
         <Sec title="Data SOA" right="cek data · hitungan">
           <div className="border-t border-neutral-200 dark:border-neutral-800">
             {soa.map(([l, a1, a2]) => (
