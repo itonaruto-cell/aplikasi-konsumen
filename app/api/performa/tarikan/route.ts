@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { secretOk } from '../../../../lib/secret';
-import { kolomCair, rapikanTabel, simpanTabel, TAB_CAIR, TAB_OI } from '../../../../lib/tarikan-data';
+import { daftarCair, kolomCair, rapikanTabel, simpanTabel, TAB_CAIR, TAB_OI } from '../../../../lib/tarikan-data';
+import { fmtTgl, jtCair } from '../../../../lib/jatuh-tempo';
+import { todayJkt } from '../../../../lib/performa-calc';
 import { lupakanKonsumen } from '../../../../lib/konsumen-db';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +26,13 @@ export async function POST(req: NextRequest) {
     const kolTgl = cair.h.map((x, i) => [x, i] as const).filter(([x]) => /TGL|TANGGAL|DATE|PROCEED|DISB|CAIR|GO ?LIVE|\bGL\b/i.test(x));
     console.info('Tarikan cair diterima.', JSON.stringify({ kolom: cair.h.length, baris: cair.r.length, tgl: k.tgl >= 0 ? `${k.tgl}:${cair.h[k.tgl]}` : null,
       kandidat: kolTgl.map(([x, i]) => ({ i, judul: x, contoh: cair.r.slice(0, 3).map((b) => b[i] || '') })) }));
+    // Cek jatuh tempo semua konsumen cair (tanpa nama; kontrak 4 digit terakhir)
+    const bulan = todayJkt().slice(0, 7);
+    console.info('Cek jatuh tempo cair.', JSON.stringify({ judul: cair.h, baris: daftarCair(cair).map((it, i) => {
+      const jt = jtCair(it, bulan);
+      return { i, kt: it.kontrak.slice(-4), jual: it.tglJual || '', gl: it.tgl, jt: jt ? `${fmtTgl(jt.cair)}→${fmtTgl(jt.pertama)}` : null,
+        cair: it.cair || 0, pokok: it.pokok, angs: it.ekstra?.angsuran || '', tenor: it.tenor || 0, brand: it.brand };
+    }) }));
   }
   try {
     if (cair) { await simpanTabel(TAB_CAIR, cair); lupakanKonsumen(); }
