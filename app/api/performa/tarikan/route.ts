@@ -28,11 +28,12 @@ export async function POST(req: NextRequest) {
       kandidat: kolTgl.map(([x, i]) => ({ i, judul: x, contoh: cair.r.slice(0, 3).map((b) => b[i] || '') })) }));
     // Cek jatuh tempo semua konsumen cair (tanpa nama; kontrak 4 digit terakhir)
     const bulan = todayJkt().slice(0, 7);
-    console.info('Cek jatuh tempo cair.', JSON.stringify({ judul: cair.h, baris: daftarCair({ ...cair, dikirim: "" }).map((it, i) => {
+    // Satu baris log per konsumen supaya tidak terpotong
+    daftarCair({ ...cair, dikirim: '' }).forEach((it, i) => {
       const jt = jtCair(it, bulan);
-      return { i, kt: it.kontrak.slice(-4), jual: it.tglJual || '', gl: it.tgl, jt: jt ? `${fmtTgl(jt.cair)}→${fmtTgl(jt.pertama)}` : null,
-        cair: it.cair || 0, pokok: it.pokok, angs: it.ekstra?.angsuran || '', tenor: it.tenor || 0, brand: it.brand };
-    }) }));
+      console.info(`Cek JT cair ${i + 1}/${cair.r.length}`, JSON.stringify({ kt: it.kontrak.slice(-4), jual: it.tglJual || '', gl: it.tgl,
+        jt: jt ? `${fmtTgl(jt.cair)}→${fmtTgl(jt.pertama)}` : null, cair: it.cair || 0, pokok: it.pokok, angs: it.ekstra?.angsuran || '', tenor: it.tenor || 0, brand: it.brand, flag: it.flag || '' }));
+    });
   }
   try {
     if (cair) { await simpanTabel(TAB_CAIR, cair); lupakanKonsumen(); }
