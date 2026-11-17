@@ -128,7 +128,7 @@ export function OpenRow({ title, sub, onClick }: { title: string; sub: string; o
 
 export function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
-    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} inputMode="search"
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} inputMode="search" data-boleh-muat
       className="mt-2 h-10 w-full rounded-xl bg-neutral-100 px-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-400 dark:bg-neutral-800" />
   );
 }
