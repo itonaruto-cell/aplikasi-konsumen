@@ -9,6 +9,7 @@ import {
   Avatar, BRAND, BrandArt, BrandChip, BrandIcon, CountPct, Ico, Kosong, Line, shortName, type BrandId,
 } from './parts';
 import { PengumumanList } from './Pengumuman';
+import { detailSoaMa, orderInBrand, salesSoa } from '../../lib/blok-soa';
 import { NotifPrompt } from './Notif';
 
 /* ---------- Tabel dari sheet pantauan ---------- */
@@ -222,7 +223,8 @@ function Cabang({ c, push }: { c: Ctx; push: Push }) {
   const ap = c.sales.filter((o) => o.approval && (o.approval.total || 0) > 0);
   const oiTot = oi.reduce((s, o) => ({ go: s.go + (o.oi!.golive || 0), t: s.t + (o.oi!.total || 0), tg: s.tg + (o.oi!.target || 0) }), { go: 0, t: 0, tg: 0 });
   const flag = findBlok(c.data, 'cabang', 'Sales per flag approval');
-  const flagTot = flag?.r.find((r) => isTotal(r[0])) || null;
+  // Baris TOTAL; kalau tidak ada, dijumlah dari baris brand
+  const flagTot = flag?.r.find((r) => isTotal(r[0])) || (flag?.r.length ? [null, ...[1, 2, 3, 4].map((i) => flag.r.reduce((t, r) => t + (num(r[i]) || 0), 0))] : null);
   const flagHead = (flag?.h || []).slice(1, 5).map((h) => tc(label(h)));
 
   return (
@@ -361,6 +363,9 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
     return [tc(label(r[0])), num(r[3]) ?? num(r[2]), num(h?.[2]) ?? num(h?.[1])] as [string, number | null, number | null];
   });
   const OI_C: Record<string, string> = { Golive: 'text-[#1FA463]', Cancel: 'text-neutral-500', Reject: 'text-[#E5484D]', Pending: 'text-[#E08A1E]' };
+  // Arahan BH: order in dari tabel ORDER IN · BY BRAND, sales by SOA (ACC & AMM), detail SOA MA (ACC & AMM)
+  const oiB = orderInBrand(data, b), sSoa = salesSoa(data, b), dSoa = detailSoaMa(data, b);
+  const tanpa0 = (v: number | null) => (isNum(v) ? v : null);
 
   return (
     <>
@@ -429,7 +434,30 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
         </Sec>
       )}
 
-      {channels.length > 0 && (
+      {sSoa ? (
+        <Sec title="Sales by SOA" right="ketuk untuk konsumen">
+          <div className="border-t border-neutral-200 dark:border-neutral-800">
+            {sSoa.soa.map((x) => (
+              <button key={x.n} onClick={() => push({ t: 'cair', brand: b, sumber: x.n })} aria-label={`${x.n}: lihat konsumen cair`}
+                className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-neutral-200 px-4 py-2 text-left text-sm active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+                <span className="min-w-0 flex-1 font-semibold">{x.n}</span>
+                <span className="text-right"><b>{isNum(x.unit) ? angka(x.unit) : '–'}</b><span className="text-neutral-500"> unit</span>
+                  <span className="block text-xs text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span></span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-2.5 grid grid-cols-3 gap-2 px-4">
+            {[sSoa.total, sSoa.target, sSoa.m1].map((x) => (
+              <span key={x.n} className="flex flex-col rounded-2xl bg-neutral-100 p-2.5 dark:bg-neutral-900">
+                <span className="text-xs text-neutral-500">{x.n}</span>
+                <b className="text-lg leading-tight">{isNum(x.unit) ? `${angka(x.unit)} unit` : '–'}</b>
+                <span className="text-xs text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span>
+              </span>
+            ))}
+          </div>
+          {!sSoa.terisi && <p className="mx-4 mt-2 text-xs text-neutral-500">Tabel SALES BY SOA ACC/AMM di sheet belum terisi angka.</p>}
+        </Sec>
+      ) : channels.length > 0 && (
         <Sec title="Sales per channel" right="ketuk untuk konsumen">
           <div className="border-t border-neutral-200 dark:border-neutral-800">
             {channels.map((x) => (
@@ -444,7 +472,23 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
         </Sec>
       )}
 
-      {oiStat.length > 0 && (
+      {oiB ? (
+        <Sec title="Order in per status" right="by brand">
+          <div className="grid grid-cols-4 gap-1.5 px-4">
+            {([['Golive', oiB.golive], ['Pending', isNum(oiB.pending) || isNum(oiB.poPending) ? (oiB.pending || 0) + (oiB.poPending || 0) : null], ['Reject', oiB.reject], ['Cancel', oiB.cancel]] as const).map(([l, n]) => (
+              <span key={l} className="flex flex-col items-center rounded-2xl bg-neutral-100 px-1 py-2.5 dark:bg-neutral-900">
+                <b className={`text-xl ${OI_C[l] || ''}`}>{isNum(n) ? angka(n) : '–'}</b><span className="truncate text-xs text-neutral-500">{l}</span>
+              </span>
+            ))}
+          </div>
+          <p className="mx-4 mt-2 text-[13px] text-neutral-600 dark:text-neutral-300">
+            Total OI <b>{isNum(oiB.total) ? angka(oiB.total) : '–'}</b> · success rate <b>{pct(tanpa0(oiB.sr))}</b>
+            {isNum(oiB.target) ? <> · target {angka(oiB.target)} (<b>{pct(oiB.ach)}</b>)</> : null}
+            {isNum(oiB.m1) ? <> · bulan lalu {angka(oiB.m1)}</> : null}
+            {isNum(oiB.poPending) && oiB.poPending > 0 ? <> · termasuk PO pending {angka(oiB.poPending)}</> : null}
+          </p>
+        </Sec>
+      ) : oiStat.length > 0 && (
         <Sec title="Order in per status" right="bulan ini">
           <div className="grid grid-cols-4 gap-1.5 px-4">
             {oiStat.slice(0, 8).map(([l, n]) => (
@@ -456,7 +500,25 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
         </Sec>
       )}
 
-      {soa.length > 0 && (
+      {dSoa ? (
+        <Sec title="Detail SOA MA" right="unit · amount">
+          <div className="border-t border-neutral-200 dark:border-neutral-800">
+            {dSoa.grup.map((x) => (
+              <div key={x.n} className="flex min-h-11 items-center justify-between gap-3 border-b border-neutral-200 px-4 text-sm dark:border-neutral-800">
+                <span className="min-w-0 flex-1">{x.n}</span>
+                <span className="flex items-baseline gap-4"><b className="w-10 text-right">{isNum(x.unit) ? angka(x.unit) : '–'}</b><span className="w-24 text-right text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span></span>
+              </div>
+            ))}
+            {[dSoa.total, dSoa.m1, dSoa.selisih].map((x) => (
+              <div key={x.n} className="flex min-h-10 items-center justify-between gap-3 border-b border-neutral-200 px-4 text-sm last:border-0 dark:border-neutral-800">
+                <span className="font-semibold">{x.n}</span>
+                <span className="flex items-baseline gap-4"><b className="w-10 text-right">{isNum(x.unit) ? angka(x.unit) : '–'}</b><span className="w-24 text-right text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span></span>
+              </div>
+            ))}
+          </div>
+          {!dSoa.terisi && <p className="mx-4 mt-2 text-xs text-neutral-500">Tabel DETAIL SOA MA ACC/AMM di sheet belum terisi angka.</p>}
+        </Sec>
+      ) : soa.length > 0 && (
         <Sec title="Data SOA" right="cek data · hitungan">
           <div className="border-t border-neutral-200 dark:border-neutral-800">
             {soa.map(([l, a1, a2]) => (

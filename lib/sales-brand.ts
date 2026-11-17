@@ -122,11 +122,13 @@ export function isiPosisiKosong(data: Performa): Performa {
 }
 
 /* ---------- Kolom "bulan lalu" per orang ---------- */
-// salesLalu.orang (tabel per PIC di file pantauan bulan lalu, kolom bulan itu = sebulan penuh) → laluPenuh.
-// Kolom sheet (bulan lalu s.d. tanggal yang sama) tetap di lalu; kalau kosong / 0, diisi angka sebulan penuh.
+// Sumber utama: tabel SALES BY PIC di sheet (kolom bulan lalu s.d. tanggal yang sama & kolom "… FULL" sebulan penuh),
+// sesuai arahan BH. salesLalu.orang (file pantauan bulan lalu) hanya cadangan kalau tabel itu tidak punya angkanya.
+const kolomPenuh = (b: Blok | undefined) => (b ? b.h.findIndex((h) => /\bFULL\b/i.test(String(h ?? '')) && !/DIFF/i.test(String(h ?? ''))) : -1);
 export function isiLaluOrang(data: Performa): Performa {
-  const daftar = data.salesLalu?.orang;
-  if (!daftar?.length || !data.orang?.length) return data;
+  if (!data.orang?.length) return data;
+  const blok = { unit: blokCabang(data, 'sales account per pic'), amount: blokCabang(data, 'sales amount per pic') };
+  const daftar = data.salesLalu?.orang || [];
   // Nama satu kata (mis. "RIZAL") hanya dipakai kalau tepat satu orang di pantauan memuat kata itu
   const UMUM = /^(MUHAMMAD|MUHAMAD|MOHAMMAD|MOH|MOCH|M|AHMAD|NUR|SITI|DWI|TRI|EKA|CMO|MAO|MOBILKU|MOTORKU|MOBIL|MOTOR)$/;
   const satuKata = (d: string, o: string) => {
@@ -137,17 +139,19 @@ export function isiLaluOrang(data: Performa): Performa {
   };
   let ubah = false;
   const orang = data.orang.map((o) => {
-    const x = daftar.find((d) => samaNama(d.nama, o.nama)) || daftar.find((d) => satuKata(d.nama, o.nama));
-    if (!x) return o;
     let baru = o;
     for (const w of ['unit', 'amount'] as const) {
-      const s = baru[w], v = x[w];
-      if (!s || !isNum(v)) continue;
-      const kosong = !isNum(s.lalu) || s.lalu === 0;
-      if (!kosong && s.laluPenuh === v) continue;
-      baru = { ...baru, [w]: kosong
-        ? { ...s, lalu: v, laluPenuh: v, diffLalu: isNum(s.ini) ? s.ini - v : s.diffLalu }
-        : { ...s, laluPenuh: v } };
+      const s = baru[w];
+      if (!s) continue;
+      const bl = blok[w], jp = kolomPenuh(bl);
+      const r = bl?.r.find((x) => samaNama(String(x[0] ?? ''), o.nama));
+      const laluSheet = r && isNum(r[2]) ? (r[2] as number) : null;
+      const penuhSheet = r && jp >= 0 && isNum(r[jp]) ? (r[jp] as number) : null;
+      const x = daftar.find((d) => samaNama(d.nama, o.nama)) || daftar.find((d) => satuKata(d.nama, o.nama));
+      const penuh = penuhSheet ?? (x && isNum(x[w]) ? x[w] : null);
+      const lalu = laluSheet ?? (isNum(s.lalu) ? s.lalu : null);
+      if (lalu === (s.lalu ?? null) && penuh === (s.laluPenuh ?? null)) continue;
+      baru = { ...baru, [w]: { ...s, lalu, laluPenuh: penuh, diffLalu: isNum(s.ini) && isNum(lalu) ? s.ini - lalu : s.diffLalu } };
       ubah = true;
     }
     return baru;
@@ -156,8 +160,8 @@ export function isiLaluOrang(data: Performa): Performa {
 }
 
 /* ---------- Kolom "bulan lalu" di tabel per brand ---------- */
-// Mulai Oktober kolom bulan lalu di tabel per brand bernilai 0. Diisi dari salesLalu (file pantauan bulan lalu,
-// dikirim Apps Script); kalau tidak ada, Mobilku/Motorku dari jumlah bulan lalu orang di tabel per PIC.
+// Kolom bulan lalu (s.d. tanggal sama) & "… FULL" (sebulan penuh) diambil dari tabel SALES BY BRAND di sheet.
+// Hanya kalau selnya kosong, diisi dari salesLalu (file pantauan bulan lalu) atau jumlah bulan lalu per PIC.
 export function isiBulanLalu(data: Performa): Performa {
   if (!data.blok?.length) return data;
   const dariOrang = (b: 'mobilku' | 'motorku', w: 'unit' | 'amount') => {
@@ -188,16 +192,13 @@ export function isiBulanLalu(data: Performa): Performa {
     return { ...bl, r: bl.r.map((r0) => {
       const k = brandBaris(r0[0]) || (/^(grand\s*)?total$/i.test(String(r0[0] ?? '').trim()) ? 'total' : '');
       if (!k) return r0;
+      // Angka di tabel SALES BY BRAND sheet dipakai apa adanya (arahan BH); file bulan lalu hanya mengisi sel kosong
       const f = dariFile(k, w);
       let r = r0;
-      if (f !== null && r[8] !== f) { r = [...r]; while (r.length < 8) r.push(null); r[8] = f; ubah = true; }
-      if (isNum(r[2]) && r[2] !== 0) return r;
+      if (f !== null && !isNum(r[8])) { r = [...r]; while (r.length < 8) r.push(null); r[8] = f; ubah = true; }
+      if (isNum(r[2])) return r;
       const v = sumber(k, w);
-      if (v === null) {
-        // Angka 0 untuk satu brand penuh hampir pasti kolom yang belum terisi: tampilkan kosong, bukan 0
-        if (r[2] === 0 && isNum(r[3]) && (r[3] as number) > 0) { ubah = true; const x = [...r]; x[2] = null; x[6] = null; return x; }
-        return r;
-      }
+      if (v === null) return r;
       ubah = true;
       const x = [...r];
       x[2] = v;

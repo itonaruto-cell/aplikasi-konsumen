@@ -121,7 +121,12 @@ export function periksaData(data: Performa | null | undefined, now = new Date())
       saran: 'Kolom di tab AKTIVITAS RO bergeser dari huruf kolom yang dibaca Apps Script. Pasang file PerbaikanRO di Apps Script pantauan, lalu jalankan kirimPerformaLengkap.' });
   }
 
-  // 6. Posisi kosong (info)
+  // 6. Tabel BlokSheet (sales by SOA, detail SOA MA, order in per brand, flag approval, bulan lalu per PIC & brand)
+  if (!data.blokSheet) out.push({ id: 'bloksheet', judul: 'Tabel SOA, order in & flag dari sheet', tingkat: 'waspada',
+    isi: 'Tabel SALES BY SOA, DETAIL SOA MA, ORDER IN by brand, flag approval, dan kolom bulan lalu di BAHAN REVIEW MKT belum ikut terkirim.',
+    saran: 'Pasang file BlokSheet di Apps Script pantauan (paling bawah), lalu jalankan kirimPerformaLengkap.' });
+
+  // 7. Posisi kosong (info)
   const kosong = (data.orang || []).filter((o) => posisiKosong(o.nama)).map((o) => o.nama);
   if (kosong.length) out.push({ id: 'posisi', judul: 'Posisi kosong', tingkat: 'aman',
     isi: `${kosong.join(', ')} belum terisi orang. Di laporan ditandai "Posisi kosong".` });
