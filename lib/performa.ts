@@ -5,6 +5,7 @@ import { rapikanPerforma } from './sales-brand';
 import { simpanArsip } from './performa-arsip';
 import { bacaTabel, kolomCair, TAB_CAIR, TAB_OI, type Tabel } from './tarikan-data';
 import { bulanData } from './performa-kosong';
+import { bacaBlokSheet, gabungBlok } from './blok-sheet';
 
 // Data performa terakhir disimpan di tab "PERFORMA" Google Sheets aplikasi ini
 // (dibuat otomatis). Isinya JSON dari Apps Script, dipotong per sel karena
@@ -37,6 +38,8 @@ async function ensureTab() {
 }
 
 let cache: { at: number; data: Performa | null } | null = null;
+/** Data tersimpan berubah di luar savePerforma (mis. tabel BlokSheet masuk): baca ulang di permintaan berikutnya. */
+export const lupakanPerforma = () => { cache = null; };
 
 type Snap = { tgl: string; rank: Peringkat };
 type Snaps = { cur?: Snap; prev?: Snap };
@@ -195,7 +198,8 @@ export async function savePerforma(data: Performa) {
     valueInputOption: 'RAW',
     requestBody: { values: [[NOTE], ...chunks] },
   });
-  cache = { at: Date.now(), data };
+  // Dibaca ulang di permintaan berikutnya supaya tabel BlokSheet ikut tergabung
+  cache = null;
   return { before, after: rank, dilewati: false as const };
 }
 
@@ -210,7 +214,7 @@ export async function loadPerforma(): Promise<Performa | null> {
   const json = rows.slice(1).map((r) => String(r[0] || '')).join('');
   let data: Performa | null = null;
   if (json) {
-    try { data = rapikanPerforma(JSON.parse(json) as Performa); } catch { data = null; }
+    try { data = rapikanPerforma(gabungBlok(JSON.parse(json) as Performa, await bacaBlokSheet())); } catch { data = null; }
   }
   if (data) {
     const kemarin = kemarinOf(parseSnaps(rows[0]?.[1]), todayJkt());

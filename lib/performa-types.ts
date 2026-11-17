@@ -92,6 +92,7 @@ export type Performa = {
   orang: Orang[];
   blok?: Blok[];            // tabel pantauan dari sheet (s = cabang/mobilku/motorku, t = judul, h = kolom, r = baris)
   salesBrand?: SalesBrand;  // rekap tarikan sales per nama & jenis kendaraan
+  blokSheet?: string;       // ditambahkan server: waktu kiriman tabel BlokSheet yang ikut digabung
   salesLalu?: SalesLalu;    // sales per brand bulan lalu (dibaca Apps Script dari file pantauan bulan lalu)
   riwayat?: Riwayat;       // ditambahkan server: urutan peringkat hari sebelumnya (untuk panah naik/turun)
 };
