@@ -189,7 +189,7 @@ function PesanKonsumen({ it }: { it: CairItem }) {
     <section className="mt-5 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800">
       <p className="text-[15px] font-bold">Pesan untuk konsumen</p>
       <p className="text-[12px] text-neutral-500">Detail kontrak + Tata Cara Pembayaran Angsuran. Teks bisa diubah dulu sebelum dikirim.</p>
-      <textarea value={teks} onChange={(e) => setTeks(e.target.value)} rows={12} aria-label="Teks pesan untuk konsumen"
+      <textarea value={teks} onChange={(e) => setTeks(e.target.value)} rows={12} aria-label="Teks pesan untuk konsumen" data-boleh-muat
         className="mt-2 w-full rounded-xl border border-neutral-300 bg-[#E7FFDB] p-2.5 text-[13px] leading-relaxed text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-400 dark:border-neutral-700 dark:bg-[#0B3B2C] dark:text-neutral-100" />
       <div className="mt-2 flex items-center gap-2.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}

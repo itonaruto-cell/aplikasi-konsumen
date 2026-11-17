@@ -145,7 +145,16 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
     })();
     return () => { alive = false; };
   }, [reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const reload = () => setReloadKey((k) => k + 1);
+  // Versi aplikasi saat halaman dibuka; tombol muat ulang memuat kode terbaru kalau sudah ada versi baru
+  const versiAwal = useRef('');
+  const reload = async () => {
+    try {
+      const j = await (await fetch('/api/versi', { cache: 'no-store' })).json();
+      const v = String(j?.v || '');
+      if (v && versiAwal.current && v !== versiAwal.current) { window.location.reload(); return; }
+    } catch { /* abaikan */ }
+    setReloadKey((k) => k + 1);
+  };
 
   // Pengumuman owner
   useEffect(() => {
@@ -167,7 +176,6 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
   const halamanRef = useRef(page);
   halamanRef.current = page;
   useEffect(() => {
-    let awal = '';
     let disembunyikan = 0;
     const AMAN = ['pantau', 'rute', 'cari', 'saya', 'juara', 'aktivitas', 'insentif', 'laporan', 'proyeksi', 'kesehatan'];
     const cek = async (dariLatar = false) => {
@@ -175,9 +183,13 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
         const j = await (await fetch('/api/versi', { cache: 'no-store' })).json();
         const v = String(j?.v || '');
         if (!v) return;
-        if (!awal) { awal = v; return; }
-        if (v === awal) return;
-        if (dariLatar && AMAN.includes(halamanRef.current) && !document.querySelector('div.fixed.inset-0')) { window.location.reload(); return; }
+        if (!versiAwal.current) { versiAwal.current = v; return; }
+        if (v === versiAwal.current) return;
+        // Balik dari aplikasi lain (mis. WA) di halaman tanpa isian → langsung pakai versi terbaru, walau ada lembar detail
+        // terbuka; kecuali lembar itu berisi isian yang sedang diketik (mis. pengumuman).
+        const adaKetikan = [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('div.fixed.inset-0 textarea, div.fixed.inset-0 input')]
+          .some((el) => !el.hasAttribute('data-boleh-muat') && el.type !== 'file' && el.type !== 'checkbox' && el.type !== 'radio' && !!el.value.trim());
+        if (dariLatar && AMAN.includes(halamanRef.current) && !adaKetikan) { window.location.reload(); return; }
         setVersiBaru(true);
       } catch { /* abaikan */ }
     };
@@ -502,7 +514,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
       {/* Navigasi bawah gaya Android */}
       {versiBaru && (
-        <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 flex justify-center px-4">
+        <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[60] flex justify-center px-4">
           <div className="flex w-full max-w-xl items-center gap-3 rounded-2xl bg-neutral-900 py-2 pl-4 pr-2 text-sm text-white shadow-lg dark:bg-white dark:text-neutral-900">
             <span className="min-w-0 flex-1 font-semibold">Versi baru aplikasi tersedia</span>
             <button onClick={() => window.location.reload()} className="min-h-10 rounded-xl bg-white px-4 font-bold text-neutral-900 dark:bg-neutral-900 dark:text-white">Muat ulang</button>
