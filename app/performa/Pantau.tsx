@@ -10,6 +10,7 @@ import {
 } from './parts';
 import { PengumumanList } from './Pengumuman';
 import { detailSoaMa, orderInBrand, salesSoa } from '../../lib/blok-soa';
+import { AMBANG_INJECT, progresVisit } from '../../lib/visit-progres';
 import { NotifPrompt } from './Notif';
 
 /* ---------- Tabel dari sheet pantauan ---------- */
@@ -328,11 +329,11 @@ function RincianMotor({ c }: { c: Ctx }) {
 }
 
 /* ---------- Tab Mobilku / Motorku ---------- */
-function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string; extra?: ReactNode }) {
+function BrandTab({ c, b, push, bulan, lama, extra, onInject }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string; extra?: ReactNode; onInject?: () => void }) {
   const data = c.data, a = data.aktivitas, B = BRAND[b];
   const tot = brandTotals(c)(b);
   const mt = a?.maintain?.[b], rk = a?.rekrut?.[b];
-  const sv = findBlok(data, b, 'Status visit'), hv = findBlok(data, b, 'Hasil visit');
+  const hv = findBlok(data, b, 'Hasil visit');
   const mtB = findBlok(data, b, 'Maintain');
   const chA = findBlok(data, b, 'Sales account per channel'), chM = findBlok(data, b, 'Sales amount per channel');
   const ois = findBlok(data, b, 'Order in per status');
@@ -340,15 +341,8 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
   const kons: KonsumenFull[] = a?.konsumen?.[b] || [];
   const maAll = a?.ma?.[b] || [];
 
-  // Visit P1–P3: dari tabel Status visit, atau hitung dari aktivitas
-  const pv = ([1, 2, 3] as const).map((p) => {
-    const col = p;
-    const get = (re: RegExp) => num(sv?.r.find((r) => re.test(label(r[0])))?.[col]);
-    const bt = get(/^bertemu$/i), tb = get(/^tidak\s*bertemu$/i), bl = get(/^belum\s*visit$/i), gt = get(/^grand\s*total$/i);
-    if (gt !== null) return { bt: bt || 0, tb: tb || 0, bl: bl || 0, tot: gt };
-    const x = a?.visit?.[b]?.[`p${p}` as 'p1'];
-    return { bt: x?.ditemui || 0, tb: (x?.tervisit || 0) - (x?.ditemui || 0), bl: (x?.database || 0) - (x?.tervisit || 0), tot: x?.database || 0 };
-  });
+  // Visit P1–P3: dari tabel Status visit, atau hitung dari aktivitas; total & persen untuk pengingat inject P3
+  const prog = progresVisit(data, b), pv = prog.p;
   const hasil = (hv?.r || []).filter((r) => label(r[0]) && !isTotal(r[0]) && !/belum\s*visit/i.test(label(r[0])))
     .map((r) => [tc(label(r[0])), (num(r[1]) || 0) + (num(r[2]) || 0) + (num(r[3]) || 0)] as [string, number]);
   const mtRows = (mtB?.r || []).filter((r) => /maintain\s*\dx/i.test(label(r[0])))
@@ -401,6 +395,7 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
               className="flex flex-col gap-2 rounded-2xl border border-neutral-200 p-3 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
               <span className="flex items-baseline justify-between"><b className="text-[15px]">P{i + 1}</b><span className="text-xs text-neutral-500">{x.tot} data</span></span>
               <span className="text-2xl font-bold leading-none">{x.tot - x.bl}<span className="text-[13px] font-medium text-neutral-500">/{x.tot}</span></span>
+              <span className="-mt-1 text-xs font-semibold text-neutral-500">{x.tot ? pct((x.bt + x.tb) / x.tot) : '–'} tervisit</span>
               <Stack h="h-2" parts={[[x.bt, C_GO], [x.tb, C_PEN], [x.bl, 'bg-neutral-200 dark:bg-neutral-700']]} />
               <span className="text-[11px] leading-snug text-neutral-600 dark:text-neutral-400">
                 <b className="text-green-700 dark:text-green-400">{x.bt}</b> bertemu<br /><b className="text-[#8A4700] dark:text-[#F2A33A]">{x.tb}</b> tidak bertemu<br /><b className="text-red-700 dark:text-red-400">{x.bl}</b> belum visit
@@ -408,9 +403,32 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
             </button>
           ))}
         </div>
+        {prog.tot > 0 && (
+          <div className={`mx-4 mt-2.5 rounded-[18px] p-3.5 ${prog.waktunya ? 'bg-[#FFF4E0] text-[#5C3200] dark:bg-[#2A1E0C] dark:text-[#F7C98A]' : 'border border-neutral-200 dark:border-neutral-800'}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[13px] font-bold">Total visit P1–P3</span>
+              <span className="text-sm"><b className="text-lg">{pct(prog.pct)}</b> · {angka(prog.sudah)}/{angka(prog.tot)} data</span>
+            </div>
+            <div className="relative mt-2">
+              <Stack h="h-2.5" parts={[[prog.bt, C_GO], [prog.tb, C_PEN], [prog.bl, 'bg-neutral-200 dark:bg-neutral-700']]} />
+              <span aria-hidden className="absolute -top-1 h-[18px] w-0.5 rounded bg-neutral-900 dark:bg-white" style={{ left: `${AMBANG_INJECT * 100}%` }} />
+            </div>
+            <p className="mt-2 text-xs leading-snug">
+              <b>{angka(prog.bt)}</b> bertemu · <b>{angka(prog.tb)}</b> tidak bertemu · <b>{angka(prog.bl)}</b> belum visit
+            </p>
+            {prog.waktunya ? (
+              <div className="mt-2.5 flex items-center justify-between gap-3">
+                <p className="text-[13px] font-bold leading-snug">Visit sudah {pct(prog.pct)}, waktunya inject P3.</p>
+                {onInject && <button onClick={onInject} className="min-h-10 shrink-0 rounded-full bg-[#8A4700] px-4 text-sm font-bold text-white active:opacity-80 dark:bg-[#F2A33A] dark:text-black">Inject P3</button>}
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-neutral-500">Inject P3 saat visit {pct(AMBANG_INJECT)} · kurang {angka(prog.kurang)} data lagi.</p>
+            )}
+          </div>
+        )}
         {hasil.length > 0 && (
           <>
-            <p className="px-4 pt-3 text-[13px] font-bold">Hasil visit</p>
+            <p className="flex justify-between px-4 pt-3 text-[13px] font-bold"><span>Hasil visit</span><span className="font-semibold text-neutral-500">total {angka(hasil.reduce((t, [, n]) => t + n, 0))}</span></p>
             <div className="flex flex-wrap gap-1.5 px-4 pt-2">
               {hasil.map(([l, n]) => (
                 <span key={l} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] font-semibold ${n ? `${B.soft} ${B.text}` : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-900'}`}>{l} <b>{n}</b></span>
@@ -584,10 +602,10 @@ function Sapa({ teks }: { teks: ReactNode }) {
 type Tab = 'cabang' | BrandId;
 const TABS: Tab[] = ['cabang', 'mobilku', 'motorku'];
 
-export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped, plan, kejar }: {
+export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped, plan, kejar, onInject }: {
   c: Ctx; me: Orang | null; akun: { name?: string }; push: Push;
   pengumuman: Pengumuman[]; isOwner: boolean; onPengumuman: () => void; buatPengumuman: () => void; openWrapped: () => void;
-  plan?: ReactNode; kejar?: (cek: CekData) => ReactNode;
+  plan?: ReactNode; kejar?: (cek: CekData) => ReactNode; onInject?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('cabang');
   const [dir, setDir] = useState<'kanan' | 'kiri'>('kanan');
@@ -699,7 +717,7 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
             <Cabang c={c} push={push} />
           </>
         ) : (
-          <BrandTab c={c} b={tab} push={push} bulan={bulan} lama={lama} extra={tab === 'mobilku' ? kejar?.(cek) : undefined} />
+          <BrandTab c={c} b={tab} push={push} bulan={bulan} lama={lama} extra={tab === 'mobilku' ? kejar?.(cek) : undefined} onInject={onInject} />
         )}
       </div>
       <p className="px-4 pt-5 text-[13px] text-neutral-500">Geser kiri–kanan untuk pindah Cabang · Mobilku · Motorku. Tarik ke bawah untuk memuat ulang.</p>

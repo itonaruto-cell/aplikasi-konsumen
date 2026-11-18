@@ -410,7 +410,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             {k === 'pantau' && (
               <Pantau c={c} me={me} akun={akun} push={push}
                 pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
-                openWrapped={() => setWrap(true)}
+                openWrapped={() => setWrap(true)} onInject={() => go('inject')}
                 kejar={(cek) => <Kejar c={c} me={me} spv={spv} isOwner={akun.role === 'owner'} reloadKey={reloadKey} cek={cek} onBahan={() => go('bahan')} />} />
             )}
             {k === 'laporan' && <>{akun.role === 'owner' && data && <div className="px-4 pt-4"><PeringatanData data={data} onBuka={() => go('kesehatan')} /></div>}<Laporan key={lapAwal} c={c} spv={spv} awal={lapAwal} tim={tim} aku={me?.nama || akun.perfName || ''} semua={akun.role === 'owner' || akun.role === 'spv'} /></>}
