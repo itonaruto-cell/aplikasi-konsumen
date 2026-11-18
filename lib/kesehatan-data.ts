@@ -123,8 +123,11 @@ export function periksaData(data: Performa | null | undefined, now = new Date())
 
   // 6. Tabel BlokSheet (sales by SOA, detail SOA MA, order in per brand, flag approval, bulan lalu per PIC & brand)
   if (!data.blokSheet) out.push({ id: 'bloksheet', judul: 'Tabel SOA, order in & flag dari sheet', tingkat: 'waspada',
-    isi: 'Tabel SALES BY SOA, DETAIL SOA MA, ORDER IN by brand, flag approval, dan kolom bulan lalu di BAHAN REVIEW MKT belum ikut terkirim.',
+    isi: 'Tabel SALES BY SOA, SOA MA, ORDER IN by brand, flag approval, dan kolom bulan lalu di BAHAN REVIEW MKT belum ikut terkirim.',
     saran: 'Pasang file BlokSheet di Apps Script pantauan (paling bawah), lalu jalankan kirimPerformaLengkap.' });
+  else if (data.blokTidakAda?.length) out.push({ id: 'bloksheet-kurang', judul: 'Tabel BAHAN REVIEW MKT tidak ketemu', tingkat: 'waspada',
+    isi: `${data.blokTidakAda.join(', ')} tidak ditemukan di sheet (judul tabel/kolomnya berubah?). Bagian itu memakai data lama atau tidak ditampilkan.`,
+    saran: 'Kabari pembuat aplikasi judul tabel yang baru; aplikasi yang disesuaikan, Apps Script tidak perlu diubah (BlokSheet versi 2).' });
 
   // 7. Posisi kosong (info)
   const kosong = (data.orang || []).filter((o) => posisiKosong(o.nama)).map((o) => o.nama);

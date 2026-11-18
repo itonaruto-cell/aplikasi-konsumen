@@ -460,6 +460,10 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
           </div>
           {!sSoa.terisi && <p className="mx-4 mt-2 text-xs text-neutral-500">Tabel SALES BY SOA ACC/AMM di sheet belum terisi angka.</p>}
         </Sec>
+      ) : data.blokSheet ? (
+        <Sec title="Sales by SOA">
+          <p className="mx-4 text-[13px] text-neutral-500">Tabel SALES BY SOA ACC/AMM tidak ketemu di sheet BAHAN REVIEW MKT, jadi belum bisa ditampilkan.</p>
+        </Sec>
       ) : channels.length > 0 && (
         <Sec title="Sales per channel" right="ketuk untuk konsumen">
           <div className="border-t border-neutral-200 dark:border-neutral-800">
@@ -504,11 +508,15 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
       )}
 
       {dSoa ? (
-        <Sec title="Detail SOA MA" right="unit · amount">
+        <Sec title="Sales by SOA MA" right="unit · amount">
           <div className="border-t border-neutral-200 dark:border-neutral-800">
             {dSoa.grup.map((x) => (
-              <div key={x.n} className="flex min-h-11 items-center justify-between gap-3 border-b border-neutral-200 px-4 text-sm dark:border-neutral-800">
-                <span className="min-w-0 flex-1">{x.n}</span>
+              <div key={x.n} className="flex min-h-11 items-center justify-between gap-3 border-b border-neutral-200 px-4 py-1.5 text-sm dark:border-neutral-800">
+                <span className="min-w-0 flex-1">{x.n}
+                  {(isNum(x.unitLalu) || isNum(x.amountLalu)) && (
+                    <span className="block text-xs text-neutral-500">Bln lalu {isNum(x.unitLalu) ? `${angka(x.unitLalu)} unit` : '–'}{isNum(x.amountLalu) ? ` · ${rp(x.amountLalu)}` : ''}</span>
+                  )}
+                </span>
                 <span className="flex items-baseline gap-4"><b className="w-10 text-right">{isNum(x.unit) ? angka(x.unit) : '–'}</b><span className="w-24 text-right text-neutral-500">{isNum(x.amount) ? rp(x.amount) : '–'}</span></span>
               </div>
             ))}
@@ -519,7 +527,7 @@ function BrandTab({ c, b, push, bulan, lama, extra }: { c: Ctx; b: BrandId; push
               </div>
             ))}
           </div>
-          {!dSoa.terisi && <p className="mx-4 mt-2 text-xs text-neutral-500">Tabel DETAIL SOA MA ACC/AMM di sheet belum terisi angka.</p>}
+          {!dSoa.terisi && <p className="mx-4 mt-2 text-xs text-neutral-500">Tabel SALES BY SOA MA ACC/AMM di sheet belum terisi angka.</p>}
         </Sec>
       ) : !data.blokSheet && soa.length > 0 && (
         <Sec title="Data SOA" right="cek data · hitungan">

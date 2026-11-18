@@ -152,6 +152,10 @@ export async function savePerforma(data: Performa) {
   const lama = await bacaMentah(api, spreadsheetId);
   // UPDATE PER kosong (mis. file pantauan bulan baru yang tabel sales-nya belum terisi): pakai tanggal hari ini
   if (!data.updated) data = { ...data, updated: todayJkt() };
+  // Isi tab BAHAN REVIEW MKT terbaru dari BlokSheet versi 2: angka sales, order in, approval, bulan & aktivitas diambil
+  // dari sheet (dicari dari judul tabel) sebelum dicek kosong, jadi kiriman tetap terpakai walau susunan sheet berubah
+  const bs = await bacaBlokSheet(true).catch(() => null);
+  if (bs?.grid) data = { ...gabungBlok(data, bs), blokSheet: undefined, blokTidakAda: undefined };
   // Kiriman dari file pantauan bulan lalu (mis. jadwal Apps Script lama yang masih hidup) setelah data bulan baru
   // sudah masuk: diabaikan supaya tidak menimpa data bulan berjalan
   if (lama && bulanData(data) && bulanData(lama) && bulanData(data) < bulanData(lama)) {
