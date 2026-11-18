@@ -215,7 +215,7 @@ export async function savePerforma(data: Performa) {
   });
   // Dibaca ulang di permintaan berikutnya supaya tabel BlokSheet ikut tergabung
   cache = null;
-  return { before, after: rank, dilewati: false as const };
+  return { before, after: rank, dilewati: false as const, data };
 }
 
 export async function loadPerforma(): Promise<Performa | null> {

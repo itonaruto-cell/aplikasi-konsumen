@@ -4,6 +4,7 @@ import { savePerforma } from '../../../../lib/performa';
 import { listSubs, sameName, sendMany } from '../../../../lib/notif';
 import { notifMove, rankMoves } from '../../../../lib/performa-calc';
 import type { Performa } from '../../../../lib/performa-types';
+import { notifInjectP3 } from '../../../../lib/notif-inject';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
         notif = r.terkirim;
       }
     } catch (err) { console.error('Notifikasi peringkat gagal:', err); }
+    // Notifikasi "waktunya inject P3" saat visit prioritas sebuah brand mencapai 80%
+    try { notif += await notifInjectP3(hasil.data); } catch (err) { console.error('Notifikasi inject P3 gagal:', err); }
     return NextResponse.json({ ok: true, orang: data.orang.length, notif });
   } catch (err) {
     console.error('Gagal menyimpan performa:', err);
