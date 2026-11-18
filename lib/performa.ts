@@ -164,6 +164,17 @@ export async function savePerforma(data: Performa) {
   }
   if (kirimanKosong(data, lama)) {
     console.warn('Kiriman performa kosong diabaikan; data terakhir tetap dipakai.', { updated: data.updated, bulan: data.bulan, lama: lama?.updated, lamaBulan: lama?.bulan });
+    // Isi kiriman (tanpa nama konsumen): bagian mana yang masih terbaca setelah susunan sheet berubah
+    const kunci = (o: unknown) => (o && typeof o === 'object' ? Object.keys(o) : []);
+    console.warn('Isi kiriman kosong.', JSON.stringify({
+      kunci: kunci(data), cabangTotal: data.cabangTotal,
+      orang: (data.orang || []).map((o) => ({ n: o.nama, b: o.brand, k: kunci(o), unit: o.unit, amount: o.amount, oi: o.oi, ap: o.approval, v: o.visit?.total, m: o.maintain?.ma })),
+      aktivitas: { visit: data.aktivitas?.visit, maintain: data.aktivitas?.maintain, rekrut: data.aktivitas?.rekrut,
+        konsumen: Object.fromEntries(Object.entries(data.aktivitas?.konsumen || {}).map(([b, l]) => [b, l.length])),
+        ma: Object.fromEntries(Object.entries(data.aktivitas?.ma || {}).map(([b, l]) => [b, l.length])) },
+      blok: (data.blok || []).map((b) => `${b.s}|${b.t} (${b.r.length}x${b.h.length}) ${JSON.stringify(b.h).slice(0, 160)}`),
+      salesBrand: data.salesBrand?.orang?.length, salesLalu: kunci(data.salesLalu),
+    }));
     return { before: undefined, after: undefined, dilewati: true as const, alasan: 'kosong' as const };
   }
   data = rapikanPerforma({ ...bawaRekapLama(data, lama), riwayat: undefined });
