@@ -1,5 +1,5 @@
 // Membaca tabel dari sheet BAHAN REVIEW MKT (dikirim Apps Script BlokSheet) untuk tab Mobilku / Motorku:
-// order in per status (tabel ORDER IN · BY BRAND), sales by SOA (SALES BY SOA ACC & AMM), detail SOA MA (ACC & AMM).
+// order in per status (tabel ORDER IN · BY BRAND), sales by SOA (SALES BY SOA ACC & AMM), sales by SOA MA (ACC & AMM).
 // Kolom dicari dari judulnya, jadi tetap benar walau Pak Aji menambah / menggeser kolom di sheet.
 import type { Blok, Performa } from './performa-types';
 import { brandBaris } from './sales-brand';
@@ -91,8 +91,16 @@ export function salesSoa(d: Performa, brand: string): SalesSoa | null {
   return { soa, total: t ? jadi(t) : null, terisi: soa.some((x) => isNum(x.unit) || isNum(x.amount)) };
 }
 
-/* ---------- Detail SOA MA (DETAIL SOA MA ACC & AMM) ---------- */
+/* ---------- Sales by SOA MA (SALES BY SOA MA ACC & AMM; dulu DETAIL SOA MA) ---------- */
 export type DetailSoaMa = { grup: SoaBaris[]; total: SoaBaris; m1: SoaBaris; selisih: SoaBaris; terisi: boolean };
+// Susunan baru (lib/blok-grid.ts): satu blok per brand, baris = grup MA, kolom = GRUP | bulan lalu | bulan ini
+function perGrupBaru(d: Performa, t: string, brand: string) {
+  const b = (d.blok || []).find((x) => x.s === brand && x.t === t);
+  if (!b) return null;
+  const sub: Sub = { h: b.h, r: b.r };
+  const iIni = kolBulan(sub, d.bulan?.ini || '', b.h.length - 1), iLalu = kolBulan(sub, d.bulan?.lalu || '', 1);
+  return new Map(b.r.filter((r) => N(r[0])).map((r) => [N(r[0]), { ini: angka(r[iIni]), lalu: angka(r[iLalu]) }]));
+}
 function perGrup(b: Blok | undefined, brand: string) {
   const r = b?.r.find((x) => brandBaris(x[0]) === brand);
   if (!b || !r) return null;
@@ -101,12 +109,28 @@ function perGrup(b: Blok | undefined, brand: string) {
   const v = (i: number) => (i >= 0 ? angka(r[i]) : null);
   return { grup, total: v(iT), m1: v(kol(b, /^M-?1$/)), selisih: v(kol(b, /DIFF/)) };
 }
+const adaAngka = (xs: SoaBaris[]) => xs.some((x) => (isNum(x.unit) && x.unit !== 0) || (isNum(x.amount) && x.amount !== 0));
 export function detailSoaMa(d: Performa, brand: string): DetailSoaMa | null {
+  const bu = perGrupBaru(d, 'SOA MA account', brand), ba = perGrupBaru(d, 'SOA MA amount', brand);
+  if (bu || ba) {
+    const nama = [...new Set([...(bu?.keys() || []), ...(ba?.keys() || [])])];
+    const jadi = (n: string, label = namaRapi(n)): SoaBaris => ({ n: label, unit: bu?.get(n)?.ini ?? null, amount: ba?.get(n)?.ini ?? null,
+      unitLalu: bu?.get(n)?.lalu ?? null, amountLalu: ba?.get(n)?.lalu ?? null });
+    const grup = nama.filter((n) => !isTotal(n)).map((n) => jadi(n));
+    const t = nama.find((n) => isTotal(n));
+    const total = t ? jadi(t, 'Total') : { n: 'Total', unit: jumlah(grup.map((x) => x.unit)), amount: jumlah(grup.map((x) => x.amount)),
+      unitLalu: jumlah(grup.map((x) => x.unitLalu ?? null)), amountLalu: jumlah(grup.map((x) => x.amountLalu ?? null)) };
+    const m1: SoaBaris = { n: 'Bulan lalu', unit: total.unitLalu ?? null, amount: total.amountLalu ?? null };
+    const beda = (a: number | null, b: number | null) => (isNum(a) && isNum(b) ? a - b : null);
+    return { grup, total: { n: 'Total', unit: total.unit, amount: total.amount }, m1,
+      selisih: { n: 'Selisih', unit: beda(total.unit, m1.unit), amount: beda(total.amount, m1.amount) },
+      terisi: adaAngka([...grup, total]) || adaAngka(grup.map((x) => ({ n: x.n, unit: x.unitLalu ?? null, amount: x.amountLalu ?? null }))) };
+  }
   const u = perGrup(blok(d, 'Detail SOA MA account'), brand), a = perGrup(blok(d, 'Detail SOA MA amount'), brand);
   if (!u && !a) return null;
   const nama = [...new Set([...(u?.grup || []), ...(a?.grup || [])].map((x) => x.n))];
   const grup = nama.map((n) => ({ n: namaRapi(n), unit: u?.grup.find((x) => x.n === n)?.v ?? null, amount: a?.grup.find((x) => x.n === n)?.v ?? null }));
   const brs = (k: 'total' | 'm1' | 'selisih', n: string): SoaBaris => ({ n, unit: u?.[k] ?? null, amount: a?.[k] ?? null });
   return { grup, total: brs('total', 'Total'), m1: brs('m1', 'Bulan lalu'), selisih: brs('selisih', 'Selisih'),
-    terisi: [...grup, brs('total', '')].some((x) => (isNum(x.unit) && x.unit !== 0) || (isNum(x.amount) && x.amount !== 0)) };
+    terisi: adaAngka([...grup, brs('total', '')]) };
 }
