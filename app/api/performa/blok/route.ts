@@ -13,8 +13,16 @@ export async function POST(req: NextRequest) {
   if (!secretOk(req.headers.get('x-performa-secret'))) return NextResponse.json({ error: 'Kunci salah.' }, { status: 401 });
   const text = await req.text();
   if (text.length > 1_000_000) return NextResponse.json({ error: 'Data terlalu besar.' }, { status: 413 });
-  let x;
-  try { x = rapikanBlokSheet(JSON.parse(text)); } catch { return NextResponse.json({ error: 'Format data salah.' }, { status: 400 }); }
+  let body: unknown;
+  try { body = JSON.parse(text); } catch { return NextResponse.json({ error: 'Format data salah.' }, { status: 400 }); }
+  // Laporan diagnosa dari Apps Script (mis. PerbaikanRO: kolom tab AKTIVITAS RO yang terbaca) — hanya dicatat di log,
+  // isinya hitungan & judul kolom, tanpa nama konsumen
+  const diag = (body as { diag?: unknown })?.diag;
+  if (diag) {
+    console.info('Diagnosa Apps Script.', JSON.stringify(diag).slice(0, 8000));
+    return NextResponse.json({ ok: true });
+  }
+  const x = rapikanBlokSheet(body);
   if (!x) return NextResponse.json({ error: 'Tidak ada tabel.' }, { status: 400 });
   const ringkas = x.blok.map((b) => `${b.s === 'cabang' ? '' : `${b.s} · `}${b.t} (${b.r.length} baris)`);
   const info = { sumber: x.sumber, versi: x.grid ? 2 : 1, ukuran: x.grid ? `${x.grid.length}x${Math.max(0, ...x.grid.map((r) => r.length))}` : undefined,
