@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useOverlay } from './overlay';
 import { Ico, Kosong } from './performa/parts';
 
@@ -44,6 +44,9 @@ const toWa = (hp: string) => {
   if (d.startsWith('8')) return '62' + d;
   return d;
 };
+// Nomor HP disamakan bentuknya (62… / 0… / 8…) supaya nomor yang sama di beberapa konsumen bisa dikenali
+const kunciHp = (hp: string) => toWa(hp);
+const kunciOrang = (s: string) => s.toUpperCase().replace(/[^A-Z]/g, '');
 const splitPhones = (v: string) =>
   v.split(/\s*[\/,;|]\s*|\s+atau\s+|\s+dan\s+/i).map(digits).filter((d) => d.length >= 8)
     .filter((d, i, a) => a.indexOf(d) === i);
@@ -130,6 +133,31 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
   const [toast, setToast] = useState('');
   const [picker, setPicker] = useState<{ kind: 'tel' | 'wa'; phones: string[] } | null>(null);
   const [ubah, setUbah] = useState<Row | null>(null);
+  const [hpSamaSaja, setHpSamaSaja] = useState(false);
+  // Owner: nomor HP yang tercatat di lebih dari satu konsumen (beda nama). Biasanya nomor keluarga, mediator/dealer,
+  // atau salah input di database, jadi ditandai supaya bisa dicek dan dikoreksi
+  const petaHp = useMemo(() => {
+    const m = new Map<string, Map<string, Row>>();
+    if (!isOwner) return m;
+    for (const r of rows) {
+      const nama = pick(r, 'NAMA KONSUMEN', 'NAMA'), kn = kunciOrang(nama);
+      if (!kn) continue;
+      for (const p of splitPhones(pick(r, 'NO HP', 'NO. HP', 'HP'))) {
+        const k = kunciHp(p);
+        if (!m.has(k)) m.set(k, new Map());
+        if (!m.get(k)!.has(kn)) m.get(k)!.set(kn, r);
+      }
+    }
+    return m;
+  }, [rows, isOwner]);
+  const hpSama = useCallback((r: Row): { hp: string; lain: Row[] }[] => {
+    if (!isOwner) return [];
+    const kn = kunciOrang(pick(r, 'NAMA KONSUMEN', 'NAMA'));
+    return splitPhones(pick(r, 'NO HP', 'NO. HP', 'HP'))
+      .map((hp) => ({ hp, lain: [...(petaHp.get(kunciHp(hp))?.entries() || [])].filter(([k]) => k !== kn).map(([, x]) => x) }))
+      .filter((x) => x.lain.length > 0);
+  }, [isOwner, petaHp]);
+  const jumlahHpSama = useMemo(() => (isOwner ? rows.filter((r) => hpSama(r).length > 0).length : 0), [rows, isOwner, hpSama]);
 
   // Sesudah koreksi tersimpan: perbarui baris di daftar dan di detail
   const pasangKoreksi = (id: string, nilai: Record<string, string>, koreksi: Record<string, string>) => {
@@ -174,6 +202,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
   const passes = (r: Row, except?: FKey) => {
     if (mode === 'simpan' && !saved.includes(rowId(r))) return false;
     if (mode === 'cair' && !r.__CAIR) return false;
+    if (hpSamaSaja && !hpSama(r).length) return false;
     for (const f of FILTERS) {
       if (f.key === except) continue;
       const sel = filters[f.key];
@@ -185,7 +214,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
 
   const filtered = useMemo(() => rows.filter((r) => passes(r)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, query, mode, saved, filters]);
+    [rows, query, mode, saved, filters, hpSamaSaja, hpSama]);
 
   const labelOf = useMemo(() => {
     const m = new Map<string, string>();
@@ -209,7 +238,7 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
     return Array.from(m, ([key, count]) => ({ key, count, label: lab(openFilter, key) }))
       .sort((a, b) => a.label.localeCompare(b.label, 'id'));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openFilter, rows, query, mode, saved, filters, labelOf]);
+  }, [openFilter, rows, query, mode, saved, filters, labelOf, hpSamaSaja]);
 
   const visibleOptions = options.filter((o) => !optSearch || norm(o.label).includes(norm(optSearch)));
   const activeCount = FILTERS.reduce((n, f) => n + filters[f.key].length, 0);
@@ -303,6 +332,11 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
             </button>
           );
         })}
+        {isOwner && jumlahHpSama > 0 && (
+          <button onClick={() => setHpSamaSaja((x) => !x)} aria-pressed={hpSamaSaja} className={chip(hpSamaSaja)}>
+            No HP sama · {jumlahHpSama}
+          </button>
+        )}
       </div>
 
       {activeCount > 0 && (
@@ -476,6 +510,31 @@ export default function CariKonsumen({ me, reloadKey = 0 }: { me: Akun; reloadKe
                 <a href={mapsUrl || undefined} target="_blank" rel="noreferrer" className={`${action} ${mapsUrl ? '' : 'opacity-40'}`}><Ico n="pin" className="h-6 w-6" />Maps</a>
                 <button onClick={() => copyData(r)} className={action}><I n="copy" className="h-6 w-6" />Salin</button>
               </div>
+
+              {(() => {
+                const sama = hpSama(r);
+                if (!sama.length) return null;
+                return (
+                  <div className="mt-4 rounded-2xl bg-[#FFF4E0] p-3.5 text-[#5C3200] dark:bg-[#2A1E0C] dark:text-[#F7C98A]">
+                    <p className="text-sm font-bold">Nomor HP ini juga tercatat di konsumen lain</p>
+                    {sama.map((x) => (
+                      <div key={x.hp} className="mt-2">
+                        <p className="font-mono text-[13px]">{x.hp}</p>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {x.lain.slice(0, 6).map((o) => (
+                            <button key={rowId(o)} onClick={() => setSelected(o)}
+                              className="min-h-9 rounded-full bg-white/70 px-3 text-[13px] font-semibold active:opacity-70 dark:bg-black/30">
+                              {pick(o, 'NAMA KONSUMEN', 'NAMA')}
+                            </button>
+                          ))}
+                          {x.lain.length > 6 && <span className="self-center text-[13px]">+{x.lain.length - 6} lainnya</span>}
+                        </div>
+                      </div>
+                    ))}
+                    <p className="mt-2 text-[13px] leading-snug">Biasanya ini nomor keluarga, nomor mediator/dealer, atau salah input di database. Kalau salah, perbaiki lewat Ubah / lengkapi data.</p>
+                  </div>
+                );
+              })()}
 
               {isOwner && phones.length > 1 && (
                 <div className="mt-4 rounded-2xl border border-neutral-200 p-3 dark:border-neutral-800">
