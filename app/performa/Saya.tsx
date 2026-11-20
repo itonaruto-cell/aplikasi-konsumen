@@ -1,10 +1,10 @@
 'use client';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { periksaData } from '../../lib/kesehatan-data';
 import type { Orang } from '../../lib/performa-types';
 import { badges, ranking, streak, type Ctx } from '../../lib/performa-calc';
 import { ThemeToggle } from '../theme';
-import { OrangDetail, nama, type Push } from './ui';
+import { OrangDetail, angka, nama, rp, type Push } from './ui';
 import { Avatar, Card, Ico } from './parts';
 import { MONITORING_MOTORKU } from './Rute';
 import { NotifSetting } from './Notif';
@@ -24,13 +24,13 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
   const masalah = sehat ? sehat.filter((x) => x.tingkat === 'bahaya').length : 0;
   const waspada = sehat ? sehat.filter((x) => x.tingkat === 'waspada').length : 0;
   type Item = { judul: string; sub: string; ico: ReactNode; on?: () => void; badge?: string; badgeCls?: string };
-  const GRUP: [string, Item[]][] = [
+  const GRUP: [string, Item[], { id: string; ikon: string; warna: string }][] = [
     ['Kerja harian', [
       { judul: 'Database prospek', sub: 'Input, impor Google Maps, follow up dengan foto bukti', ico: ico('users'), on: onProspek },
       { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
       { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
       { judul: 'Tanya SK', sub: 'Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu', ico: ico('list'), on: onSK },
-    ]],
+    ], { id: 'harian', ikon: 'pin', warna: WARNA.hijau }],
     ['Survey & dokumen', [
       { judul: 'Report survey (6C + 1E + 1P)', sub: 'Hasil survey per unsur, salin langsung ke WA', ico: ico('list'), on: onReport },
       { judul: 'Format aplikasi BCP', sub: 'Data aplikasi + Note MAO dari 6C 1EP, salin ke WA', ico: ico('edit'), on: onBcp },
@@ -39,7 +39,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
       { judul: 'Rekap mutasi rekening', sub: 'PDF Mandiri / BCA / BRI / BNI → kredit per bulan & rata-rata, ke WA', ico: ico('chart'), on: onMutasi },
       { judul: 'Form banding (F-761)', sub: 'Reason, analisa 6C, SWOT & foto → Excel untuk G Suite', ico: ico('edit'), on: onBanding },
       { judul: 'Surat IM / berita acara', sub: 'IM SAKPOLE, Copcan ubah POT, Take Over, Tidak revisi STNK → Word', ico: ico('list'), on: onSurat },
-    ]],
+    ], { id: 'dokumen', ikon: 'edit', warna: WARNA.ungu }],
     ['Laporan & performa', [
       { judul: 'Proyeksi sales', sub: 'Tercapai + bahan vs target & bulan lalu', ico: ico('up'), on: onProyeksi },
       { judul: 'Report sore', sub: 'Plan & realisasi, achievement, follow up, update bahan · gambar', ico: ico('share'), on: onReportSore },
@@ -47,15 +47,20 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
       { judul: 'Performa bulan lalu', sub: 'Buka arsip pantauan bulan sebelumnya: angka & daftar konsumen', ico: ico('list'), on: onArsip },
       { judul: 'Papan juara', sub: 'Peringkat amount, unit, visit, dan maintain', ico: ico('trophy'), on: onJuara },
       { judul: 'Insentif', sub: 'Hasil hitungan HO dan simulasi bulan ini', ico: ico('value'), on: onInsentif },
-    ]],
+    ], { id: 'laporan', ikon: 'chart', warna: WARNA.biru }],
     ['Kelola (owner)', [
       { judul: 'Kesehatan data', sub: masalah || waspada ? 'Ada data pantauan yang perlu dicek' : 'Kiriman, tarikan sales & isi sheet pantauan', ico: ico('check'), on: onKesehatan,
         badge: masalah ? `${masalah} masalah` : waspada ? `${waspada} cek` : 'Aman',
         badgeCls: masalah ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' : waspada ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300' : 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' },
       { judul: 'Perbarui database konsumen', sub: 'Dari tab KA, SALES & MAPS ke Sheet1', ico: ico('edit'), on: onSinkron },
       { judul: 'Buat pengumuman', sub: 'Disematkan di Pantau dan dikirim ke HP tim', ico: ico('share'), on: onPengumuman },
-    ]],
+    ], { id: 'kelola', ikon: 'check', warna: WARNA.merah }],
   ];
+  const [buka, toggle] = useLipat();
+  const badgeOn = mine.filter((b) => b.on).length;
+  const ringkas = me && (me.unit || me.amount)
+    ? [me.unit && `${angka(me.unit.ini)}${me.unit.target ? `/${angka(me.unit.target)}` : ''} unit`, me.amount && rp(me.amount.ini)].filter(Boolean).join(' · ')
+    : 'Sales, aktivitas & konsumen kamu';
   const role = akun.role === 'owner' ? 'Owner' : akun.role === 'spv' ? 'SPV · plan & bahan tim' : akun.role === 'konsumen' ? 'Tim + database konsumen' : 'Tim';
 
   return (
@@ -78,24 +83,28 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
             <Avatar o={me} size={72} className="text-2xl" />
           </div>
 
-          {c.sales.includes(me) && (<>
-          <p className="mt-5 text-[15px] font-bold">Badge kamu</p>
-          <div className="mt-2 flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none]">
-            {mine.map((b) => (
-              <div key={b.id} className={`flex w-[124px] shrink-0 flex-col gap-1.5 rounded-2xl p-3 ${b.on
-                ? 'bg-neutral-900 text-white dark:ring-1 dark:ring-neutral-800'
-                : 'border border-dashed border-neutral-300 text-neutral-500 dark:border-neutral-700'}`}>
-                <span className={b.on ? 'text-[#F5C451]' : ''}><Ico n={b.on ? 'trophy' : 'lock'} className="h-6 w-6" sw={1.8} /></span>
-                <span className="text-sm font-bold">{b.label}</span>
-                <span className={`text-xs ${b.on ? 'text-neutral-300' : ''}`}>{b.desc}</span>
-              </div>
-            ))}
-          </div>
-          </>)}
+          <Lipat id="performa" judul="Performa saya" sub={ringkas} ikon="up" warna={WARNA.navy} buka={buka.has('performa')} onToggle={() => toggle('performa')} className="mt-6">
+            <div className="px-1 pb-4 pt-1">
+              <OrangDetail o={me} rank={rank} total={amount.filter((r) => r.rank).length} data={c.data} push={push} hideHeader />
+            </div>
+          </Lipat>
 
-          <div className="mt-6">
-            <OrangDetail o={me} rank={rank} total={amount.filter((r) => r.rank).length} data={c.data} push={push} hideHeader />
-          </div>
+          {c.sales.includes(me) && mine.length > 0 && (
+            <Lipat id="badge" judul="Badge kamu" sub={badgeOn ? `${badgeOn} dari ${mine.length} terbuka` : `${mine.length} badge menunggu dibuka`} ikon="trophy" warna={WARNA.emas}
+              buka={buka.has('badge')} onToggle={() => toggle('badge')}>
+              <div className="flex gap-2.5 overflow-x-auto px-4 pb-4 [scrollbar-width:none]">
+                {mine.map((b) => (
+                  <div key={b.id} className={`flex w-[124px] shrink-0 flex-col gap-1.5 rounded-2xl p-3 ${b.on
+                    ? 'bg-neutral-900 text-white dark:ring-1 dark:ring-neutral-800'
+                    : 'border border-dashed border-neutral-300 text-neutral-500 dark:border-neutral-700'}`}>
+                    <span className={b.on ? 'text-[#F5C451]' : ''}><Ico n={b.on ? 'trophy' : 'lock'} className="h-6 w-6" sw={1.8} /></span>
+                    <span className="text-sm font-bold">{b.label}</span>
+                    <span className={`text-xs ${b.on ? 'text-neutral-300' : ''}`}>{b.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </Lipat>
+          )}
         </>
       ) : (
         <Card className="p-4">
@@ -109,75 +118,128 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
         </Card>
       )}
 
-      {GRUP.map(([judul, isi]) => {
+      <p className="mb-1 mt-7 px-1 text-[13px] font-bold uppercase tracking-wide text-neutral-500">Menu</p>
+      {GRUP.map(([judul, isi, g]) => {
         const ada = isi.filter((x) => x.on);
         if (!ada.length) return null;
+        const tanda = ada.find((x) => x.badge && x.badgeCls && !/aman/i.test(x.badge));
         return (
-          <section key={judul}>
-            <p className="mt-8 text-[15px] font-bold">{judul}</p>
-            <Card className="mt-2 overflow-hidden">
-              {ada.map((x) => (
-                <button key={x.judul} onClick={x.on} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 py-2 text-left last:border-0 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
-                  {x.ico}
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[15px]">{x.judul}</span>
-                    <span className="block text-[13px] text-neutral-500">{x.sub}</span>
-                  </span>
-                  {!!x.badge && <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${x.badgeCls}`}>{x.badge}</span>}
-                  <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
-                </button>
-              ))}
-            </Card>
-          </section>
+          <Lipat key={g.id} id={g.id} judul={judul} jumlah={ada.length} ikon={g.ikon} warna={g.warna}
+            sub={ada.slice(0, 3).map((x) => x.judul).join(' · ') + (ada.length > 3 ? ' …' : '')}
+            badge={tanda ? <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${tanda.badgeCls}`}>{tanda.badge}</span> : undefined}
+            buka={buka.has(g.id)} onToggle={() => toggle(g.id)}>
+            {ada.map((x) => (
+              <button key={x.judul} onClick={x.on} className={BARIS}>
+                {x.ico}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px]">{x.judul}</span>
+                  <span className="block text-[13px] text-neutral-500">{x.sub}</span>
+                </span>
+                {!!x.badge && <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${x.badgeCls}`}>{x.badge}</span>}
+                <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
+              </button>
+            ))}
+          </Lipat>
         );
       })}
 
-      <p className="mt-8 text-[15px] font-bold">Akun</p>
-      <Card className="mt-2 overflow-hidden">
-        <div className="flex min-h-14 items-center gap-3 border-b border-neutral-200 px-4 py-2.5 dark:border-neutral-800">
-          <Ico n="user" className="h-5 w-5 text-neutral-500" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px]">{akun.email}</span>
-            <span className="block text-[13px] text-neutral-500">Akses: {role}</span>
-          </span>
-        </div>
-        <NotifSetting nama={me?.nama || ''} />
-        <div className="flex min-h-14 items-center gap-3 border-b border-neutral-200 px-4 dark:border-neutral-800">
+      <Lipat id="akun" judul="Akun & pengaturan" sub={`${akun.email} · ${role}`} ikon="user" warna={WARNA.abu} buka={buka.has('akun')} onToggle={() => toggle('akun')}>
+        <div className="border-t border-neutral-200 dark:border-neutral-800"><NotifSetting nama={me?.nama || ''} /></div>
+        <div className="flex min-h-14 items-center gap-3 px-4">
           <span className="flex-1 text-[15px]">Mode terang / gelap</span>
           <ThemeToggle className="h-11 w-11 border border-neutral-200 dark:border-neutral-800" />
         </div>
         {onWrapped && (
-          <button onClick={onWrapped} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+          <button onClick={onWrapped} className={BARIS}>
             <Ico n="trophy" className="h-5 w-5 text-[#B07A00] dark:text-[#F5C451]" />
             <span className="flex-1 text-[15px]">Kendal Wrapped bulan ini</span>
             <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
           </button>
         )}
         {onAktivitas && (
-          <button onClick={onAktivitas} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+          <button onClick={onAktivitas} className={BARIS}>
             <Ico n="users" className="h-5 w-5 text-neutral-500" />
             <span className="flex-1 text-[15px]">Aktivitas tim (siapa yang buka aplikasi)</span>
             <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
           </button>
         )}
         {onCari && (
-          <button onClick={onCari} className="flex min-h-14 w-full items-center gap-3 border-b border-neutral-200 px-4 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+          <button onClick={onCari} className={BARIS}>
             <Ico n="search" className="h-5 w-5 text-neutral-500" />
             <span className="flex-1 text-[15px]">Cari konsumen</span>
             <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
           </button>
         )}
-        <a href={MONITORING_MOTORKU} target="_blank" rel="noreferrer"
-          className="flex min-h-14 items-center gap-3 border-b border-neutral-200 px-4 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900">
+        <a href={MONITORING_MOTORKU} target="_blank" rel="noreferrer" className={BARIS}>
           <Ico n="map" className="h-5 w-5 text-neutral-500" />
           <span className="flex-1 text-[15px]">Monitoring Visit Motorku</span>
           <Ico n="right" className="h-[18px] w-[18px] text-neutral-400" sw={2} />
         </a>
-        <a href="/api/auth/logout" className="flex min-h-14 items-center gap-3 px-4 text-red-700 active:bg-neutral-50 dark:text-red-400 dark:active:bg-neutral-900">
-          <Ico n="logout" className="h-5 w-5" />
-          <span className="flex-1 text-[15px] font-semibold">Keluar</span>
-        </a>
-      </Card>
+      </Lipat>
+
+      <a href="/api/auth/logout" className="mt-6 flex min-h-12 items-center justify-center gap-2 rounded-full text-[15px] font-semibold text-red-700 active:bg-red-50 dark:text-red-400 dark:active:bg-red-950/40">
+        <Ico n="logout" className="h-5 w-5" />Keluar
+      </a>
     </div>
+  );
+}
+
+// Warna petak ikon tiap lipatan (lembut di mode terang, redup di mode gelap)
+const WARNA = {
+  navy: 'bg-[#E8EEF9] text-[#1B2F5B] dark:bg-[#16223D] dark:text-[#AFC3EC]',
+  emas: 'bg-[#FFF4E0] text-[#8A4700] dark:bg-[#2A1E0C] dark:text-[#F7C98A]',
+  hijau: 'bg-[#E5F3EC] text-[#1D6A4B] dark:bg-[#0F2A1F] dark:text-[#8FD1B0]',
+  ungu: 'bg-[#EFEAFB] text-[#5B3FA8] dark:bg-[#211A36] dark:text-[#C3B3F2]',
+  biru: 'bg-[#E3F2F7] text-[#0E6178] dark:bg-[#0E2830] dark:text-[#8ACFE2]',
+  merah: 'bg-[#FCE9EC] text-[#9B1C31] dark:bg-[#2E1218] dark:text-[#F2A7B3]',
+  abu: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300',
+};
+const BARIS = 'flex min-h-14 w-full items-center gap-3 border-t border-neutral-200 px-4 py-2 text-left active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-900';
+
+// Lipatan yang sedang terbuka diingat di HP ini (semua tertutup saat pertama kali)
+const KUNCI_LIPAT = 'saya-lipat-buka';
+function useLipat(): [Set<string>, (id: string) => void] {
+  const [buka, setBuka] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    try { const x = JSON.parse(localStorage.getItem(KUNCI_LIPAT) || '[]'); if (Array.isArray(x)) setBuka(new Set(x.map(String))); } catch { /* abaikan */ }
+  }, []);
+  const toggle = (id: string) => setBuka((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    try { localStorage.setItem(KUNCI_LIPAT, JSON.stringify([...n])); } catch { /* abaikan */ }
+    return n;
+  });
+  return [buka, toggle];
+}
+
+function Lipat({ id, judul, sub, ikon, warna, jumlah, badge, buka, onToggle, className = 'mt-3', children }: {
+  id: string; judul: string; sub: string; ikon: string; warna: string; jumlah?: number; badge?: ReactNode;
+  buka: boolean; onToggle: () => void; className?: string; children: ReactNode;
+}) {
+  // Isi baru dipasang saat pertama dibuka (Performa saya cukup berat), lalu tetap ada supaya animasi tutup mulus
+  const [pernah, setPernah] = useState(buka);
+  useEffect(() => { if (buka) setPernah(true); }, [buka]);
+  return (
+    <section className={`overflow-hidden rounded-[22px] border transition-colors ${buka ? 'border-neutral-300 dark:border-neutral-700' : 'border-neutral-200 dark:border-neutral-800'} ${className}`}>
+      <button onClick={onToggle} aria-expanded={buka} aria-controls={`lipat-${id}`}
+        className="flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left active:bg-neutral-50 dark:active:bg-neutral-900">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${warna}`}><Ico n={ikon} className="h-[22px] w-[22px]" sw={2} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-[15px] font-bold">{judul}</span>
+            {!!jumlah && <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-px text-[12px] font-semibold text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">{jumlah}</span>}
+            {badge}
+          </span>
+          <span className="mt-0.5 block truncate text-[13px] text-neutral-500">{sub}</span>
+        </span>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition duration-200 motion-reduce:transition-none ${buka ? 'rotate-180 bg-neutral-100 dark:bg-neutral-900' : ''}`}>
+          <Ico n="down" className="h-5 w-5 text-neutral-500" sw={2} />
+        </span>
+      </button>
+      <div id={`lipat-${id}`} inert={!buka}
+        className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${buka ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="min-h-0 overflow-hidden">{pernah && children}</div>
+      </div>
+    </section>
   );
 }
