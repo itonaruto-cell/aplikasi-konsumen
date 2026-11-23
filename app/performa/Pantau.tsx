@@ -329,7 +329,7 @@ function RincianMotor({ c }: { c: Ctx }) {
 }
 
 /* ---------- Tab Mobilku / Motorku ---------- */
-function BrandTab({ c, b, push, bulan, lama, extra, onInject }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string; extra?: ReactNode; onInject?: () => void }) {
+function BrandTab({ c, b, push, bulan, lama, extra, onInject, onTargetMa }: { c: Ctx; b: BrandId; push: Push; bulan: string; lama?: string; extra?: ReactNode; onInject?: () => void; onTargetMa?: () => void }) {
   const data = c.data, a = data.aktivitas, B = BRAND[b];
   const tot = brandTotals(c)(b);
   const mt = a?.maintain?.[b], rk = a?.rekrut?.[b];
@@ -449,6 +449,11 @@ function BrandTab({ c, b, push, bulan, lama, extra, onInject }: { c: Ctx; b: Bra
               </div>
             )) : <p className="text-sm text-neutral-500">{mt?.sudah}/{mt?.ma} MA sudah dimaintain bulan ini.</p>}
           </div>
+          {onTargetMa && (
+            <button onClick={onTargetMa} className="mx-4 mt-2 flex min-h-11 w-[calc(100%-2rem)] items-center justify-between rounded-full bg-neutral-100 px-4 text-sm font-semibold active:opacity-70 dark:bg-neutral-900">
+              Target maintain per MA &amp; sisa hari kerja <span aria-hidden>›</span>
+            </button>
+          )}
         </Sec>
       )}
 
@@ -602,10 +607,10 @@ function Sapa({ teks }: { teks: ReactNode }) {
 type Tab = 'cabang' | BrandId;
 const TABS: Tab[] = ['cabang', 'mobilku', 'motorku'];
 
-export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped, plan, kejar, onInject }: {
+export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengumuman, buatPengumuman, openWrapped, plan, kejar, onInject, onTargetMa }: {
   c: Ctx; me: Orang | null; akun: { name?: string }; push: Push;
   pengumuman: Pengumuman[]; isOwner: boolean; onPengumuman: () => void; buatPengumuman: () => void; openWrapped: () => void;
-  plan?: ReactNode; kejar?: (cek: CekData) => ReactNode; onInject?: () => void;
+  plan?: ReactNode; kejar?: (cek: CekData) => ReactNode; onInject?: () => void; onTargetMa?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('cabang');
   const [dir, setDir] = useState<'kanan' | 'kiri'>('kanan');
@@ -717,7 +722,7 @@ export default function Pantau({ c, me, akun, push, pengumuman, isOwner, onPengu
             <Cabang c={c} push={push} />
           </>
         ) : (
-          <BrandTab c={c} b={tab} push={push} bulan={bulan} lama={lama} extra={tab === 'mobilku' ? kejar?.(cek) : undefined} onInject={onInject} />
+          <BrandTab c={c} b={tab} push={push} bulan={bulan} lama={lama} extra={tab === 'mobilku' ? kejar?.(cek) : undefined} onInject={onInject} onTargetMa={onTargetMa} />
         )}
       </div>
       <p className="px-4 pt-5 text-[13px] text-neutral-500">Geser kiri–kanan untuk pindah Cabang · Mobilku · Motorku. Tarik ke bawah untuk memuat ulang.</p>

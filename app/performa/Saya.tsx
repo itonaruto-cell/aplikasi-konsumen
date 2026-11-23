@@ -11,9 +11,9 @@ import { NotifSetting } from './Notif';
 
 type Me = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim' };
 
-export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport, onProyeksi, onMutasi, onSurat, onAlatPdf, onReportSore, onArsip, onBcp }: {
+export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped, onBahan, onInsentif, onInject, onJuara, onPengumuman, onLaporan, onProspek, onSinkron, onSK, onKesehatan, onBanding, onPdf, onReport, onProyeksi, onMutasi, onSurat, onAlatPdf, onReportSore, onArsip, onBcp, onTargetMa }: {
   c: Ctx; me: Orang | null; akun: Me; push: Push; onCari?: () => void; onAktivitas?: () => void; onWrapped?: () => void;
-  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void; onReport?: () => void; onProyeksi?: () => void; onMutasi?: () => void; onSurat?: () => void; onAlatPdf?: () => void; onReportSore?: () => void; onArsip?: () => void; onBcp?: () => void;
+  onBahan?: () => void; onInsentif?: () => void; onInject?: () => void; onJuara?: () => void; onPengumuman?: () => void; onLaporan?: () => void; onProspek?: () => void; onSinkron?: () => void; onSK?: () => void; onKesehatan?: () => void; onBanding?: () => void; onPdf?: () => void; onReport?: () => void; onProyeksi?: () => void; onMutasi?: () => void; onSurat?: () => void; onAlatPdf?: () => void; onReportSore?: () => void; onArsip?: () => void; onBcp?: () => void; onTargetMa?: () => void;
 }) {
   const amount = ranking(c, 'amount');
   const rank = me ? amount.find((r) => r.o === me)?.rank || 0 : 0;
@@ -29,6 +29,7 @@ export default function Saya({ c, me, akun, push, onCari, onAktivitas, onWrapped
       { judul: 'Database prospek', sub: 'Input, impor Google Maps, follow up dengan foto bukti', ico: ico('users'), on: onProspek },
       { judul: 'Bahan survey', sub: 'Belum disurvey dan sedang diproses', ico: ico('pin'), on: onBahan },
       { judul: 'Inject P3', sub: 'Ajukan konsumen, unduh daftar untuk HO', ico: ico('users'), on: onInject },
+      { judul: 'Target maintain MA', sub: 'Target per MA (Kuning–Putih), sisa hari kerja, saran jadwal & report', ico: ico('check'), on: onTargetMa },
       { judul: 'Tanya SK', sub: 'Tanya jawab & dokumen SK approval, survey, BPKB, MobilKu', ico: ico('list'), on: onSK },
     ], { id: 'harian', ikon: 'pin', warna: WARNA.hijau }],
     ['Survey & dokumen', [

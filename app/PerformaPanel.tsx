@@ -33,6 +33,7 @@ const BandingPage = lazy(() => import('./performa/Banding'));
 const SuratPage = lazy(() => import('./performa/Surat'));
 import { suratTerbuka } from '../lib/surat-buka';
 const AlatPdf = lazy(() => import('./performa/AlatPdf'));
+const TargetMaintain = lazy(() => import('./performa/TargetMaintain'));
 import { bacaBuka } from '../lib/banding-draf';
 const PdfSurvey = lazy(() => import('./performa/PdfSurvey'));
 const ReportSurveyPage = lazy(() => import('./performa/ReportSurvey'));
@@ -48,7 +49,7 @@ const PeringatanData = lazy(() => import('./performa/Kesehatan').then((m) => ({ 
 // Data performa boleh dilihat semua akun terdaftar; nomor HP / kontrak / alamat konsumen tidak pernah dikirim ke sini.
 
 type Akun = { email: string; name?: string; role: 'owner' | 'spv' | 'konsumen' | 'tim'; perfName?: string | null };
-type Page = 'pantau' | 'plan' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas' | 'bahan' | 'insentif' | 'inject' | 'laporan' | 'prospek' | 'sinkron' | 'sk' | 'kesehatan' | 'banding' | 'pdf' | 'report' | 'proyeksi' | 'mutasi' | 'surat' | 'alatpdf' | 'bcp';
+type Page = 'pantau' | 'plan' | 'juara' | 'rute' | 'cari' | 'saya' | 'aktivitas' | 'bahan' | 'insentif' | 'inject' | 'laporan' | 'prospek' | 'sinkron' | 'sk' | 'kesehatan' | 'banding' | 'pdf' | 'report' | 'proyeksi' | 'mutasi' | 'surat' | 'alatpdf' | 'bcp' | 'targetma';
 type Slot = (reloadKey: number) => ReactNode;
 const SEEN_KEY = 'ck_story_seen';
 
@@ -67,7 +68,7 @@ function MemuatHalaman() {
 const SIAPKAN: (() => Promise<unknown>)[] = [
   () => import('./performa/Plan'), () => import('./performa/Bahan'), () => import('./performa/Rute'), () => import('./performa/Juara'),
   () => import('./performa/Insentif'), () => import('./performa/Laporan'), () => import('./performa/Proyeksi'), () => import('./performa/ReportSurvey'),
-  () => import('./performa/PdfSurvey'), () => import('./performa/Banding'), () => import('./performa/Surat'), () => import('./performa/AlatPdf'), () => import('./performa/Bcp'),
+  () => import('./performa/PdfSurvey'), () => import('./performa/Banding'), () => import('./performa/Surat'), () => import('./performa/AlatPdf'), () => import('./performa/Bcp'), () => import('./performa/TargetMaintain'),
   () => import('./performa/Prospek'), () => import('./performa/Inject'), () => import('./performa/RekapMutasi'), () => import('./performa/TanyaSK'),
   () => import('./performa/Sorotan'), () => import('./performa/Wrapped'), () => import('./CariKonsumen'),
 ];
@@ -382,7 +383,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
 
   const cabang = (data?.cabang || 'kendal').toLowerCase();
   const namaApp = `Marketing ${cabang.replace(/\b\w/g, (h) => h.toUpperCase())}`;
-  const TITLE: Record<Page, string> = { pantau: namaApp, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3', laporan: 'Laporan', prospek: 'Database prospek', sinkron: 'Perbarui database', sk: 'Tanya SK', kesehatan: 'Kesehatan data', banding: 'Form banding', pdf: 'PDF berkas survey', report: 'Report survey', proyeksi: 'Proyeksi sales', mutasi: 'Rekap mutasi rekening', surat: 'Surat IM', alatpdf: 'Alat PDF', bcp: 'Format BCP' };
+  const TITLE: Record<Page, string> = { pantau: namaApp, plan: 'Plan aktivitas', juara: 'Papan juara', rute: 'Rute visit', cari: 'Cari konsumen', saya: 'Saya', aktivitas: 'Aktivitas tim', bahan: 'Bahan survey', insentif: 'Insentif', inject: 'Inject P3', laporan: 'Laporan', prospek: 'Database prospek', sinkron: 'Perbarui database', sk: 'Tanya SK', kesehatan: 'Kesehatan data', banding: 'Form banding', pdf: 'PDF berkas survey', report: 'Report survey', proyeksi: 'Proyeksi sales', mutasi: 'Rekap mutasi rekening', surat: 'Surat IM', alatpdf: 'Alat PDF', bcp: 'Format BCP', targetma: 'Target maintain MA' };
 
   const halaman = (k: Page): ReactNode => (
     k === 'cari' ? (cari ? cari(reloadKey) : null) : k === 'aktivitas' ? (aktivitas ? aktivitas(reloadKey) : null)
@@ -410,7 +411,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             {k === 'pantau' && (
               <Pantau c={c} me={me} akun={akun} push={push}
                 pengumuman={pengumuman} isOwner={akun.role === 'owner'} onPengumuman={() => setPKey((k) => k + 1)} buatPengumuman={() => setFormP(true)}
-                openWrapped={() => setWrap(true)} onInject={() => go('inject')}
+                openWrapped={() => setWrap(true)} onInject={() => go('inject')} onTargetMa={() => go('targetma')}
                 kejar={(cek) => <Kejar c={c} me={me} spv={spv} isOwner={akun.role === 'owner'} reloadKey={reloadKey} cek={cek} onBahan={() => go('bahan')} />} />
             )}
             {k === 'laporan' && <>{akun.role === 'owner' && data && <div className="px-4 pt-4"><PeringatanData data={data} onBuka={() => go('kesehatan')} /></div>}<Laporan key={lapAwal} c={c} spv={spv} awal={lapAwal} tim={tim} aku={me?.nama || akun.perfName || ''} semua={akun.role === 'owner' || akun.role === 'spv'} /></>}
@@ -425,10 +426,11 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
             {k === 'banding' && <BandingPage akun={akun} reloadKey={reloadKey} />}
             {k === 'surat' && <SuratPage akun={akun} reloadKey={reloadKey} />}
             {k === 'alatpdf' && <AlatPdf />}
+            {k === 'targetma' && <TargetMaintain c={c} me={me} akun={akun} />}
             {k === 'prospek' && <ProspekPage akun={akun} tim={staf.map((x) => x.nama)} reloadKey={reloadKey} cabang={String(data?.cabang || 'Kendal')} />}
             {k === 'juara' && <Juara c={c} me={me} push={push} storyList={storyList} seen={(s) => seen.includes(storyKey(s))} openStory={setStory} />}
             {k === 'rute' && <Rute key={`${rute.mode}-${rute.brand}-${rute.n}`} data={data} push={push} mode0={rute.mode} brand0={rute.n ? rute.brand : (me && brandOf(me)) || 'semua'} />}
-            {k === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => { setLapAwal('achievement'); go('laporan'); }} onReportSore={() => { setLapAwal('sore'); go('laporan'); }} onArsip={() => bukaArsip()} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onReport={() => go('report')} onBcp={() => go('bcp')} onProyeksi={() => go('proyeksi')} onMutasi={() => go('mutasi')} onSurat={() => go('surat')} onAlatPdf={() => go('alatpdf')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
+            {k === 'saya' && <Saya c={c} me={me} akun={akun} push={push} onCari={cari ? () => go('cari') : undefined} onAktivitas={aktivitas ? () => go('aktivitas') : undefined} onWrapped={() => setWrap(true)} onBahan={() => go('bahan')} onInsentif={() => go('insentif')} onInject={() => go('inject')} onJuara={() => go('juara')} onLaporan={() => { setLapAwal('achievement'); go('laporan'); }} onReportSore={() => { setLapAwal('sore'); go('laporan'); }} onArsip={() => bukaArsip()} onProspek={() => go('prospek')} onSK={() => go('sk')} onBanding={() => go('banding')} onPdf={() => go('pdf')} onReport={() => go('report')} onBcp={() => go('bcp')} onTargetMa={() => go('targetma')} onProyeksi={() => go('proyeksi')} onMutasi={() => go('mutasi')} onSurat={() => go('surat')} onAlatPdf={() => go('alatpdf')} onKesehatan={akun.role === 'owner' ? () => go('kesehatan') : undefined} onSinkron={akun.role === 'owner' ? () => go('sinkron') : undefined} onPengumuman={akun.role === 'owner' ? () => setFormP(true) : undefined} />}
           </>
         )
   );
@@ -524,7 +526,7 @@ export default function PerformaPanel({ me: akun, cari, aktivitas }: { me: Akun;
       <nav aria-label="Menu utama" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <div className="mx-auto grid max-w-xl" style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}>
           {NAV.map(([k, icon, label]) => {
-            const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif' || page === 'inject' || page === 'juara' || page === 'laporan' || page === 'prospek' || page === 'sinkron' || page === 'sk' || page === 'kesehatan' || page === 'banding' || page === 'pdf' || page === 'report' || page === 'proyeksi' || page === 'mutasi' || page === 'surat' || page === 'alatpdf' || page === 'bcp'));
+            const on = k === page || (k === 'saya' && (page === 'aktivitas' || page === 'bahan' || page === 'insentif' || page === 'inject' || page === 'juara' || page === 'laporan' || page === 'prospek' || page === 'sinkron' || page === 'sk' || page === 'kesehatan' || page === 'banding' || page === 'pdf' || page === 'report' || page === 'proyeksi' || page === 'mutasi' || page === 'surat' || page === 'alatpdf' || page === 'bcp' || page === 'targetma'));
             return (
               <button key={k} onClick={() => (k === page ? window.scrollTo({ top: 0, behavior: 'smooth' }) : goNav(k))}
                 aria-current={on ? 'page' : undefined}

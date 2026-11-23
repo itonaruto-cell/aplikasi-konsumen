@@ -9,6 +9,7 @@ import { brandBaris, labelLalu, rincianMotor, rpLalu } from '../../lib/sales-bra
 import type { Proyeksi } from '../../lib/proyeksi';
 import type { DataProyeksi, Mode } from './proyeksi-data';
 import { tahapOf, type Bahan } from '../../lib/bahan-types';
+import type { BarisMa, HasilTarget } from '../../lib/maintain-target';
 
 type G = CanvasRenderingContext2D;
 type BrandId = 'mobilku' | 'motorku';
@@ -917,4 +918,67 @@ function bagianFuKons(g: G, d: DataFuKons, y: number): number {
     yy += 64 + hasil.length * 30 + pant.length * 28 + ekstra + 22;
   });
   return y + h + 32;
+}
+
+/* ---------- Report maintain MA (target per MA) ---------- */
+export type DataMaintainMa = { brand: BrandId; ket: string; per: string; hasil: HasilTarget; sisaHari: number; perHari: number };
+const MM = { head: 76, kol: 46, baris: 62, jarak: 28 };
+export function tinggiMaintainMa(d: DataMaintainMa) {
+  const grup = d.hasil.grup.length + (d.hasil.belum.length ? 1 : 0);
+  const baris = d.hasil.baris.length;
+  return 500 + grup * (MM.head + MM.kol + 14 + MM.jarak) + baris * MM.baris + 30 + KAKI;
+}
+export function gambarMaintainMa(g: G, d: DataMaintainMa) {
+  const H = tinggiMaintainMa(d), navy = '#10294A';
+  g.fillStyle = '#F3F4F8'; g.fillRect(0, 0, W, H);
+  g.fillStyle = navy; g.fillRect(0, 0, W, 250);
+  tulis(g, 'REPORT MAINTAIN MA', P, 96, { size: 56, weight: 700, color: '#fff', spasi: 1 });
+  tulis(g, `${LABEL[d.brand]}  •  ${d.ket}`, P, 152, { size: 32, color: 'rgba(255,255,255,0.82)', maks: W - P * 2 });
+  tulis(g, `Per ${tglPanjang(d.per)}`, P, 204, { size: 28, color: 'rgba(255,255,255,0.7)' });
+
+  // Ringkasan
+  let y = 280;
+  const gap = 24, bw = (W - P * 2 - gap * 2) / 3;
+  ([['MA wajib', String(d.hasil.wajib), navy], ['Sudah capai', String(d.hasil.capai), C.good], ['Kurang maintain', `${d.hasil.kurang}x`, C.bad]] as const)
+    .forEach(([l, v, w], i) => {
+      const x = P + i * (bw + gap);
+      kotak(g, x, y, bw, 120, 22, C.card, true);
+      tulis(g, l, x + 26, y + 44, { size: 25, color: C.muted });
+      tulis(g, v, x + 26, y + 98, { size: 46, weight: 700, color: w });
+    });
+  y += 120 + 52;
+  tulis(g, d.sisaHari > 0 ? `Sisa ${d.sisaHari} hari kerja · perlu ±${d.perHari} maintain per hari` : 'Hari kerja bulan ini sudah habis', P, y, { size: 26, color: C.muted });
+  y += 48;
+
+  const xNilai = W - P - 150, xStatus = W - P - 104;
+  const bagian = (judul: string, bg: string, fg: string, list: BarisMa[], putih: boolean) => {
+    const h = MM.head + MM.kol + list.length * MM.baris + 14;
+    kotak(g, P, y, W - P * 2, h, 24, C.card, true);
+    kotak(g, P, y, W - P * 2, MM.head, 24, bg);
+    g.fillStyle = bg; g.fillRect(P, y + MM.head - 24, W - P * 2, 24);
+    tulis(g, judul, P + 30, y + 50, { size: 32, weight: 700, color: fg, maks: W - P * 2 - 60 });
+    let yy = y + MM.head + 34;
+    tulis(g, 'Maintain', xNilai, yy, { size: 22, color: C.muted, align: 'right' });
+    tulis(g, 'Status', xStatus, yy, { size: 22, color: C.muted });
+    yy += 12;
+    list.forEach((b, i) => {
+      const yb = yy + i * MM.baris;
+      if (i) { g.fillStyle = C.line; g.fillRect(P + 30, yb, W - P * 2 - 60, 2); }
+      tulis(g, `${i + 1}. ${b.m.n.toUpperCase()}`, P + 30, yb + 42, { size: 29, maks: xNilai - P - 150 });
+      if (putih || b.target === null) {
+        tulis(g, `${b.f}x`, xNilai, yb + 42, { size: 29, weight: 700, align: 'right' });
+        tulis(g, '—', xStatus + 8, yb + 42, { size: 29, color: C.muted });
+      } else {
+        tulis(g, `${b.f}/${b.target}`, xNilai, yb + 42, { size: 29, weight: 700, align: 'right' });
+        if (b.capai) tulis(g, '✓ OK', xStatus, yb + 42, { size: 29, weight: 700, color: C.good });
+        else tulis(g, `-${b.kurang}`, xStatus + 6, yb + 42, { size: 29, weight: 700, color: C.bad });
+      }
+    });
+    y += h + MM.jarak;
+  };
+  for (const gr of d.hasil.grup) bagian(`${gr.level.label}  —  ${gr.level.wajib}`, gr.level.bg, gr.level.fg, gr.baris, gr.level.target === 0);
+  if (d.hasil.belum.length) bagian('BELUM DITARGET', '#D4D4D8', '#1A1A1A', d.hasil.belum, true);
+
+  tulis(g, 'Angka = total maintain saat ini / target wajib. "-" = kekurangan maintain.', P, y + 18, { size: 22, color: C.muted, maks: W - P * 2 });
+  kaki(g, y + 30, new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
 }
