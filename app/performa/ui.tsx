@@ -137,7 +137,7 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
 export type View =
   | { t: 'orang'; o: Orang }
   | { t: 'maList'; title: string; sub: string; items: MaFull[] }
-  | { t: 'kList'; title: string; sub: string; items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string; seharusnya?: Record<number, number> }
+  | { t: 'kList'; title: string; sub: string; items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string; seharusnya?: Record<number, number>; belumSeharusnya?: Record<number, number> }
   | { t: 'ma'; m: MaFull }
   | { t: 'k'; k: KonsumenFull; pic?: string }
   | { t: 'oi'; nama?: string }
@@ -178,7 +178,7 @@ function MaListView({ items, push }: { items: MaFull[]; push: Push }) {
 }
 
 /* ---------- Daftar konsumen ---------- */
-function KListView({ items, mode, p0, pic, push, seharusnya }: { items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string; push: Push; seharusnya?: Record<number, number> }) {
+function KListView({ items, mode, p0, pic, push, seharusnya, belumSeharusnya }: { items: KonsumenFull[]; mode: 'cabang' | 'orang'; p0: 0 | 1 | 2 | 3; pic?: string; push: Push; seharusnya?: Record<number, number>; belumSeharusnya?: Record<number, number> }) {
   const [p, setP] = useState<'0' | '1' | '2' | '3'>(String(p0) as '0');
   const [visit, setVisit] = useState<'belum' | 'sudah'>(mode === 'orang' ? 'sudah' : 'belum');
   const [temu, setTemu] = useState<'semua' | 'bertemu' | 'tidak'>('semua');
@@ -199,6 +199,10 @@ function KListView({ items, mode, p0, pic, push, seharusnya }: { items: Konsumen
   // Daftar lebih sedikit dari tabel Status visit: nama sisanya belum terbaca dari sheet
   const kurang = Object.entries(seharusnya || {}).map(([x, tot]) => ({ p: Number(x), tot, ada: count(Number(x)) }))
     .filter((x) => (p === '0' || x.p === Number(p)) && x.ada < x.tot);
+  // Belum visit di daftar lebih banyak dari tabel Status visit: visit di sheet ada, tapi riwayatnya belum terbaca
+  const blTabel = mode === 'cabang' && !pic && belumSeharusnya
+    ? Object.entries(belumSeharusnya).filter(([x]) => p === '0' || Number(x) === Number(p)).reduce((t, [, n]) => t + n, 0) : null;
+  const selisihBelum = blTabel !== null && !kurang.length ? belumVisit.length - blTabel : 0;
 
   return (
     <>
@@ -218,6 +222,11 @@ function KListView({ items, mode, p0, pic, push, seharusnya }: { items: Konsumen
       {kurang.length > 0 && (
         <p role="status" className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[13px] leading-snug text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
           Baru {kurang.map((x) => `${x.ada} dari ${x.tot} konsumen P${x.p}`).join(', ')} yang namanya terbaca dari sheet. Kolom tab AKTIVITAS RO bergeser, jadi Apps Script perlu diperbaiki (lihat Kesehatan data).
+        </p>
+      )}
+      {selisihBelum > 0 && visit === 'belum' && (
+        <p role="status" className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[13px] leading-snug text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+          Tabel Status visit di sheet mencatat {blTabel} belum visit{p === '0' ? '' : ` di P${p}`}, tapi {belumVisit.length} konsumen di sini belum ada riwayat visitnya. Biasanya tanggal visit di tab AKTIVITAS RO belum diisi.
         </p>
       )}
       {inP.length > 8 && <SearchBox value={q} onChange={setQ} placeholder="Cari nama, kecamatan, atau no kontrak" />}
@@ -305,7 +314,7 @@ function KDetail({ k, pic }: { k: KonsumenFull; pic?: string }) {
             {k.v.map((v) => (
               <div key={v.ke} className={`rounded-2xl bg-neutral-50 p-3 dark:bg-neutral-800/60 ${pic && keyOf(v.pic) !== keyOf(pic) ? 'opacity-70' : ''}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold">Visit {v.ke} · {tanggal(v.tgl)}</p>
+                  <p className="text-sm font-semibold">Visit {v.ke} · {v.tgl ? tanggal(v.tgl) : 'tanggal belum diisi'}</p>
                   <Pill cls={isMet(v) ? 'good' : 'mid'}>{nama(v.st)}</Pill>
                 </div>
                 <dl className="mt-1 divide-y divide-neutral-100 dark:divide-neutral-700/60">
@@ -546,7 +555,7 @@ export function Sheet({ stack, data, rankOf, push, pop, close }: {
               {view.t === 'kList' && (<>
                 <p className="text-lg font-semibold">{view.title}</p>
                 <p className="mb-3 text-sm text-neutral-500">{view.sub}</p>
-                <KListView items={view.items} mode={view.mode} p0={view.p0} pic={view.pic} push={push} seharusnya={view.seharusnya} />
+                <KListView items={view.items} mode={view.mode} p0={view.p0} pic={view.pic} push={push} seharusnya={view.seharusnya} belumSeharusnya={view.belumSeharusnya} />
               </>)}
               {view.t === 'k' && <KDetail k={view.k} pic={view.pic} />}
               {view.t === 'ma' && <MaDetail m={view.m} />}
