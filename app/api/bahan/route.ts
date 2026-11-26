@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 // Menghapus = menandai status "hapus" (baris tidak dibuang, supaya aman saat banyak yang menyimpan bersamaan).
 const TAB = 'BAHAN_SURVEY';
 const HEAD = ['ID', 'EMAIL', 'NAMA', 'KONSUMEN', 'NOMINAL', 'SUMBER', 'KETERANGAN_SUMBER', 'STEP', 'STATUS', 'DIBUAT', 'DIUBAH', 'PIC_SURVEY', 'AGGREGATOR', 'TAHAP', 'KENDARAAN'];
-const STATUS: StatusBahan[] = ['aktif', 'cair', 'batal'];
+const STATUS: StatusBahan[] = ['aktif', 'cair', 'gagal', 'batal'];
 
 const toObj = (r: string[]): Bahan => ({
   id: r[0], email: r[1].toLowerCase(), nama: r[2], konsumen: r[3], nominal: Number(r[4]) || 0,
