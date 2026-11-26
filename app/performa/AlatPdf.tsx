@@ -27,6 +27,51 @@ const dasar = (nama: string) => nama.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|
 const filePdf = (bytes: Uint8Array, nama: string) => new File([bytes.buffer as ArrayBuffer], `${nama}.pdf`, { type: 'application/pdf' });
 const pesanError = (e: unknown) => (e instanceof PdfTerkunci ? e.message : (e as Error)?.message || 'Gagal memproses PDF. Coba lagi.');
 
+/* ---------- Kualitas: Normal / Maks 10 MB ---------- */
+// "Maks 10 MB": PDF di atas 10 MB dibuat ulang dengan resolusi & kualitas yang diturunkan bertahap sampai muat.
+// Pilihan disimpan di HP ini, sama seperti cara simpan.
+const KUNCI_KUALITAS = 'pdf-kualitas';
+const MAKS_10_MB = 10 * 1024 * 1024;
+const LANGKAH_MAKS = [{ skala: 2, q: 0.85 }, { skala: 1.6, q: 0.7 }, { skala: 1.4, q: 0.6 }, { skala: 1.2, q: 0.5 }, { skala: 1, q: 0.4 }] as const;
+const bacaMaks10 = () => { try { return localStorage.getItem(KUNCI_KUALITAS) === 'maks10'; } catch { return false; } };
+function PilihKualitas() {
+  const [maks, setMaks] = useState(false);
+  useEffect(() => { setMaks(bacaMaks10()); }, []);
+  const pilih = (v: boolean) => { setMaks(v); try { localStorage.setItem(KUNCI_KUALITAS, v ? 'maks10' : 'normal'); } catch { /* penyimpanan dimatikan: berlaku sampai halaman ditutup */ } };
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[13px]">
+      <span className="text-neutral-500 dark:text-neutral-400">Kualitas:</span>
+      <div role="radiogroup" aria-label="Kualitas PDF" className="flex rounded-xl bg-neutral-100 p-0.5 dark:bg-neutral-900">
+        {([[false, 'Normal'], [true, 'Maks 10 MB']] as const).map(([v, l]) => (
+          <button key={l} role="radio" aria-checked={maks === v} onClick={() => pilih(v)}
+            className={`min-h-9 rounded-[10px] px-3 font-semibold ${maks === v ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-800 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}>{l}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+async function kecilkanKeMaks(file: File, progres: (s: string) => void): Promise<File> {
+  if (file.size <= MAKS_10_MB || file.type !== 'application/pdf') return file;
+  const { doc } = await bukaPdf(file);
+  const nama = dasar(file.name);
+  let terkecil = Infinity;
+  for (const t of LANGKAH_MAKS) {
+    const bytes = await pdfDariRender(doc, t.skala, t.q, nama, progres);
+    if (bytes.length <= MAKS_10_MB) return filePdf(bytes, nama);
+    terkecil = Math.min(terkecil, bytes.length);
+  }
+  throw new Error(`${file.name} masih ${mb(terkecil)} walau kualitas paling rendah. Coba pisah jadi beberapa PDF.`);
+}
+// Kirim PDF hasil. Mode Maks 10 MB: PDF yang kebesaran diperkecil dulu. Mengembalikan file yang benar-benar dikirim.
+async function kirimPdf(files: File[], set: (s: string) => void): Promise<File[]> {
+  const siap: File[] = [];
+  if (bacaMaks10()) for (const f of files) siap.push(await kecilkanKeMaks(f, set));
+  else siap.push(...files);
+  set('');
+  await kirimFile(siap);
+  return siap;
+}
+
 /* ---------- Bagian bersama ---------- */
 function Kotak({ children }: { children: ReactNode }) {
   return <section className="mt-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950">{children}</section>;
@@ -149,8 +194,8 @@ function JpgKePdf() {
       const hal = await Promise.all(list.map(async (f) => ({ jpeg: new Uint8Array(await f.blob.arrayBuffer()), w: f.w, h: f.h })));
       const judul = nama.trim() || `Foto ${new Date().toLocaleDateString('id-ID').replace(/\//g, '-')}`;
       const file = filePdf(buatPdfFoto(hal, judul), dasar(judul));
-      setSibuk(''); await kirimFile([file]);
-      setPesan(`PDF siap: ${file.name} (${mb(file.size)}, ${list.length} halaman).`);
+      const [siap] = await kirimPdf([file], setSibuk);
+      setPesan(`PDF siap: ${siap.name} (${mb(siap.size)}, ${list.length} halaman).`);
     } catch (e) { setSibuk(''); setPesan(pesanError(e)); }
   };
   return (
@@ -197,8 +242,8 @@ function GabungPdf() {
     try {
       const judul = nama.trim() || `${dasar(list[0].file.name)} - gabungan`;
       const file = filePdf(await gabungPdf(list.map((x) => ({ file: x.file })), judul, setSibuk), dasar(judul));
-      setSibuk(''); await kirimFile([file]);
-      setPesan(`PDF gabungan siap: ${file.name} (${mb(file.size)}).`);
+      const [siap] = await kirimPdf([file], setSibuk);
+      setPesan(`PDF gabungan siap: ${siap.name} (${mb(siap.size)}).`);
     } catch (e) { setSibuk(''); setPesan(pesanError(e)); }
   };
   return (
@@ -264,8 +309,8 @@ function PisahPdf() {
     try {
       const idx = [...pilih].sort((x, y) => x - y);
       const file = filePdf(await ambilHalaman(b.pdf.file, idx), `${dasar(b.pdf.file.name)} - hal ${rentang(idx)}`);
-      b.setSibuk(''); await kirimFile([file]);
-      b.setPesan(`PDF siap: ${file.name} (${idx.length} halaman).`);
+      const [siap] = await kirimPdf([file], b.setSibuk);
+      b.setPesan(`PDF siap: ${siap.name} (${idx.length} halaman).`);
     } catch (e) { b.setSibuk(''); b.setPesan(pesanError(e)); }
   };
   const perHalaman = async () => {
@@ -277,8 +322,8 @@ function PisahPdf() {
         b.setSibuk(`Memisah halaman ${i + 1}/${n}…`);
         files.push(filePdf(await ambilHalaman(b.pdf.file, [i]), `${dasar(b.pdf.file.name)} - hal ${i + 1}`));
       }
-      b.setSibuk(''); await kirimFile(files);
-      b.setPesan(`${files.length} PDF siap (1 halaman per file).`);
+      const siap = await kirimPdf(files, b.setSibuk);
+      b.setPesan(`${siap.length} PDF siap (1 halaman per file).`);
     } catch (e) { b.setSibuk(''); b.setPesan(pesanError(e)); }
   };
   return (
@@ -305,8 +350,8 @@ function PutarPdf() {
     b.setPesan(''); b.setSibuk('Menyimpan…');
     try {
       const file = filePdf(await putarHalaman(b.pdf.file, putar), `${dasar(b.pdf.file.name)} - diputar`);
-      b.setSibuk(''); await kirimFile([file]);
-      b.setPesan(`PDF siap: ${file.name}.`);
+      const [siap] = await kirimPdf([file], b.setSibuk);
+      b.setPesan(`PDF siap: ${siap.name}.`);
     } catch (e) { b.setSibuk(''); b.setPesan(pesanError(e)); }
   };
   const ada = putar.some(Boolean);
@@ -343,8 +388,7 @@ function KompresPdf() {
       const bytes = await pdfDariRender(b.pdf.doc, t.skala, t.q, dasar(b.pdf.file.name), b.setSibuk);
       b.setSibuk('');
       if (bytes.length >= b.pdf.file.size * 0.95) { b.setPesan(`PDF ini sudah kecil (${mb(b.pdf.file.size)}); hasil kompres tidak lebih kecil, jadi tidak disimpan.${tk === 'sedang' ? ' Coba pilihan "Kecil sekali".' : ''}`); return; }
-      const file = filePdf(bytes, `${dasar(b.pdf.file.name)} - kecil`);
-      await kirimFile([file]);
+      const [file] = await kirimPdf([filePdf(bytes, `${dasar(b.pdf.file.name)} - kecil`)], b.setSibuk);
       b.setPesan(`Selesai: ${mb(b.pdf.file.size)} → ${mb(file.size)} (${Math.round((1 - file.size / b.pdf.file.size) * 100)}% lebih kecil).`);
     } catch (e) { b.setSibuk(''); b.setPesan(pesanError(e)); }
   };
@@ -518,8 +562,8 @@ function BukaPassword() {
       const { doc } = await bukaPdf(file);
       const bytes = await pdfDariRender(doc, 2, 0.85, dasar(file.name), setSibuk);
       const hasil = filePdf(bytes, `${dasar(file.name)} - tanpa password`);
-      setSibuk(''); await kirimFile([hasil]);
-      setPesan(`PDF tanpa password siap: ${hasil.name} (${mb(hasil.size)}).`);
+      const [siap] = await kirimPdf([hasil], setSibuk);
+      setPesan(`PDF tanpa password siap: ${siap.name} (${mb(siap.size)}).`);
     } catch (e) { setSibuk(''); setPesan(pesanError(e)); }
   };
   return (
@@ -540,7 +584,7 @@ export default function AlatPdf() {
     <div className="px-4 pb-10 pt-3">
       <button onClick={() => setAlat(null)} className="flex min-h-11 items-center gap-1 rounded-xl pr-3 text-[14px] font-semibold"><Ico n="left" className="h-5 w-5" sw={2} />Semua alat PDF</button>
       <h2 className="mt-1 text-[20px] font-bold tracking-tight">{a.ikon} {a.judul}</h2>
-      <div className="mt-3"><PilihCaraSimpan /></div>
+      <div className="mt-3 space-y-2"><PilihCaraSimpan /><PilihKualitas /></div>
       {a.k === 'jpg2pdf' ? <JpgKePdf /> : a.k === 'gabung' ? <GabungPdf /> : a.k === 'pdf2jpg' ? <PdfKeJpg /> : a.k === 'pisah' ? <PisahPdf />
         : a.k === 'putar' ? <PutarPdf /> : a.k === 'kompres' ? <KompresPdf /> : a.k === 'kecilJpg' ? <KecilkanJpg /> : <BukaPassword />}
     </div>
@@ -551,7 +595,7 @@ export default function AlatPdf() {
         <p className="text-[13px] font-bold uppercase tracking-wide text-neutral-400">Alat PDF</p>
         <p className="mt-1 text-[15px] leading-snug text-neutral-200">Semua diproses di HP ini. File konsumen tidak diunggah ke mana pun.</p>
       </section>
-      <div className="mt-4"><PilihCaraSimpan /></div>
+      <div className="mt-4 space-y-2"><PilihCaraSimpan /><PilihKualitas /></div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         {ALAT.map((x) => (
           <button key={x.k} onClick={() => setAlat(x.k)} className={`flex min-h-28 flex-col items-start justify-between rounded-2xl p-4 text-left ${x.warna}`}>
