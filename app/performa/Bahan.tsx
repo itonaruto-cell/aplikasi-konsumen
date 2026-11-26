@@ -47,7 +47,7 @@ export function useBahan(reloadKey = 0) {
 export const sumberLabel = (b: Pick<Bahan, 'sumber' | 'ket' | 'agg'>) =>
   b.sumber === 'Lainnya' ? b.ket || 'Lainnya'
     : b.sumber === 'Agent' ? [b.agg ? 'Aggregator' : 'Agent', b.ket].filter(Boolean).join(' · ') : b.sumber;
-const STATUS_LABEL: Record<StatusBahan, string> = { aktif: 'Aktif', cair: 'Sudah cair', batal: 'Batal' };
+const STATUS_LABEL: Record<StatusBahan, string> = { aktif: 'Aktif', cair: 'Sudah cair', gagal: 'Gagal cair', batal: 'Batal survey' };
 const picKey = (b: Pick<Bahan, 'pic'>) => keyOf(b.pic);
 
 /* ---------- Form tambah / ubah ---------- */
@@ -210,7 +210,9 @@ function BahanForm({ awal, tim, picAwal, onClose, onSaved }: {
                 )}
                 <button onClick={() => simpan('cair', 'Ditandai sudah cair')} disabled={busy}
                   className="min-h-11 flex-1 rounded-full border border-green-600 px-4 text-sm font-semibold text-green-700 disabled:opacity-60 dark:border-green-500 dark:text-green-300">Sudah cair</button>
-                <button onClick={() => simpan('batal', 'Ditandai batal')} disabled={busy}
+                <button onClick={() => simpan('gagal', 'Ditandai gagal cair')} disabled={busy}
+                  className="min-h-11 flex-1 rounded-full border border-red-600 px-4 text-sm font-semibold text-red-700 disabled:opacity-60 dark:border-red-500 dark:text-red-400">Gagal cair</button>
+                <button onClick={() => simpan('batal', 'Ditandai batal survey')} disabled={busy}
                   className="min-h-11 flex-1 rounded-full border border-neutral-300 px-4 text-sm font-semibold disabled:opacity-60 dark:border-neutral-700">Batal survey</button>
               </>
             ) : (
@@ -244,6 +246,7 @@ function BahanCard({ b, onClick }: { b: Bahan; onClick: () => void }) {
         {b.status !== 'aktif' && (
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${b.status === 'cair'
             ? 'bg-green-50 text-green-700 dark:bg-green-400/15 dark:text-green-300'
+            : b.status === 'gagal' ? 'bg-red-50 text-red-700 dark:bg-red-400/15 dark:text-red-400'
             : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300'}`}>{STATUS_LABEL[b.status]}</span>
         )}
       </span>
@@ -281,6 +284,8 @@ export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsen
   const aktif = mine.filter((b) => b.status === 'aktif');
   const perTahap = (t: Tahap) => aktif.filter((b) => tahapOf(b) === t);
   const selesai = mine.filter((b) => b.status !== 'aktif');
+  // Rekap bahan yang sudah selesai (cair / gagal cair / batal survey), per status
+  const rekap = (['cair', 'gagal', 'batal'] as const).map((s) => ({ s, n: selesai.filter((b) => b.status === s).length }));
   const total = aktif.reduce((s, b) => s + b.nominal, 0);
   const judul = isOwner && siapa !== 'semua' ? shortName(staff.find((s) => s.key === siapa)?.nama || '').toUpperCase() : isOwner ? 'SEMUA PIC' : 'KAMU';
   // PIC bawaan saat menambah: diri sendiri kalau ia anggota tim
@@ -369,9 +374,10 @@ export default function BahanSurvey({ akun, me, tim = [], reloadKey = 0, onInsen
             <div className="px-4 pt-4">
               <button onClick={() => setLama((v) => !v)} aria-expanded={lama}
                 className="flex min-h-11 w-full items-center justify-between gap-2 text-[15px] font-semibold text-neutral-600 dark:text-neutral-300">
-                Sudah cair atau batal ({selesai.length})
+                Rekap selesai ({selesai.length})
                 <Ico n={lama ? 'up' : 'down'} className="h-[18px] w-[18px] text-neutral-500" sw={2} />
               </button>
+              <p className="mt-0.5 text-[13px] text-neutral-500">{rekap.map((r) => `${STATUS_LABEL[r.s]} ${r.n}`).join(' · ')}</p>
               {lama && (
                 <div className="mt-2 flex flex-col gap-2.5">
                   {selesai.map((b) => <BahanCard key={b.id} b={b} onClick={() => setForm(b)} />)}

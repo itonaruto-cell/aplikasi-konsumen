@@ -3,7 +3,8 @@
 
 export const SUMBER = ['Agent', 'Telesales', 'Booking mandiri', 'Lainnya'] as const;
 export type Sumber = (typeof SUMBER)[number];
-export type StatusBahan = 'aktif' | 'cair' | 'batal';
+// cair = sudah cair; gagal = sudah disurvey tapi konsumen reject/cancel; batal = batal sebelum/tanpa survey
+export type StatusBahan = 'aktif' | 'cair' | 'gagal' | 'batal';
 // Tahap bahan yang masih aktif: belum disurvey (bahan survey) atau sudah disurvey dan sedang diproses
 export const TAHAP = ['survey', 'proses'] as const;
 export type Tahap = (typeof TAHAP)[number];
