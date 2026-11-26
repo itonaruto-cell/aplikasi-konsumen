@@ -7,6 +7,9 @@ import { bagiPdf, buatPdfFoto } from '../../lib/pdf-foto';
 import { FIELD } from './form';
 import { Ico } from './parts';
 import GabungMutasi from './GabungMutasi';
+import { PilihCaraSimpan, kirimFile } from './cara-simpan';
+
+export { kirimFile, PilihCaraSimpan, bacaCaraSimpan } from './cara-simpan';
 
 export const KATEGORI_PDF: { k: string; nama: string; isi: string }[] = [
   { k: 'mandatory', nama: 'MANDATORY', isi: 'KTP, KK, NPWP' },
@@ -82,18 +85,6 @@ async function pdfKategori(kat: { nama: string }, foto: Foto[], nama: string, se
     const bytes = buatPdfFoto(hal, `${kat.nama} ${nama}${bagian}`);
     return new File([bytes.buffer as ArrayBuffer], namaFile(kat.nama, nama, bagian, sendiri), { type: 'application/pdf' });
   });
-}
-export async function kirimFile(files: File[]) {
-  if (navigator.canShare?.({ files })) {
-    try { await navigator.share({ files }); return; } catch (e) { if ((e as Error)?.name === 'AbortError') return; }
-  }
-  for (const f of files) {
-    const url = URL.createObjectURL(f);
-    const a = document.createElement('a');
-    a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 15_000);
-    await new Promise((r) => setTimeout(r, 400));
-  }
 }
 
 function Thumb({ f, i, n, kat, onGeser, onPindah, onHapus }: {
@@ -188,7 +179,7 @@ export default function PdfSurvey() {
     <div className="px-4 pb-40 pt-4">
       <section className="rounded-3xl bg-neutral-900 p-5 text-white">
         <p className="text-[13px] font-bold uppercase tracking-wide text-neutral-400">PDF berkas survey</p>
-        <p className="mt-1 text-[15px] leading-snug text-neutral-200">Masukkan foto per kategori, lalu jadikan PDF (satu foto per halaman) dan bagikan sekaligus ke WhatsApp.</p>
+        <p className="mt-1 text-[15px] leading-snug text-neutral-200">Masukkan foto per kategori, lalu jadikan PDF (satu foto per halaman). Bisa dibagikan ke WhatsApp atau diunduh ke HP.</p>
         <input value={info.nama} onChange={(e) => simpanInfo({ ...info, nama: e.target.value.toUpperCase() })} placeholder="Nama konsumen (untuk nama file)" aria-label="Nama konsumen"
           className="mt-3 min-h-12 w-full rounded-2xl bg-white px-4 text-[16px] text-neutral-900 outline-none placeholder:text-neutral-400" />
         <div className="mt-2 flex items-center gap-2 text-[13px] text-neutral-300">
@@ -199,6 +190,7 @@ export default function PdfSurvey() {
           ))}
         </div>
       </section>
+      <div className="mt-3"><PilihCaraSimpan /></div>
       <p className="mt-2 text-[12px] text-neutral-500">Foto tersimpan di HP ini saja (tidak diunggah) sampai diketuk &quot;Mulai survey baru&quot;.</p>
       <GabungMutasi nama={info.nama} />
 
@@ -254,7 +246,7 @@ export default function PdfSurvey() {
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+64px)] z-30 border-t border-neutral-200 bg-white/95 px-4 py-2.5 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <button onClick={() => buatDanKirim(terisi)} disabled={!terisi.length || !!sibuk}
           className="mx-auto block min-h-12 w-full max-w-xl rounded-2xl bg-[#0F8048] text-[15px] font-bold text-white disabled:opacity-40">
-          {terisi.length ? `Buat & bagikan ${terisi.length} PDF (${foto.length} foto)` : 'Tambahkan foto dulu'}
+          {terisi.length ? `Buat & simpan ${terisi.length} PDF (${foto.length} foto)` : 'Tambahkan foto dulu'}
         </button>
       </div>
     </div>

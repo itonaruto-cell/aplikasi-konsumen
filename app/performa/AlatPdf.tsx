@@ -4,7 +4,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { buatPdfFoto } from '../../lib/pdf-foto';
 import { ambilHalaman, bukaPdf, gabungPdf, muatPdfLib, PdfTerkunci, pdfDariRender, putarHalaman, renderJpeg, thumbnail } from './pdf-alat';
-import { keJpeg, kirimFile } from './PdfSurvey';
+import { keJpeg } from './PdfSurvey';
+import { PilihCaraSimpan, kirimFile } from './cara-simpan';
 import { FIELD } from './form';
 import { Ico } from './parts';
 import { useOverlay } from '../overlay';
@@ -496,7 +497,7 @@ function KecilkanJpg() {
           ))}
         </ul>
         <p className="mt-2 text-[12px] text-neutral-500">Total {mb(totalAwal)} → {mb(totalAkhir)}{totalAwal > totalAkhir ? ` (${Math.round((1 - totalAkhir / totalAwal) * 100)}% lebih kecil)` : ''}</p>
-        <Tombol onClick={() => kirimFile(list.map((f) => f.file))} disabled={!!sibuk}>Simpan / bagikan {list.length} foto</Tombol>
+        <Tombol onClick={() => kirimFile(list.map((f) => f.file))} disabled={!!sibuk}>Simpan {list.length} foto</Tombol>
         <Tombol onClick={bersihkan} disabled={!!sibuk} utama={false}>Kosongkan daftar</Tombol>
       </>)}
       <Status sibuk={sibuk} pesan={pesan} />
@@ -539,6 +540,7 @@ export default function AlatPdf() {
     <div className="px-4 pb-10 pt-3">
       <button onClick={() => setAlat(null)} className="flex min-h-11 items-center gap-1 rounded-xl pr-3 text-[14px] font-semibold"><Ico n="left" className="h-5 w-5" sw={2} />Semua alat PDF</button>
       <h2 className="mt-1 text-[20px] font-bold tracking-tight">{a.ikon} {a.judul}</h2>
+      <div className="mt-3"><PilihCaraSimpan /></div>
       {a.k === 'jpg2pdf' ? <JpgKePdf /> : a.k === 'gabung' ? <GabungPdf /> : a.k === 'pdf2jpg' ? <PdfKeJpg /> : a.k === 'pisah' ? <PisahPdf />
         : a.k === 'putar' ? <PutarPdf /> : a.k === 'kompres' ? <KompresPdf /> : a.k === 'kecilJpg' ? <KecilkanJpg /> : <BukaPassword />}
     </div>
@@ -549,6 +551,7 @@ export default function AlatPdf() {
         <p className="text-[13px] font-bold uppercase tracking-wide text-neutral-400">Alat PDF</p>
         <p className="mt-1 text-[15px] leading-snug text-neutral-200">Semua diproses di HP ini. File konsumen tidak diunggah ke mana pun.</p>
       </section>
+      <div className="mt-4"><PilihCaraSimpan /></div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         {ALAT.map((x) => (
           <button key={x.k} onClick={() => setAlat(x.k)} className={`flex min-h-28 flex-col items-start justify-between rounded-2xl p-4 text-left ${x.warna}`}>

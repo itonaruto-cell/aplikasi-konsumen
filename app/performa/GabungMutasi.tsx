@@ -4,19 +4,11 @@
 import { useState } from 'react';
 import { bacaMutasi, labelBulan } from '../../lib/mutasi';
 import { bacaPdf, gabungPdf } from './pdf-alat';
+import { kirimFile } from './cara-simpan';
 
 type Item = { id: string; file: File; label: string; urut: string; password?: string };
 const mb = (n: number) => `${(n / 1_048_576).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
 
-async function bagikan(file: File) {
-  if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file] }); return; } catch (e) { if ((e as Error)?.name === 'AbortError') return; }
-  }
-  const url = URL.createObjectURL(file);
-  const a = document.createElement('a');
-  a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 15_000);
-}
 
 export default function GabungMutasi({ nama }: { nama: string }) {
   const [list, setList] = useState<Item[]>([]);
@@ -57,7 +49,7 @@ export default function GabungMutasi({ nama }: { nama: string }) {
       const bytes = await gabungPdf(list.map((it) => ({ file: it.file, password: it.password })), judul, setSibuk);
       const file = new File([bytes.buffer as ArrayBuffer], `${judul}.pdf`.replace(/[\\/:*?"<>|]+/g, ' '), { type: 'application/pdf' });
       setSibuk('');
-      await bagikan(file);
+      await kirimFile([file]);
       setPesan(`PDF gabungan siap: ${file.name} (${mb(file.size)})${file.size > 10_000_000 ? ' — lebih dari 10 MB, mungkin terlalu besar untuk sebagian aplikasi.' : ''}`);
     } catch (e) { setSibuk(''); setPesan((e as Error)?.message || 'PDF gagal digabung. Coba lagi.'); }
   };
