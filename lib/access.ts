@@ -18,14 +18,17 @@ export const canSeeKonsumen = (role: Role | null | undefined) => role === 'owner
 // Boleh melihat & mengubah plan dan bahan semua orang?
 export const lihatTim = (role: Role | string | null | undefined) => role === 'owner' || role === 'spv';
 
-let cache: { at: number; map: Map<string, Role>; names: Map<string, string> } | null = null;
-const CACHE_MS = 60_000;
+// Cache daftar akses. Kalau baca Google Sheets gagal (mis. kena batas kuota 429), daftar terakhir yang
+// berhasil tetap dipakai, supaya akun yang sudah terdaftar tidak tiba-tiba dianggap belum terdaftar.
+let cache: { at: number; ttl: number; map: Map<string, Role>; names: Map<string, string> } | null = null;
+const CACHE_MS = 2 * 60_000;
+const CACHE_GAGAL_MS = 15_000;
 
 function sheetsClient() {
   return sheetsApi();
 }
 
-async function loadAccessSheet(): Promise<{ map: Map<string, Role>; names: Map<string, string> }> {
+async function loadAccessSheet(): Promise<{ ok: boolean; map: Map<string, Role>; names: Map<string, string> }> {
   const map = new Map<string, Role>();
   const names = new Map<string, string>();
   try {
@@ -43,13 +46,22 @@ async function loadAccessSheet(): Promise<{ map: Map<string, Role>; names: Map<s
     }
   } catch (err) {
     console.error('Gagal membaca tab AKSES:', err);
+    return { ok: false, map, names };
   }
-  return { map, names };
+  return { ok: true, map, names };
 }
 
 async function loadCache() {
-  if (!cache || Date.now() - cache.at > CACHE_MS) {
-    cache = { at: Date.now(), ...(await loadAccessSheet()) };
+  const sekarang = Date.now();
+  if (cache && sekarang - cache.at < cache.ttl) return cache;
+  const hasil = await loadAccessSheet();
+  if (hasil.ok) {
+    cache = { at: sekarang, ttl: CACHE_MS, map: hasil.map, names: hasil.names };
+  } else if (cache) {
+    // Gagal baca: pakai daftar terakhir yang berhasil, coba lagi sebentar lagi
+    cache = { ...cache, at: sekarang, ttl: CACHE_GAGAL_MS };
+  } else {
+    cache = { at: sekarang, ttl: CACHE_GAGAL_MS, map: hasil.map, names: hasil.names };
   }
   return cache;
 }
